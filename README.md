@@ -1,4 +1,4 @@
-# adhd
+# OKF Workspace
 Open Knowledge Format (OKF) Collaborative AI Assisted Editing  wiki.
 
 # OKF Workspace — Product and Technical Specification
