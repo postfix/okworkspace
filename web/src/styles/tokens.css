@@ -1,0 +1,90 @@
+/*
+ * OKF Workspace design tokens (Phase 0 UI design contract).
+ * Single source of truth: components reference var(--…) only — never hard-coded
+ * hex/px. Named semantically so a dark theme can be added later without
+ * renaming.
+ */
+
+:root {
+  /* Spacing — 8-point scale (multiples of 4) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* Layout fixed dimensions */
+  --topbar-height: 56px;
+  --navrail-width: 264px;
+  --login-card-width: 400px;
+
+  /* Minimum interactive hit sizes (accessibility) */
+  --hit-min-height: 40px;
+  --hit-min-icon: 44px;
+
+  /* Typography — exactly 4 sizes, exactly 2 weights */
+  --font-family-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  --font-size-display: 28px;
+  --font-size-heading: 20px;
+  --font-size-body: 16px;
+  --font-size-label: 14px;
+
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+
+  --line-height-display: 1.2;
+  --line-height-heading: 1.2;
+  --line-height-body: 1.5;
+  --line-height-label: 1.4;
+
+  /* Color — 60 / 30 / 10 split (light theme baseline) */
+  --color-bg: #ffffff;
+  --color-text: #1a1a1a;
+  --color-surface: #f6f7f8;
+  --color-border: #e3e5e8;
+  --color-text-muted: #6b7280;
+  --color-accent: #2563eb;
+  --color-accent-fg: #ffffff;
+  --color-destructive: #dc2626;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+
+  /* Radius & elevation */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06),
+    0 1px 3px rgba(16, 24, 40, 0.1);
+  --shadow-popover: 0 4px 12px rgba(16, 24, 40, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-body);
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+/* Shared focus-visible ring (accent, 2px, 2px offset) */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
