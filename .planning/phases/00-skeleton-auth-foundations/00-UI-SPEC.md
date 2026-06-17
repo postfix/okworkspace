@@ -128,7 +128,7 @@ Plain, calm, non-technical voice (the audience includes non-technical teammates)
 | Primary CTA — Login | **Sign in** |
 | Primary CTA — Forced password change | **Update password** |
 | Primary CTA — Admin add user | **Create user** |
-| Primary CTA — Profile save | **Save changes** |
+| Primary CTA — Profile save | **Save profile** |
 | Login screen title | **OKF Workspace** (wordmark) with subtitle "Sign in to your workspace" |
 | Login fields | "Username", "Password" (labels above fields) |
 | Forced-password-change banner | "You're using a temporary password. Choose a new one to continue." |
@@ -147,14 +147,28 @@ Plain, calm, non-technical voice (the audience includes non-technical teammates)
 | Warning banner — Git remote divergence | "The remote repository has diverged. Automatic sync was paused to protect your data — contact your administrator." |
 | Status — repo health OK | "Storage healthy" (with success dot) |
 | Logout control label | **Log out** (in the top-bar user menu) |
-| Destructive confirmation — Deactivate user | Title: "Deactivate {displayName}?" · Body: "They won't be able to sign in until reactivated. Their account and history are kept." · Confirm button: "Deactivate" (destructive) · Cancel: "Cancel" |
-| Destructive confirmation — Reset user password | Title: "Reset password for {displayName}?" · Body: "This generates a new temporary password they must change on next sign-in." · Confirm: "Reset password" · Cancel: "Cancel" |
+| Destructive confirmation — Deactivate user | Title: "Deactivate {displayName}?" · Body: "They won't be able to sign in until reactivated. Their account and history are kept." · Confirm button: "Deactivate" (destructive) · Cancel: "Keep account active" |
+| Destructive confirmation — Reset user password | Title: "Reset password for {displayName}?" · Body: "This generates a new temporary password they must change on next sign-in." · Confirm: "Reset password" · Cancel: "Keep current password" |
 
 **Destructive actions in this phase (each requires an explicit confirmation dialog — never a one-click destructive action):**
 1. **Deactivate / disable a user** (admin table row) → confirmation dialog above.
 2. **Reset a user's password** (admin table row) → confirmation dialog above (treated as semi-destructive because it invalidates the current credential).
 
 There is **no page delete, no content deletion, and no Git-history mutation** in Phase 0, so those destructive flows are out of scope here.
+
+---
+
+## Visual Focal Point (per Phase-0 surface)
+
+Each surface declares the single element that anchors attention, so the executor builds a clear visual hierarchy (one focal point per screen; everything else recedes).
+
+| Surface | Visual focal point |
+|---------|-------------------|
+| Login (`/login`) | Centered login card; the **OKF Workspace wordmark** is the highest-weight element (28px/600), and the **"Sign in"** primary CTA (accent fill) is the action anchor — everything else (fields, subtitle) is secondary. |
+| Forced password change | Same centered card; the **"Set a new password"** heading anchors, the **"Update password"** primary CTA is the action anchor; the temporary-password warning banner is supporting, not focal. |
+| AppShell (`/app`) | The **main content pane** (empty-state heading "Your workspace is ready") is the focal point; the left **nav rail and top bar are secondary/recessive** (secondary surface, muted, read-only tree). |
+| Admin users (`/admin`) | The **users table** is the focal point; the **"Create user"** primary CTA sits top-right as the action anchor; row actions and the table header are secondary. |
+| Profile | The **profile form** (display name + password fields) is the focal point; the **"Save profile"** primary CTA is the action anchor. |
 
 ---
 
