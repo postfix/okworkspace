@@ -22,6 +22,9 @@ type Deps struct {
 	// routes. Optional; when nil a minimal 404 is served (Task 3 wires the
 	// real embedded SPA).
 	SPAHandler http.Handler
+	// Health reports repository health for GET /api/v1/health. Optional; when
+	// nil the endpoint reports a default healthy status.
+	Health HealthChecker
 }
 
 // New builds the HTTP handler: chi mux with the middleware stack (recover,
@@ -38,6 +41,7 @@ func New(deps Deps) (http.Handler, error) {
 		users:    deps.UserRepo,
 		config:   deps.Config,
 	}
+	health := &healthHandler{checker: deps.Health}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -46,6 +50,7 @@ func New(deps Deps) (http.Handler, error) {
 	// API surface.
 	r.Route("/api/v1", func(api chi.Router) {
 		api.Get("/csrf", h.handleCSRF)
+		api.Get("/health", health.handleHealth)
 		api.Route("/auth", func(a chi.Router) {
 			a.Post("/login", h.handleLogin)
 			a.Post("/logout", h.handleLogout)

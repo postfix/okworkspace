@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     status     TEXT    NOT NULL DEFAULT 'pending', -- pending | running | done | failed
     attempts   INTEGER NOT NULL DEFAULT 0,
     last_error TEXT    NOT NULL DEFAULT '',
-    run_after  TEXT    NOT NULL DEFAULT (datetime('now')),
+    -- run_after is fractional Unix epoch seconds (REAL) so sub-second backoff is
+    -- representable; SQLite's datetime() truncates to whole seconds.
+    run_after  REAL    NOT NULL DEFAULT 0,
     created_at TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );

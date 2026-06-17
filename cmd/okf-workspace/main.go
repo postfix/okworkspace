@@ -13,11 +13,31 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/postfix/okworkspace/internal/config"
+	"github.com/postfix/okworkspace/internal/gitstore"
+	"github.com/postfix/okworkspace/internal/jobs"
+	"github.com/postfix/okworkspace/internal/repo"
 	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
 	"github.com/postfix/okworkspace/internal/users"
 	"github.com/postfix/okworkspace/internal/web"
 )
+
+// healthAdapter adapts *gitstore.GitStore to server.HealthChecker without the
+// server package importing gitstore.
+type healthAdapter struct{ gs *gitstore.GitStore }
+
+func (a healthAdapter) RepoHealth(ctx context.Context) (server.RepoHealth, error) {
+	h, err := a.gs.Health(ctx)
+	if err != nil {
+		return server.RepoHealth{}, err
+	}
+	return server.RepoHealth{
+		OK:         h.OK,
+		Diverged:   h.Diverged,
+		SelfHealed: h.SelfHealed,
+		Detail:     h.Detail,
+	}, nil
+}
 
 func main() {
 	if err := rootCmd().Execute(); err != nil {
@@ -99,6 +119,43 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		)
 	}
 
+	// --- Storage + safety spines (Plan 02) ---
+	// Startup order (after bootstrap admin, before the HTTP server):
+	//   repo/data-dir init -> gitstore.Init -> SelfHealStaleLock ->
+	//   (PullOnStartup if remote) -> seed (if new+empty) -> job worker Start.
+	repoDir := cfg.Storage.RepoDir
+	if repoDir == "" {
+		repoDir = filepath.Join(cfg.Storage.DataDir, "repo")
+	}
+	contentRepo, err := repo.New(repoDir)
+	if err != nil {
+		return fmt.Errorf("init repo: %w", err)
+	}
+	defer func() { _ = contentRepo.Close() }()
+
+	gs := gitstore.New(contentRepo, cfg.Git)
+	if cfg.Git.Enabled {
+		if err := gs.Init(ctx); err != nil {
+			return fmt.Errorf("git init: %w", err)
+		}
+		healed, err := gs.SelfHealStaleLock(ctx)
+		if err != nil {
+			logger.Warn("git self-heal reported an issue", slog.Any("error", err))
+		} else if healed {
+			logger.Warn("recovered from an interrupted save (stale git lock cleared)")
+		}
+		if err := gs.PullOnStartup(ctx); err != nil {
+			return fmt.Errorf("git pull-on-startup: %w", err)
+		}
+		// First-run repo seed (SPEC §9 starter layout) is wired in Task 3.
+	}
+
+	worker := jobs.New(st.DB(), jobs.Config{})
+	worker.Register("commit", func(_ context.Context, _ string) error { return nil })
+	worker.Start(ctx)
+	defer worker.Stop()
+	logger.Info("job worker started")
+
 	spa, err := web.Handler()
 	if err != nil {
 		return fmt.Errorf("build SPA handler: %w", err)
@@ -108,6 +165,7 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		Config:     cfg,
 		UserRepo:   userRepo,
 		SPAHandler: spa,
+		Health:     healthAdapter{gs: gs},
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)
