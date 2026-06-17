@@ -1,10 +1,11 @@
 ---
 phase: 0
 slug: skeleton-auth-foundations
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-06-17
+reviewed_at: 2026-06-17
 ---
 
 # Phase 0 — UI Design Contract
