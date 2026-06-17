@@ -30,3 +30,15 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# --- OKF Workspace ---
+# Runtime config (copy config.example.yaml -> config.yaml)
+config.yaml
+# Local data directory (SQLite app.db, repo, logs, tmp)
+/data/
+# Built binary
+/okf-workspace
+# Frontend deps and build output (web/dist is committed only via .gitkeep)
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep

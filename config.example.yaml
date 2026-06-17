@@ -1,0 +1,55 @@
+# OKF Workspace configuration (SPEC §20.3).
+# Copy to config.yaml and adjust. config.yaml is gitignored.
+
+server:
+  listen: "0.0.0.0:8080"
+  # Set to your https URL in production; enables the Secure cookie flag.
+  public_url: "http://localhost:8080"
+
+storage:
+  data_dir: "./data"
+  repo_dir: "./data/repo"
+  max_upload_mb: 100
+
+git:
+  enabled: true
+  remote_enabled: false
+  remote: "origin"
+  branch: "main"
+  push_on_commit: false
+  pull_on_startup: false
+
+auth:
+  session_cookie_name: "okf_session"
+  session_ttl_hours: 168
+
+# The bootstrap admin username (D-03). Overridable via OKF_ADMIN_USERNAME.
+admin:
+  username: "admin"
+
+# --- Parsed-but-unused placeholders this phase (Phase 2/3/4) ---
+agent:
+  enabled: false
+  provider: "openai-compatible"
+  model: "local-or-remote-model"
+  base_url: "http://localhost:11434/v1"
+  api_key_env: "OKF_LLM_API_KEY"
+
+search:
+  enabled: false
+  engine: "bleve"
+
+attachments:
+  extract_text: true
+  allowed_extensions:
+    - ".pdf"
+    - ".docx"
+    - ".txt"
+    - ".md"
+    - ".png"
+    - ".jpg"
+    - ".jpeg"
+    - ".svg"
+    - ".csv"
+    - ".xlsx"
+    - ".zip"
