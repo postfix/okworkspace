@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -31,7 +30,7 @@ func (g *GitStore) SelfHealStaleLock(ctx context.Context) (bool, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	lockPath := filepath.Join(g.repo.Root(), ".git", "index.lock")
+	lockPath := g.repo.GitMetaPath("index.lock")
 	if _, err := os.Stat(lockPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil

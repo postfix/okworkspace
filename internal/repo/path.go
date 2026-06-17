@@ -60,6 +60,15 @@ func New(dir string) (*Repo, error) {
 // Root returns the canonical absolute root path.
 func (r *Repo) Root() string { return r.root }
 
+// GitMetaPath returns an absolute path to a file under the repo's .git
+// directory (e.g. "index.lock"). Segments are application constants, never
+// user input — this is Git metadata, not resolver-gated wiki content — so it
+// keeps all path joining confined to the repo package.
+func (r *Repo) GitMetaPath(segments ...string) string {
+	parts := append([]string{r.root, ".git"}, segments...)
+	return filepath.Join(parts...)
+}
+
 // Close releases the OS-level traversal guard.
 func (r *Repo) Close() error {
 	if r.osRoot == nil {
