@@ -38,12 +38,23 @@ export default function Dialog({
 }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<Element | null>(null);
+  // Keep the latest onCancel in a ref so the focus/keydown effect can call it
+  // without listing onCancel as a dependency. Callers pass a fresh onCancel
+  // identity on every render (e.g. `onCancel={() => setAddOpen(false)}`); if the
+  // effect depended on it, every keystroke-driven re-render would re-run the
+  // effect and re-focus the first field, stealing the caret.
+  const onCancelRef = useRef(onCancel);
+  // Sync the ref in an effect (not during render) so the focus/keydown effect
+  // below can call the latest onCancel without depending on its identity.
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  }, [onCancel]);
 
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement;
     const node = dialogRef.current;
-    // Move focus into the dialog.
+    // Move focus into the dialog. Runs only when the dialog opens.
     const focusable = node?.querySelector<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
@@ -52,7 +63,7 @@ export default function Dialog({
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCancel();
+        onCancelRef.current();
         return;
       }
       if (e.key !== "Tab" || !node) return;
@@ -77,7 +88,10 @@ export default function Dialog({
       document.removeEventListener("keydown", onKeyDown);
       (previouslyFocused.current as HTMLElement | null)?.focus?.();
     };
-  }, [open, onCancel]);
+    // Depend on `open` ONLY: the focus-into-dialog logic must run when the
+    // dialog opens/closes, not on every render. onCancel is read via
+    // onCancelRef so its changing identity never re-fires this effect.
+  }, [open]);
 
   if (!open) return null;
 
