@@ -1,20 +1,25 @@
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Folder, LogOut } from "lucide-react";
+import { FileText, Folder, Shield } from "lucide-react";
 
 import { health, logout, me, type Me, type RepoHealth } from "../api/client";
+import UserMenu from "../components/UserMenu";
 import "./AppShell.css";
 
 // Static placeholder tree (read-only/disabled). The real seeded tree is wired
-// in Plan 02; here it only communicates "editing arrives next".
+// in a later phase; here it only communicates "editing arrives next".
 const PLACEHOLDER_TREE = [
-  { label: "index.md", kind: "file" as const, depth: 0 },
-  { label: "runbooks", kind: "folder" as const, depth: 0 },
-  { label: "architecture", kind: "folder" as const, depth: 0 },
-  { label: "decisions", kind: "folder" as const, depth: 0 },
+  { label: "index.md", kind: "file" as const },
+  { label: "runbooks", kind: "folder" as const },
+  { label: "architecture", kind: "folder" as const },
+  { label: "decisions", kind: "folder" as const },
 ];
 
-export default function AppShell() {
+// AppShell is the authenticated chrome (top bar + nav rail + main pane). When
+// given children it renders them in the main pane (e.g. Admin, Profile);
+// otherwise it shows the Phase-0 empty-state placeholder.
+export default function AppShell({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data } = useQuery<Me>({ queryKey: ["me"], queryFn: me });
@@ -34,7 +39,13 @@ export default function AppShell() {
   return (
     <div className="appshell">
       <header className="topbar">
-        <div className="topbar-wordmark">OKF Workspace</div>
+        <button
+          type="button"
+          className="topbar-wordmark topbar-wordmark-btn"
+          onClick={() => navigate("/app")}
+        >
+          OKF Workspace
+        </button>
         <div className="topbar-right">
           {repoHealth?.ok && (
             <span className="repo-health" title={repoHealth.detail}>
@@ -42,11 +53,11 @@ export default function AppShell() {
               <span>Storage healthy</span>
             </span>
           )}
-          <span className="topbar-displayname">{data?.display_name}</span>
-          <button className="btn-ghost" type="button" onClick={handleLogout}>
-            <LogOut size={16} aria-hidden="true" />
-            <span>Log out</span>
-          </button>
+          <UserMenu
+            displayName={data?.display_name ?? ""}
+            onProfile={() => navigate("/profile")}
+            onLogout={handleLogout}
+          />
         </div>
       </header>
 
@@ -68,6 +79,19 @@ export default function AppShell() {
               </li>
             ))}
           </ul>
+
+          {isAdmin && (
+            <div className="navrail-admin">
+              <button
+                type="button"
+                className="navrow navrow-action"
+                onClick={() => navigate("/admin")}
+              >
+                <Shield size={16} aria-hidden="true" />
+                <span>Admin</span>
+              </button>
+            </div>
+          )}
         </nav>
 
         <main className="mainpane">
@@ -82,16 +106,21 @@ export default function AppShell() {
               Recovered from an interrupted save. Everything looks fine.
             </div>
           )}
-          <div className="empty-state">
-            <h1 className="empty-state-heading">Your workspace is ready</h1>
-            <p className="empty-state-body">
-              Page editing arrives in the next release. For now you can browse
-              the starter structure on the left.
-              {isAdmin
-                ? " Your admin can add teammates from the admin screen."
-                : ""}
-            </p>
-          </div>
+
+          {children ? (
+            children
+          ) : (
+            <div className="empty-state">
+              <h1 className="empty-state-heading">Your workspace is ready</h1>
+              <p className="empty-state-body">
+                Page editing arrives in the next release. For now you can browse
+                the starter structure on the left.
+                {isAdmin
+                  ? " Your admin can add teammates from the admin screen."
+                  : ""}
+              </p>
+            </div>
+          )}
         </main>
       </div>
     </div>

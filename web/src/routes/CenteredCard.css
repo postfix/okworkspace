@@ -1,4 +1,5 @@
-.login-screen {
+/* Shared layout for centered single-card screens (forced password change). */
+.centered-screen {
   min-height: 100%;
   display: flex;
   align-items: flex-start;
@@ -7,7 +8,7 @@
   background: var(--color-surface);
 }
 
-.login-card {
+.centered-card {
   width: 100%;
   max-width: var(--login-card-width);
   background: var(--color-bg);
@@ -20,24 +21,29 @@
   gap: var(--space-md);
 }
 
-.login-wordmark {
+.centered-title {
+  margin: 0;
   font-size: var(--font-size-display);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-display);
   text-align: center;
 }
 
-.login-subtitle {
-  margin: 0;
-  text-align: center;
-  color: var(--color-text-muted);
+.banner {
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
   font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
 }
 
-/* .field, .field-label, .input, .btn, .btn-primary, .spinner are shared
- * primitives declared in styles/controls.css. */
+.banner-warning {
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+  background: var(--color-bg);
+}
 
-.login-error {
-  font-size: var(--font-size-label);
-  color: var(--color-destructive);
+.banner-success {
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+  background: var(--color-bg);
 }

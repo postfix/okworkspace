@@ -6,7 +6,20 @@ export interface Me {
   username: string;
   display_name: string;
   role: string;
+  must_change_password: boolean;
 }
+
+// AdminUser mirrors the safe userView the admin API returns (no password hash).
+export interface AdminUser {
+  id: number;
+  username: string;
+  display_name: string;
+  role: string;
+  must_change_password: boolean;
+  active: boolean;
+}
+
+export type UserRole = "admin" | "editor" | "reader";
 
 // RepoHealth mirrors the backend GET /api/v1/health payload (SPEC §6.6).
 export interface RepoHealth {
@@ -34,10 +47,14 @@ async function ensureCSRF(): Promise<string> {
   return fetchCSRFToken();
 }
 
-async function mutate<T>(path: string, body: unknown): Promise<T> {
+async function mutate<T>(
+  path: string,
+  body: unknown,
+  method: "POST" | "PUT" = "POST",
+): Promise<T> {
   const token = await ensureCSRF();
   const res = await fetch(path, {
-    method: "POST",
+    method,
     credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
@@ -94,4 +111,70 @@ export async function health(): Promise<RepoHealth> {
     throw new Error("Something went wrong. Check your connection and try again.");
   }
   return (await res.json()) as RepoHealth;
+}
+
+// --- Self-service profile (D-06) ---
+
+// updateProfile changes the current user's display name only (no role).
+export async function updateProfile(displayName: string): Promise<void> {
+  await mutate<void>("/api/v1/profile", { display_name: displayName }, "PUT");
+}
+
+// changePassword changes the current user's password (verifies the current one
+// server-side, enforces >=12 chars, clears must_change_password).
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await mutate<void>(
+    "/api/v1/profile/password",
+    { current_password: currentPassword, new_password: newPassword },
+    "PUT",
+  );
+}
+
+// --- Admin user management (D-05, admin-only and server-side RBAC-gated) ---
+
+export async function listUsers(): Promise<AdminUser[]> {
+  const res = await fetch("/api/v1/admin/users", { credentials: "same-origin" });
+  if (res.status === 403) {
+    const err = new Error("You don't have permission to do that.") as Error & {
+      status?: number;
+    };
+    err.status = 403;
+    throw err;
+  }
+  if (!res.ok) {
+    throw new Error("Something went wrong. Check your connection and try again.");
+  }
+  return (await res.json()) as AdminUser[];
+}
+
+export interface CreatedUser extends AdminUser {
+  one_time_password: string;
+}
+
+export async function createUser(
+  username: string,
+  displayName: string,
+  role: UserRole,
+): Promise<CreatedUser> {
+  return mutate<CreatedUser>("/api/v1/admin/users", {
+    username,
+    display_name: displayName,
+    role,
+  });
+}
+
+export async function resetUserPassword(
+  id: number,
+): Promise<{ one_time_password: string }> {
+  return mutate<{ one_time_password: string }>(
+    `/api/v1/admin/users/${id}/reset-password`,
+    undefined,
+  );
+}
+
+export async function deactivateUser(id: number): Promise<void> {
+  await mutate<void>(`/api/v1/admin/users/${id}/deactivate`, undefined);
 }
