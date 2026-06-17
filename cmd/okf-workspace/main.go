@@ -6,13 +6,16 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/postfix/okworkspace/internal/config"
+	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
+	"github.com/postfix/okworkspace/internal/users"
 )
 
 func main() {
@@ -80,7 +83,44 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	}
 	logger.Info("store ready", slog.String("db_path", dbPath))
 
-	// Task 2/3 wire bootstrap-admin and the HTTP server here.
-	logger.Info("startup complete (Task 1 scope: config + store + migrate)")
+	// Bootstrap the admin user on first run (D-01): print the one-time password
+	// exactly once. Never logs plaintext on any other path.
+	userRepo := users.NewRepository(st.DB())
+	adminUser, adminPassword, created, err := users.BootstrapAdmin(ctx, userRepo, cfg)
+	if err != nil {
+		return fmt.Errorf("bootstrap admin: %w", err)
+	}
+	if created {
+		logger.Warn("admin user created — save this password, it will NOT be shown again",
+			slog.String("username", adminUser),
+			slog.String("one_time_password", adminPassword),
+			slog.Bool("must_change_password", true),
+		)
+	}
+
+	handler, err := server.New(server.Deps{
+		Store:      st,
+		Config:     cfg,
+		UserRepo:   userRepo,
+		SPAHandler: spaHandler(),
+	})
+	if err != nil {
+		return fmt.Errorf("build server: %w", err)
+	}
+
+	logger.Info("listening", slog.String("addr", cfg.Server.Listen))
+	srv := &http.Server{Addr: cfg.Server.Listen, Handler: handler}
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("http server: %w", err)
+	}
 	return nil
+}
+
+// spaHandler returns the embedded SPA handler. Task 3 replaces this with the
+// real embed.FS-backed handler; until then it serves a placeholder.
+func spaHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("OKF Workspace SPA not yet built (run: cd web && npm run build)"))
+	})
 }

@@ -34,11 +34,15 @@ func setup(t *testing.T) (*users.Repository, string) {
 
 func TestAuthenticateSuccess(t *testing.T) {
 	repo, pw := setup(t)
-	u, err := auth.Authenticate(context.Background(), repo, "admin", pw)
+	uid, err := auth.Authenticate(context.Background(), repo, "admin", pw)
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
-	if u == nil || u.Username != "admin" {
+	u, err := repo.GetByID(context.Background(), uid)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if u.Username != "admin" {
 		t.Fatalf("expected admin user, got %+v", u)
 	}
 }

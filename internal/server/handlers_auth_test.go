@@ -84,6 +84,7 @@ func TestLoginSuccessSetsSecureCookie(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-CSRF-Token", token)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	for _, c := range cookies {
 		req.AddCookie(c)
 	}
@@ -119,6 +120,7 @@ func TestLoginInvalidCredentialsGenericError(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-CSRF-Token", token)
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
 		for _, c := range cookies {
 			req.AddCookie(c)
 		}
@@ -150,6 +152,7 @@ func TestMeAfterLogin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-CSRF-Token", token)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	for _, c := range cookies {
 		req.AddCookie(c)
 	}
