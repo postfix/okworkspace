@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
 status: executing
-stopped_at: Phase 0 UI-SPEC approved
-last_updated: "2026-06-17T16:54:26.331Z"
+stopped_at: Completed 00-02-PLAN.md
+last_updated: "2026-06-17T17:12:40.934Z"
 last_activity: 2026-06-17 -- Phase 00 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 00 (skeleton-auth-foundations) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-17 -- Phase 00 execution started
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 00 P01 | 18 | 3 tasks | 43 files |
+| Phase 00 P02 | 12 | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Pure-Go SCS SQLite session store (avoids cgo sqlite3store; keeps CGO_ENABLED=0)
 - [Phase ?]: auth.UserLookup interface breaks the auth<->users import cycle
 - [Phase ?]: SPA built into internal/web/dist (Go //go:embed cannot traverse '..')
+- [Phase ?]: Phase 0: SEC-01 resolver
+- [Phase ?]: Phase 0: single-writer Git via one mutex + exec.Command arg slices; push deferred to Phase 1
+- [Phase ?]: Phase 0: jobs.run_after stored as REAL fractional epoch (SQLite datetime truncates to seconds)
 
 ### Pending Todos
 
@@ -93,6 +97,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-17T16:54:18.288Z
-Stopped at: Phase 0 UI-SPEC approved
-Resume file: .planning/phases/00-skeleton-auth-foundations/00-UI-SPEC.md
+Last session: 2026-06-17T17:12:40.929Z
+Stopped at: Completed 00-02-PLAN.md
+Resume file: None

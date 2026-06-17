@@ -88,7 +88,7 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 
 ### Security & Audit
 
-- [ ] **SEC-01**: All file paths are resolved through a safe resolver that blocks `../`, absolute paths, and symlink escape
+- [x] **SEC-01**: All file paths are resolved through a safe resolver that blocks `../`, absolute paths, and symlink escape
 - [ ] **SEC-02**: Risky attachment downloads are served with `Content-Disposition: attachment`
 - [x] **SEC-03**: Passwords are hashed with Argon2id (or bcrypt)
 - [x] **SEC-04**: Session cookies are HTTPOnly with SameSite set, and mutating requests are CSRF-protected
@@ -139,7 +139,7 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | AUTH-04 | Phase 0 | Complete |
 | AUTH-05 | Phase 0 | Pending |
 | AUTH-06 | Phase 0 | Complete |
-| SEC-01 | Phase 0 | Pending |
+| SEC-01 | Phase 0 | Complete |
 | SEC-03 | Phase 0 | Complete |
 | SEC-04 | Phase 0 | Complete |
 | SEC-05 | Phase 0 | Pending |
