@@ -61,6 +61,28 @@ func (g *GitStore) SelfHealStaleLock(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// IsEmpty reports whether the repository is genuinely new and empty: it has no
+// commits (no HEAD) AND no tracked files. A pulled/populated repo returns false
+// so the seed never clobbers existing content (D-09).
+func (g *GitStore) IsEmpty(ctx context.Context) (bool, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	// No HEAD => no commits yet.
+	if _, err := g.git(ctx, "rev-parse", "--verify", "HEAD"); err == nil {
+		return false, nil
+	}
+	// No tracked files in the index either.
+	out, err := g.git(ctx, "ls-files")
+	if err != nil {
+		return false, fmt.Errorf("git ls-files: %w", err)
+	}
+	if strings.TrimSpace(out) != "" {
+		return false, nil
+	}
+	return true, nil
+}
+
 // Health reports the current repository health. A local-only repo with a clean
 // status is OK and not diverged.
 func (g *GitStore) Health(ctx context.Context) (HealthStatus, error) {

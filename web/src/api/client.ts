@@ -8,6 +8,14 @@ export interface Me {
   role: string;
 }
 
+// RepoHealth mirrors the backend GET /api/v1/health payload (SPEC §6.6).
+export interface RepoHealth {
+  ok: boolean;
+  diverged: boolean;
+  self_healed: boolean;
+  detail: string;
+}
+
 const CSRF_HEADER = "X-CSRF-Token";
 let csrfToken: string | null = null;
 
@@ -77,4 +85,13 @@ export async function me(): Promise<Me> {
     throw new Error("Something went wrong. Check your connection and try again.");
   }
   return (await res.json()) as Me;
+}
+
+// health fetches repository health. A GET, so no CSRF token is required.
+export async function health(): Promise<RepoHealth> {
+  const res = await fetch("/api/v1/health", { credentials: "same-origin" });
+  if (!res.ok) {
+    throw new Error("Something went wrong. Check your connection and try again.");
+  }
+  return (await res.json()) as RepoHealth;
 }

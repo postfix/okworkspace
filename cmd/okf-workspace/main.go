@@ -147,7 +147,16 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		if err := gs.PullOnStartup(ctx); err != nil {
 			return fmt.Errorf("git pull-on-startup: %w", err)
 		}
-		// First-run repo seed (SPEC §9 starter layout) is wired in Task 3.
+		// Seed a brand-new, empty repo with the SPEC §9 starter layout as the
+		// first commit through the single-writer service (D-08/D-10). An
+		// existing/pulled repo is left untouched (D-09).
+		seeded, err := users.SeedStarterRepo(ctx, gs, contentRepo, adminUser)
+		if err != nil {
+			return fmt.Errorf("seed starter repo: %w", err)
+		}
+		if seeded {
+			logger.Info("seeded starter repository layout", slog.String("user", adminUser))
+		}
 	}
 
 	worker := jobs.New(st.DB(), jobs.Config{})

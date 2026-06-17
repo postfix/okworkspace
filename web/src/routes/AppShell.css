@@ -32,6 +32,35 @@
   color: var(--color-text);
 }
 
+.repo-health {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.repo-health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.banner {
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.banner-warning {
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+  background: var(--color-bg);
+}
+
 .btn-ghost {
   min-height: var(--hit-min-height);
   display: inline-flex;

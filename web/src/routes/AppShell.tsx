@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Folder, LogOut } from "lucide-react";
 
-import { logout, me, type Me } from "../api/client";
+import { health, logout, me, type Me, type RepoHealth } from "../api/client";
 import "./AppShell.css";
 
 // Static placeholder tree (read-only/disabled). The real seeded tree is wired
@@ -18,6 +18,10 @@ export default function AppShell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data } = useQuery<Me>({ queryKey: ["me"], queryFn: me });
+  const { data: repoHealth } = useQuery<RepoHealth>({
+    queryKey: ["health"],
+    queryFn: health,
+  });
 
   const isAdmin = data?.role === "admin";
 
@@ -32,6 +36,12 @@ export default function AppShell() {
       <header className="topbar">
         <div className="topbar-wordmark">OKF Workspace</div>
         <div className="topbar-right">
+          {repoHealth?.ok && (
+            <span className="repo-health" title={repoHealth.detail}>
+              <span className="repo-health-dot" aria-hidden="true" />
+              <span>Storage healthy</span>
+            </span>
+          )}
           <span className="topbar-displayname">{data?.display_name}</span>
           <button className="btn-ghost" type="button" onClick={handleLogout}>
             <LogOut size={16} aria-hidden="true" />
@@ -61,6 +71,17 @@ export default function AppShell() {
         </nav>
 
         <main className="mainpane">
+          {repoHealth?.diverged && (
+            <div className="banner banner-warning" role="alert">
+              The remote repository has diverged. Automatic sync was paused to
+              protect your data — contact your administrator.
+            </div>
+          )}
+          {repoHealth?.self_healed && !repoHealth.diverged && (
+            <div className="banner banner-warning" role="status">
+              Recovered from an interrupted save. Everything looks fine.
+            </div>
+          )}
           <div className="empty-state">
             <h1 className="empty-state-heading">Your workspace is ready</h1>
             <p className="empty-state-body">
