@@ -38,7 +38,10 @@ config.yaml
 /data/
 # Built binary
 /okf-workspace
-# Frontend deps and build output (web/dist is committed only via .gitkeep)
+# Frontend deps + TS incremental build cache
 web/node_modules/
-web/dist/*
-!web/dist/.gitkeep
+web/*.tsbuildinfo
+# Built SPA embed target (internal/web/dist is committed only via .gitkeep;
+# Go's //go:embed cannot traverse "..", so vite builds here)
+internal/web/dist/*
+!internal/web/dist/.gitkeep

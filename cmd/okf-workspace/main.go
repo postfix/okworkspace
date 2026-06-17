@@ -16,6 +16,7 @@ import (
 	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
 	"github.com/postfix/okworkspace/internal/users"
+	"github.com/postfix/okworkspace/internal/web"
 )
 
 func main() {
@@ -98,11 +99,15 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		)
 	}
 
+	spa, err := web.Handler()
+	if err != nil {
+		return fmt.Errorf("build SPA handler: %w", err)
+	}
 	handler, err := server.New(server.Deps{
 		Store:      st,
 		Config:     cfg,
 		UserRepo:   userRepo,
-		SPAHandler: spaHandler(),
+		SPAHandler: spa,
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)
@@ -114,13 +119,4 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		return fmt.Errorf("http server: %w", err)
 	}
 	return nil
-}
-
-// spaHandler returns the embedded SPA handler. Task 3 replaces this with the
-// real embed.FS-backed handler; until then it serves a placeholder.
-func spaHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("OKF Workspace SPA not yet built (run: cd web && npm run build)"))
-	})
 }
