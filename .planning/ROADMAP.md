@@ -32,7 +32,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. On first startup the system creates an admin user, initializes the data directory and Git repo, and self-heals any stale Git lock
   4. A user's available actions reflect their role (admin / editor / reader), and key actions (login, config changes) appear in an audit log
   5. Every file-path access is forced through a safe resolver that rejects `../`, absolute paths, and symlink escape (fuzz-tested)
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 00-01-PLAN.md — Walking Skeleton: scaffold + Argon2id/SCS/CSRF auth spine + admin bootstrap + login -> AppShell (wave 1)
+- [ ] 00-02-PLAN.md — Safe-path resolver (SEC-01, fuzz-tested) + single-writer Git commit spine + job worker + first-run repo seed (wave 2)
+- [ ] 00-03-PLAN.md — RBAC RequireRole + /admin user management + self-service profile + forced password change + logout + CLI reset (wave 3)
+- [ ] 00-04-PLAN.md — Audit log (SEC-05, SQLite mirror + slog) + full config.yaml schema + systemd/Docker packaging (wave 4)
 **UI hint**: yes
 **Notes**: SEC-* land here as the cross-cutting security floor (path resolver, Argon2id hashing, HTTPOnly/SameSite cookies, CSRF, audit scaffolding). The single-writer Git service and async job worker are introduced here as spines reused by every later phase. Remote-push divergence behavior (fast-forward-only pull with alert) and `pull_on_startup` semantics should be defined during Phase 0/1 planning. No phase research needed — chi middleware, Argon2id, SCS sessions, and nosurf CSRF are standard, well-documented patterns.
 
@@ -117,7 +121,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Skeleton, Auth & Foundations | 0/TBD | Not started | - |
+| 0. Skeleton, Auth & Foundations | 0/4 | Planned | - |
 | 1. OKF Pages, Navigation & Hidden Git | 0/TBD | Not started | - |
 | 2. Attachments & Text Extraction | 0/TBD | Not started | - |
 | 3. Search | 0/TBD | Not started | - |
