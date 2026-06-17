@@ -38,7 +38,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 1**
 
-- [ ] 00-01-PLAN.md — Walking Skeleton: scaffold + Argon2id/SCS/CSRF auth spine + admin bootstrap + login -> AppShell (wave 1)
+- [x] 00-01-PLAN.md — Walking Skeleton: scaffold + Argon2id/SCS/CSRF auth spine + admin bootstrap + login -> AppShell (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -151,7 +151,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Skeleton, Auth & Foundations | 0/4 | Planned | - |
+| 0. Skeleton, Auth & Foundations | 1/4 | In Progress|  |
 | 1. OKF Pages, Navigation & Hidden Git | 0/TBD | Not started | - |
 | 2. Attachments & Text Extraction | 0/TBD | Not started | - |
 | 3. Search | 0/TBD | Not started | - |

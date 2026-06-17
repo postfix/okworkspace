@@ -4,13 +4,13 @@ milestone: v0.9.9
 milestone_name: milestone
 status: executing
 stopped_at: Phase 0 UI-SPEC approved
-last_updated: "2026-06-17T16:30:05.750Z"
-last_activity: 2026-06-17 — Roadmap created (6 phases, 60/60 requirements mapped)
+last_updated: "2026-06-17T16:54:26.331Z"
+last_activity: 2026-06-17 -- Phase 00 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** A non-technical teammate can create, edit, and find knowledge — and get useful AI help on it — while every byte stays as plain Markdown + original files on disk, versioned in Git, with no proprietary store to escape.
-**Current focus:** Phase 0 — Skeleton, Auth & Foundations
+**Current focus:** Phase 00 — skeleton-auth-foundations
 
 ## Current Position
 
-Phase: 0 of 6 (Skeleton, Auth & Foundations) — counted 0–5
-Plan: 0 of TBD in current phase
+Phase: 00 (skeleton-auth-foundations) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-17 — Roadmap created (6 phases, 60/60 requirements mapped)
+Last activity: 2026-06-17 -- Phase 00 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 00 P01 | 18 | 3 tasks | 43 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,9 @@ Recent decisions affecting current work:
 - Files-as-truth; SQLite = operational data only (never content)
 - Git hidden behind backend; commits automatic; agent writes require explicit user approval
 - MVP editor = Markdown-with-preview; TipTap deferred to v2 (gated on round-trip tests)
+- [Phase ?]: Pure-Go SCS SQLite session store (avoids cgo sqlite3store; keeps CGO_ENABLED=0)
+- [Phase ?]: auth.UserLookup interface breaks the auth<->users import cycle
+- [Phase ?]: SPA built into internal/web/dist (Go //go:embed cannot traverse '..')
 
 ### Pending Todos
 
@@ -89,6 +93,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-17T15:41:49.721Z
+Last session: 2026-06-17T16:54:18.288Z
 Stopped at: Phase 0 UI-SPEC approved
 Resume file: .planning/phases/00-skeleton-auth-foundations/00-UI-SPEC.md

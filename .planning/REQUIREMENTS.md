@@ -9,12 +9,12 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 
 ### Authentication & Users
 
-- [ ] **AUTH-01**: User can log in with a username and password
+- [x] **AUTH-01**: User can log in with a username and password
 - [ ] **AUTH-02**: User can log out from any page
-- [ ] **AUTH-03**: User session persists across browser refresh via a secure cookie
-- [ ] **AUTH-04**: An admin user is created automatically on first startup
+- [x] **AUTH-03**: User session persists across browser refresh via a secure cookie
+- [x] **AUTH-04**: An admin user is created automatically on first startup
 - [ ] **AUTH-05**: User actions are gated by role (admin / editor / reader)
-- [ ] **AUTH-06**: User has a display name shown in the UI
+- [x] **AUTH-06**: User has a display name shown in the UI
 
 ### Pages
 
@@ -90,8 +90,8 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 
 - [ ] **SEC-01**: All file paths are resolved through a safe resolver that blocks `../`, absolute paths, and symlink escape
 - [ ] **SEC-02**: Risky attachment downloads are served with `Content-Disposition: attachment`
-- [ ] **SEC-03**: Passwords are hashed with Argon2id (or bcrypt)
-- [ ] **SEC-04**: Session cookies are HTTPOnly with SameSite set, and mutating requests are CSRF-protected
+- [x] **SEC-03**: Passwords are hashed with Argon2id (or bcrypt)
+- [x] **SEC-04**: Session cookies are HTTPOnly with SameSite set, and mutating requests are CSRF-protected
 - [ ] **SEC-05**: Key actions (login, page/attachment changes, agent prompts and approvals, config changes) are recorded in an audit log
 
 ## v2 Requirements
@@ -133,15 +133,15 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 0 | Pending |
+| AUTH-01 | Phase 0 | Complete |
 | AUTH-02 | Phase 0 | Pending |
-| AUTH-03 | Phase 0 | Pending |
-| AUTH-04 | Phase 0 | Pending |
+| AUTH-03 | Phase 0 | Complete |
+| AUTH-04 | Phase 0 | Complete |
 | AUTH-05 | Phase 0 | Pending |
-| AUTH-06 | Phase 0 | Pending |
+| AUTH-06 | Phase 0 | Complete |
 | SEC-01 | Phase 0 | Pending |
-| SEC-03 | Phase 0 | Pending |
-| SEC-04 | Phase 0 | Pending |
+| SEC-03 | Phase 0 | Complete |
+| SEC-04 | Phase 0 | Complete |
 | SEC-05 | Phase 0 | Pending |
 | PAGE-01 | Phase 1 | Pending |
 | PAGE-02 | Phase 1 | Pending |
@@ -195,6 +195,7 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | COLL-04 | Phase 5 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 60 total
 - Mapped to phases: 60 ✓
 - Unmapped: 0 ✓
