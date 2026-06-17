@@ -29,9 +29,10 @@ type loginRequest struct {
 }
 
 type meResponse struct {
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Role        string `json:"role"`
+	Username           string `json:"username"`
+	DisplayName        string `json:"display_name"`
+	Role               string `json:"role"`
+	MustChangePassword bool   `json:"must_change_password"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -83,9 +84,10 @@ func (h *authHandlers) handleLogin(w http.ResponseWriter, r *http.Request) {
 	h.sessions.Put(r.Context(), auth.SessionUserIDKey, u.ID)
 
 	writeJSON(w, http.StatusOK, meResponse{
-		Username:    u.Username,
-		DisplayName: u.DisplayName,
-		Role:        u.Role,
+		Username:           u.Username,
+		DisplayName:        u.DisplayName,
+		Role:               u.Role,
+		MustChangePassword: u.MustChangePassword,
 	})
 }
 
@@ -112,8 +114,9 @@ func (h *authHandlers) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, meResponse{
-		Username:    u.Username,
-		DisplayName: u.DisplayName,
-		Role:        u.Role,
+		Username:           u.Username,
+		DisplayName:        u.DisplayName,
+		Role:               u.Role,
+		MustChangePassword: u.MustChangePassword,
 	})
 }

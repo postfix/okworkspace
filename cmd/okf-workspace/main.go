@@ -51,6 +51,7 @@ func rootCmd() *cobra.Command {
 		Short: "OKF Workspace — a self-hosted, OKF-native wiki for the agent era",
 	}
 	root.AddCommand(serveCmd())
+	root.AddCommand(adminCmd())
 	return root
 }
 

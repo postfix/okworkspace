@@ -112,6 +112,74 @@ func (r *Repository) Create(ctx context.Context, u User) (int64, error) {
 	return res.LastInsertId()
 }
 
+// List returns all users ordered by display name. Used by the admin screen.
+func (r *Repository) List(ctx context.Context) ([]User, error) {
+	const q = `SELECT id, username, display_name, role, password_hash, must_change_password, active
+	           FROM users ORDER BY display_name COLLATE NOCASE`
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []User
+	for rows.Next() {
+		var u User
+		var mustChange, active int
+		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &u.PasswordHash, &mustChange, &active); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		u.MustChangePassword = mustChange != 0
+		u.Active = active != 0
+		out = append(out, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate users: %w", err)
+	}
+	return out, nil
+}
+
+// UpdateRole sets a user's role. Role validity is enforced by the caller
+// (users.SetRole); this method only performs the parameterized update.
+func (r *Repository) UpdateRole(ctx context.Context, id int64, role string) error {
+	return r.execUpdate(ctx, `UPDATE users SET role = ? WHERE id = ?`, id, role, id)
+}
+
+// UpdatePassword sets a user's password hash and must_change_password flag.
+func (r *Repository) UpdatePassword(ctx context.Context, id int64, hash string, mustChange bool) error {
+	return r.execUpdate(ctx,
+		`UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?`,
+		id, hash, boolToInt(mustChange), id)
+}
+
+// SetActive toggles a user's active flag (Deactivate/reactivate).
+func (r *Repository) SetActive(ctx context.Context, id int64, active bool) error {
+	return r.execUpdate(ctx, `UPDATE users SET active = ? WHERE id = ?`, id, boolToInt(active), id)
+}
+
+// UpdateDisplayName changes a user's display name.
+func (r *Repository) UpdateDisplayName(ctx context.Context, id int64, displayName string) error {
+	return r.execUpdate(ctx, `UPDATE users SET display_name = ? WHERE id = ?`, id, displayName, id)
+}
+
+// execUpdate runs a parameterized UPDATE and returns ErrNotFound when no row
+// matched the id. The id is passed twice by callers (once for the WHERE value,
+// once for the not-found check) — args carries the bind values in order.
+func (r *Repository) execUpdate(ctx context.Context, q string, id int64, args ...any) error {
+	res, err := r.db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return fmt.Errorf("update user id %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected for user id %d: %w", id, err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1

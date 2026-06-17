@@ -56,6 +56,29 @@ func New(deps Deps) (http.Handler, error) {
 			a.Post("/logout", h.handleLogout)
 			a.Get("/me", h.handleMe)
 		})
+
+		// Authenticated surface: loadCurrentUser resolves the session-bound user
+		// and attaches it to the context so RequireRole authorizes from the
+		// SESSION, never client input (T-00.03-01).
+		api.Group(func(authed chi.Router) {
+			authed.Use(h.loadCurrentUser)
+
+			// Self-service profile (any authenticated user, self only — D-06).
+			authed.Put("/profile", h.handleUpdateProfile)
+			authed.Put("/profile/password", h.handleChangePassword)
+
+			// Admin-only user management (D-05). Every route is gated by
+			// RequireRole(admin) in addition to the global nosurf CSRF on
+			// mutating methods (T-00.03-03).
+			authed.Group(func(admin chi.Router) {
+				admin.Use(auth.RequireRole(auth.RoleAdmin))
+				admin.Get("/admin/users", h.handleListUsers)
+				admin.Post("/admin/users", h.handleCreateUser)
+				admin.Put("/admin/users/{id}/role", h.handleSetRole)
+				admin.Post("/admin/users/{id}/reset-password", h.handleResetPassword)
+				admin.Post("/admin/users/{id}/deactivate", h.handleDeactivate)
+			})
+		})
 	})
 
 	// SPA catch-all for non-API routes.
