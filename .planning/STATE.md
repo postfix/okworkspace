@@ -1,0 +1,87 @@
+---
+gsd_state_version: '1.0'  # placeholder; syncStateFrontmatter overwrites on first state.* call
+status: planning
+progress:
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+---
+
+# Project State
+
+## Project Reference
+
+See: .planning/PROJECT.md (updated 2026-06-17)
+
+**Core value:** A non-technical teammate can create, edit, and find knowledge — and get useful AI help on it — while every byte stays as plain Markdown + original files on disk, versioned in Git, with no proprietary store to escape.
+**Current focus:** Phase 0 — Skeleton, Auth & Foundations
+
+## Current Position
+
+Phase: 0 of 6 (Skeleton, Auth & Foundations) — counted 0–5
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-06-17 — Roadmap created (6 phases, 60/60 requirements mapped)
+
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: — min
+- Total execution time: 0.0 hours
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+**Recent Trend:**
+- Last 5 plans: —
+- Trend: —
+
+*Updated after each plan completion*
+
+## Accumulated Context
+
+### Decisions
+
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- Target = full MVP (SPEC Phases 0–5); SPEC.md is source of truth
+- Files-as-truth; SQLite = operational data only (never content)
+- Git hidden behind backend; commits automatic; agent writes require explicit user approval
+- MVP editor = Markdown-with-preview; TipTap deferred to v2 (gated on round-trip tests)
+
+### Pending Todos
+
+[From .planning/todos/pending/ — ideas captured during sessions]
+
+None yet.
+
+### Blockers/Concerns
+
+[Issues that affect future work]
+
+- Phase 1: byte-stable Markdown round-trip (golden corpus) is the exit gate — spike single-writer Git batching + stale-lock recovery early
+- Phase 2: NEEDS RESEARCH — large-binary-in-Git policy + PDF/DOCX extraction fidelity must be resolved before uploads ship
+- Phase 4: NEEDS RESEARCH — Eino is pre-1.0; re-verify constructor/tool-schema/interrupt-resume APIs and pin go.sum before building the agent loop
+
+## Deferred Items
+
+Items acknowledged and carried forward from previous milestone close:
+
+| Category | Item | Status | Deferred At |
+|----------|------|--------|-------------|
+| *(none)* | | | |
+
+## Session Continuity
+
+Last session: 2026-06-17
+Stopped at: Roadmap and STATE initialized; REQUIREMENTS traceability filled (60/60 mapped)
+Resume file: None

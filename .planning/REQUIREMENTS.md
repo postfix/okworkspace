@@ -133,13 +133,74 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (filled by roadmapper) | — | Pending |
+| AUTH-01 | Phase 0 | Pending |
+| AUTH-02 | Phase 0 | Pending |
+| AUTH-03 | Phase 0 | Pending |
+| AUTH-04 | Phase 0 | Pending |
+| AUTH-05 | Phase 0 | Pending |
+| AUTH-06 | Phase 0 | Pending |
+| SEC-01 | Phase 0 | Pending |
+| SEC-03 | Phase 0 | Pending |
+| SEC-04 | Phase 0 | Pending |
+| SEC-05 | Phase 0 | Pending |
+| PAGE-01 | Phase 1 | Pending |
+| PAGE-02 | Phase 1 | Pending |
+| PAGE-03 | Phase 1 | Pending |
+| PAGE-04 | Phase 1 | Pending |
+| PAGE-05 | Phase 1 | Pending |
+| PAGE-06 | Phase 1 | Pending |
+| PAGE-07 | Phase 1 | Pending |
+| PAGE-08 | Phase 1 | Pending |
+| PAGE-09 | Phase 1 | Pending |
+| NAV-01 | Phase 1 | Pending |
+| NAV-02 | Phase 1 | Pending |
+| NAV-03 | Phase 1 | Pending |
+| NAV-04 | Phase 1 | Pending |
+| NAV-05 | Phase 1 | Pending |
+| VER-01 | Phase 1 | Pending |
+| VER-02 | Phase 1 | Pending |
+| VER-03 | Phase 1 | Pending |
+| VER-04 | Phase 1 | Pending |
+| ATT-01 | Phase 2 | Pending |
+| ATT-02 | Phase 2 | Pending |
+| ATT-03 | Phase 2 | Pending |
+| ATT-04 | Phase 2 | Pending |
+| ATT-05 | Phase 2 | Pending |
+| ATT-06 | Phase 2 | Pending |
+| ATT-07 | Phase 2 | Pending |
+| ATT-08 | Phase 2 | Pending |
+| ATT-09 | Phase 2 | Pending |
+| ATT-10 | Phase 2 | Pending |
+| SEC-02 | Phase 2 | Pending |
+| SRCH-01 | Phase 3 | Pending |
+| SRCH-02 | Phase 3 | Pending |
+| SRCH-03 | Phase 3 | Pending |
+| SRCH-04 | Phase 3 | Pending |
+| SRCH-05 | Phase 3 | Pending |
+| SRCH-06 | Phase 3 | Pending |
+| AGNT-01 | Phase 4 | Pending |
+| AGNT-02 | Phase 4 | Pending |
+| AGNT-03 | Phase 4 | Pending |
+| AGNT-04 | Phase 4 | Pending |
+| AGNT-05 | Phase 4 | Pending |
+| AGNT-06 | Phase 4 | Pending |
+| AGNT-07 | Phase 4 | Pending |
+| AGNT-08 | Phase 4 | Pending |
+| AGNT-09 | Phase 4 | Pending |
+| AGNT-10 | Phase 4 | Pending |
+| AGNT-11 | Phase 4 | Pending |
+| COLL-01 | Phase 5 | Pending |
+| COLL-02 | Phase 5 | Pending |
+| COLL-03 | Phase 5 | Pending |
+| COLL-04 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 60 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 60 ⚠️
+- Mapped to phases: 60 ✓
+- Unmapped: 0 ✓
+
+**Per-phase counts:** Phase 0 = 10 · Phase 1 = 18 · Phase 2 = 11 · Phase 3 = 6 · Phase 4 = 11 · Phase 5 = 4 (total 60)
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-17 after initial definition*
+*Last updated: 2026-06-17 after roadmap creation (traceability filled, 60/60 mapped)*
