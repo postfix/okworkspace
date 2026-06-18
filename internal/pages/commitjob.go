@@ -76,8 +76,9 @@ func CommitHandler(r *repo.Repo, g *gitstore.GitStore) jobs.Handler {
 
 // EnqueueCommit marshals p and enqueues a commit job on the worker. HTTP
 // handlers call this (never git/os directly) so every mutation serializes
-// through the single drain goroutine.
-func EnqueueCommit(ctx context.Context, w *jobs.Worker, p commitPayload) error {
+// through the single drain goroutine. It accepts the minimal enqueuer interface
+// (*jobs.Worker satisfies it) so a test can inject a fake worker.
+func EnqueueCommit(ctx context.Context, w enqueuer, p commitPayload) error {
 	raw, err := json.Marshal(p)
 	if err != nil {
 		return fmt.Errorf("pages: marshal commit payload: %w", err)

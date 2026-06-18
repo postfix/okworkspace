@@ -96,6 +96,55 @@ func appendField(mapping *yaml.Node, field string, now time.Time) {
 	mapping.Content = append(mapping.Content, key, val)
 }
 
+// Field returns the value of a top-level scalar frontmatter field, or "" when
+// the field is absent or not a scalar. Read-only inspection (e.g. recovering a
+// page title for the navigation tree); it never mutates the document.
+func Field(d *Doc, field string) string {
+	mapping := topMapping(d)
+	if mapping == nil {
+		return ""
+	}
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == field {
+			if mapping.Content[i+1].Kind == yaml.ScalarNode {
+				return mapping.Content[i+1].Value
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
+// SetField surgically sets the value of a top-level scalar frontmatter field,
+// adding the key if it is absent. It marks the document FrontDirty so Emit
+// re-marshals the frontmatter. Used to fill the generated title on a freshly
+// scaffolded page (Create) without disturbing the other repaired fields.
+func SetField(d *Doc, field, value string) {
+	mapping := topMapping(d)
+	if mapping == nil {
+		mapping = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		d.Front = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{mapping}}
+		if !d.HasFrontmatter {
+			d.HasFrontmatter = true
+			d.openFence = fenceLine(d.EOLStyle)
+			d.closeFence = fenceLine(d.EOLStyle)
+		}
+	}
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == field {
+			mapping.Content[i+1].Kind = yaml.ScalarNode
+			mapping.Content[i+1].Tag = "!!str"
+			mapping.Content[i+1].Value = value
+			d.FrontDirty = true
+			return
+		}
+	}
+	key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: field}
+	val := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
+	mapping.Content = append(mapping.Content, key, val)
+	d.FrontDirty = true
+}
+
 // fenceLine returns a "---" fence line terminated with the document's EOL.
 func fenceLine(style EOLStyle) []byte {
 	if style == EOLCRLF {

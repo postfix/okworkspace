@@ -1,0 +1,222 @@
+package pages
+
+import (
+	"context"
+	"encoding/json"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/postfix/okworkspace/internal/gitstore"
+	"github.com/postfix/okworkspace/internal/jobs"
+	"github.com/postfix/okworkspace/internal/repo"
+	"github.com/postfix/okworkspace/internal/store"
+)
+
+// newServiceFixture builds a Service backed by a real repo + git + worker, with
+// the CommitJob handler registered and the drain goroutine running. It returns
+// the service and the repo so tests can assert on-disk state.
+func newServiceFixture(t *testing.T, pushOnCommit bool) (*Service, *repo.Repo, *gitstore.GitStore) {
+	t.Helper()
+	r, gs, _ := newTestRepoAndGit(t)
+
+	st, err := store.Open(filepath.Join(t.TempDir(), "app.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("store.Migrate: %v", err)
+	}
+
+	w := jobs.New(st.DB(), jobs.Config{PollInterval: 5 * time.Millisecond})
+	w.Register(KindCommit, CommitHandler(r, gs))
+	ctx, cancel := context.WithCancel(context.Background())
+	w.Start(ctx)
+	t.Cleanup(func() { w.Stop(); cancel() })
+
+	svc := NewService(r, gs, w, st.DB(), pushOnCommit)
+	// Deterministic clock for scaffolded timestamps.
+	svc.now = func() time.Time { return time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC) }
+	return svc, r, gs
+}
+
+// waitForFile polls until the repo-relative path exists or the deadline passes.
+func waitForFile(t *testing.T, r *repo.Repo, path string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if ok, _ := r.Exists(path); ok {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("file %q never appeared (commit job did not drain)", path)
+}
+
+func TestCreateSaveRead(t *testing.T) {
+	svc, r, _ := newServiceFixture(t, false)
+	ctx := context.Background()
+
+	path, err := svc.Create(ctx, "runbooks", "Deploy Staging", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if path != "runbooks/deploy-staging.md" {
+		t.Fatalf("path = %q, want runbooks/deploy-staging.md", path)
+	}
+	waitForFile(t, r, path)
+
+	page, err := svc.Get(ctx, path)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if page.Revision == "" {
+		t.Fatal("Revision is empty after a committed create")
+	}
+	fm := page.Frontmatter
+	for _, want := range []string{"type: Page", "title: Deploy Staging", "timestamp:", "description:"} {
+		if !strings.Contains(fm, want) {
+			t.Fatalf("frontmatter missing %q; got:\n%s", want, fm)
+		}
+	}
+	if !strings.Contains(fm, "tags:") && !strings.Contains(fm, "tags") {
+		t.Fatalf("frontmatter missing tags; got:\n%s", fm)
+	}
+	if !strings.Contains(fm, "2026-06-18") {
+		t.Fatalf("timestamp not ISO-8601 from clock; got:\n%s", fm)
+	}
+}
+
+func TestCreateCollision(t *testing.T) {
+	svc, r, _ := newServiceFixture(t, false)
+	ctx := context.Background()
+
+	p1, err := svc.Create(ctx, "runbooks", "Deploy Staging", "alice")
+	if err != nil {
+		t.Fatalf("Create 1: %v", err)
+	}
+	waitForFile(t, r, p1)
+	p2, err := svc.Create(ctx, "runbooks", "Deploy Staging", "alice")
+	if err != nil {
+		t.Fatalf("Create 2: %v", err)
+	}
+	if p2 != "runbooks/deploy-staging-2.md" {
+		t.Fatalf("second path = %q, want runbooks/deploy-staging-2.md", p2)
+	}
+	waitForFile(t, r, p2)
+	p3, err := svc.Create(ctx, "runbooks", "Deploy Staging", "alice")
+	if err != nil {
+		t.Fatalf("Create 3: %v", err)
+	}
+	if p3 != "runbooks/deploy-staging-3.md" {
+		t.Fatalf("third path = %q, want runbooks/deploy-staging-3.md", p3)
+	}
+}
+
+func TestCreateTitleRequired(t *testing.T) {
+	svc, _, _ := newServiceFixture(t, false)
+	if _, err := svc.Create(context.Background(), "", "   ", "alice"); err != ErrTitleRequired {
+		t.Fatalf("Create blank title err = %v, want ErrTitleRequired", err)
+	}
+}
+
+func TestSaveStaleRevision(t *testing.T) {
+	svc, r, _ := newServiceFixture(t, false)
+	ctx := context.Background()
+
+	path, err := svc.Create(ctx, "", "Notes", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	waitForFile(t, r, path)
+
+	// A base_revision that does not match the current revision must be rejected
+	// with ErrStaleRevision and write nothing.
+	before, _ := r.Read(path)
+	err = svc.Save(ctx, path, "changed body\n", "type: Page\ntitle: Notes\n", "deadbeef-not-the-revision", "alice")
+	if err != ErrStaleRevision {
+		t.Fatalf("Save stale err = %v, want ErrStaleRevision", err)
+	}
+	// Give any (erroneously) enqueued job a moment; assert the file is unchanged.
+	time.Sleep(50 * time.Millisecond)
+	after, _ := r.Read(path)
+	if string(before) != string(after) {
+		t.Fatal("stale save mutated the file; the 409 floor must write nothing")
+	}
+}
+
+func TestSaveRepairsFrontmatter(t *testing.T) {
+	svc, r, _ := newServiceFixture(t, false)
+	ctx := context.Background()
+
+	path, err := svc.Create(ctx, "", "Notes", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	waitForFile(t, r, path)
+	page, err := svc.Get(ctx, path)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+
+	// Save a body whose frontmatter is missing `description`. After the save the
+	// re-read page must have `description` present (repaired).
+	err = svc.Save(ctx, path, "# Body\n", "type: Page\ntitle: Notes\ntags: []\ntimestamp: 2026-06-18T12:00:00Z\n", page.Revision, "alice")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	// Wait for the new revision to differ.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		got, _ := svc.Get(ctx, path)
+		if strings.Contains(got.Frontmatter, "description") {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("description was not repaired into the saved frontmatter")
+}
+
+func TestCreateFolder(t *testing.T) {
+	svc, r, _ := newServiceFixture(t, false)
+	ctx := context.Background()
+
+	if err := svc.CreateFolder(ctx, "", "architecture", "alice"); err != nil {
+		t.Fatalf("CreateFolder: %v", err)
+	}
+	waitForFile(t, r, "architecture/index.md")
+}
+
+func TestPushFlagThreaded(t *testing.T) {
+	// A fake worker captures the enqueued payload so we can assert Push reflects
+	// the constructor's pushOnCommit without draining a real commit.
+	for _, push := range []bool{true, false} {
+		r, gs, _ := newTestRepoAndGit(t)
+		fake := &capturingWorker{}
+		svc := &Service{repo: r, git: gs, worker: fake, pushOnCommit: push, now: time.Now}
+
+		if _, err := svc.Create(context.Background(), "", "Title", "alice"); err != nil {
+			t.Fatalf("Create (push=%v): %v", push, err)
+		}
+		if fake.last == nil {
+			t.Fatalf("no payload enqueued (push=%v)", push)
+		}
+		var p commitPayload
+		if err := json.Unmarshal([]byte(*fake.last), &p); err != nil {
+			t.Fatalf("unmarshal payload: %v", err)
+		}
+		if p.Push != push {
+			t.Fatalf("payload Push = %v, want %v", p.Push, push)
+		}
+	}
+}
+
+// capturingWorker is a fake enqueuer that records the last payload.
+type capturingWorker struct{ last *string }
+
+func (c *capturingWorker) Enqueue(_ context.Context, _ string, payload string) error {
+	c.last = &payload
+	return nil
+}
