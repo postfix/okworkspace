@@ -150,6 +150,62 @@ func TestShowAt(t *testing.T) {
 	}
 }
 
+// TestShowAtRejectsNonHexRef proves the argv flag-smuggling fix: ShowAt rejects
+// any ref that is not a Git hex object name BEFORE it reaches git, so a client-
+// supplied token beginning with "-" (or any non-hex value) can never land in
+// git's `<ref>:<path>` argument position as a flag (MEDIUM). A real, valid token
+// from History() still reaches git and resolves.
+func TestShowAtRejectsNonHexRef(t *testing.T) {
+	gs, r := newHistoryTestStore(t)
+	ctx := context.Background()
+
+	const wantMsg = "gitstore: invalid version reference"
+
+	cases := []struct {
+		name string
+		ref  string
+	}{
+		{"flag long", "--output=/tmp/pwned"},
+		{"flag short", "-O"},
+		{"dotdot traversal", ".."},
+		{"non-hex word", "deadbeefzz"},
+		{"uppercase hex", "DEADBEEF"},
+		{"too short", "abc"},
+		{"hex with slash", "deadbeef/notes"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := gs.ShowAt(ctx, tc.ref, "notes/page.md")
+			if err == nil {
+				t.Fatalf("ShowAt(%q) = nil error, want rejection", tc.ref)
+			}
+			if !strings.Contains(err.Error(), wantMsg) {
+				t.Fatalf("ShowAt(%q) error = %q, want validation error %q (must not reach git)",
+					tc.ref, err, wantMsg)
+			}
+		})
+	}
+
+	// An empty ref keeps its own dedicated error (not the hex-format error).
+	if _, err := gs.ShowAt(ctx, "", "notes/page.md"); err == nil ||
+		!strings.Contains(err.Error(), "requires a version reference") {
+		t.Fatalf("ShowAt(empty) error = %v, want the empty-ref error", err)
+	}
+
+	// A genuine token from History() must still resolve through git.
+	commitFile(t, gs, r, "notes/page.md", "# v1\n", "create", "Sam")
+	hist, err := gs.History(ctx, "notes/page.md")
+	if err != nil || len(hist) == 0 {
+		t.Fatalf("History setup failed: %v (len=%d)", err, len(hist))
+	}
+	if !isHexObjectName(hist[0].Token) {
+		t.Fatalf("real token %q is not hex — test premise broken", hist[0].Token)
+	}
+	if _, err := gs.ShowAt(ctx, hist[0].Token, "notes/page.md"); err != nil {
+		t.Fatalf("ShowAt with a valid hex token failed: %v", err)
+	}
+}
+
 func TestHistoryEmptyForUncommittedPath(t *testing.T) {
 	gs, _ := newHistoryTestStore(t)
 	hist, err := gs.History(context.Background(), "never/committed.md")

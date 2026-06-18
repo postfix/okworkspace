@@ -3,9 +3,25 @@ package gitstore
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// hexObjectName matches a Git object name: 7–64 lowercase hex characters. Every
+// legitimate version token History() emits is built from %H (a full 40-char
+// lowercase hex commit hash), so anchoring on hex lets ShowAt reject any token
+// that could be parsed by git as a flag (e.g. "--output=...", "-O...") in the
+// `<ref>:<path>` argument position — closing the argv flag-smuggling vector
+// (MEDIUM) with zero impact on real traffic. Compiled once at package scope.
+var hexObjectName = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
+
+// isHexObjectName reports whether ref is a Git object name (7–64 lowercase hex).
+// The version token is CLIENT-supplied (it round-trips through the URL/body),
+// so callers MUST validate its FORMAT before it reaches git as an object spec.
+func isHexObjectName(ref string) bool {
+	return hexObjectName.MatchString(ref)
+}
 
 // Commit is one entry of a page's version history (VER-02). It carries ONLY
 // human-readable provenance — when the version was cut, who cut it, and what
@@ -107,16 +123,23 @@ func actionFromTrailer(body string) string {
 }
 
 // ShowAt returns the bytes of path as they existed at the given ref (the opaque
-// version token), via `git show <ref>:<path>`. The ref is a server-issued commit
-// SHA (the History Token), never a user-typed value, and the path is validated
-// through the resolver — neither is interpolated into a shell (T-05-01). Used by
-// the pages layer to read an old version for view/restore.
+// version token), via `git show <ref>:<path>`. The ref is CLIENT-supplied — it
+// round-trips to the UI and back through the URL/request body — so it is
+// validated here as a Git hex object name (7–64 lowercase hex) before it reaches
+// git: any non-hex ref (e.g. one beginning with "-") could be parsed by git as a
+// flag in the `<ref>:<path>` argument position (argv flag smuggling), so it is
+// rejected outright. The path is validated through the resolver, and neither is
+// interpolated into a shell (T-05-01). Used by the pages layer to read an old
+// version for view/restore.
 func (g *GitStore) ShowAt(ctx context.Context, ref, path string) ([]byte, error) {
 	if _, err := g.repo.Resolve(path); err != nil {
 		return nil, fmt.Errorf("gitstore: unsafe show path %q: %w", path, err)
 	}
 	if strings.TrimSpace(ref) == "" {
 		return nil, fmt.Errorf("gitstore: show requires a version reference")
+	}
+	if !isHexObjectName(ref) {
+		return nil, fmt.Errorf("gitstore: invalid version reference")
 	}
 
 	g.mu.Lock()

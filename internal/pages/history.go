@@ -2,10 +2,33 @@ package pages
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/postfix/okworkspace/internal/okf"
 )
+
+// ErrInvalidVersion is returned by ViewVersion/RestoreVersion when the opaque
+// version token is not a Git hex object name. The token is client-supplied (it
+// round-trips through the URL/body), so its FORMAT is validated here — a
+// defense-in-depth check ahead of the gitstore chokepoint — to keep a
+// flag-shaped token (e.g. "--output=x") from ever reaching git as an object spec
+// (argv flag smuggling).
+var ErrInvalidVersion = errors.New("invalid version token")
+
+// versionTokenPattern matches a Git object name: 7–64 lowercase hex characters.
+// Every legitimate version token originates from a full %H commit hash, so this
+// is the single source of truth for the pages-layer token format check (mirrors
+// the gitstore chokepoint). Compiled once at package scope.
+var versionTokenPattern = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
+
+// validVersionToken reports whether version is a well-formed opaque version
+// token (a Git hex object name). Shared by ViewVersion and RestoreVersion so the
+// pattern is defined exactly once.
+func validVersionToken(version string) bool {
+	return versionTokenPattern.MatchString(version)
+}
 
 // HistoryEntry is one row of a page's version history as the UI consumes it
 // (VER-02). It carries ONLY human-readable fields — what action cut the version,
@@ -70,6 +93,9 @@ func (s *Service) History(ctx context.Context, path string) ([]HistoryEntry, err
 // editor would still write against HEAD) — the old version is read-only here.
 // ErrPageNotFound is returned when the live page no longer exists.
 func (s *Service) ViewVersion(ctx context.Context, path, version string) (Page, error) {
+	if !validVersionToken(version) {
+		return Page{}, fmt.Errorf("pages: view version %q: %w", path, ErrInvalidVersion)
+	}
 	raw, err := s.git.ShowAt(ctx, version, path)
 	if err != nil {
 		return Page{}, fmt.Errorf("pages: view version %q@%s: %w", path, version, err)
@@ -101,6 +127,9 @@ func (s *Service) ViewVersion(ctx context.Context, path, version string) (Page, 
 // page from Trash. Both flow through the SAME single-writer commit path — there
 // is no second write path.)
 func (s *Service) RestoreVersion(ctx context.Context, path, version, user string) error {
+	if !validVersionToken(version) {
+		return fmt.Errorf("pages: restore version %q: %w", path, ErrInvalidVersion)
+	}
 	exists, err := s.repo.Exists(path)
 	if err != nil {
 		return err

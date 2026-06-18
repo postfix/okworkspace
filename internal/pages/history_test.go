@@ -3,6 +3,7 @@ package pages
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -164,6 +165,87 @@ func TestRestoreForwardCommit(t *testing.T) {
 	}
 	if strings.TrimSpace(restored.Body) != strings.TrimSpace(orig.Body) {
 		t.Fatalf("restored body = %q, want original %q", restored.Body, orig.Body)
+	}
+}
+
+// spyReviser records whether ShowAt was reached. A flag-shaped/invalid version
+// token must be rejected by the pages layer BEFORE ShowAt is called, so its
+// ShowAtCalled flag must stay false for those inputs (defense in depth ahead of
+// the gitstore chokepoint).
+type spyReviser struct{ ShowAtCalled bool }
+
+func (s *spyReviser) BlobRevision(context.Context, string) (string, error) { return "", nil }
+func (s *spyReviser) History(context.Context, string) ([]gitstore.Commit, error) {
+	return nil, nil
+}
+func (s *spyReviser) ShowAt(context.Context, string, string) ([]byte, error) {
+	s.ShowAtCalled = true
+	return nil, nil
+}
+
+// TestVersionTokenValidationRejectsFlagShaped proves ViewVersion and
+// RestoreVersion reject a non-hex (flag-shaped) version token with
+// ErrInvalidVersion and NEVER reach ShowAt — closing the argv flag-smuggling
+// vector at the pages layer too (MEDIUM, defense in depth). A real committed
+// token still flows through to ShowAt.
+func TestVersionTokenValidationRejectsFlagShaped(t *testing.T) {
+	badTokens := []string{
+		"--output=/tmp/pwned",
+		"-O",
+		"..",
+		"deadbeefzz",
+		"DEADBEEF",
+		"abc",
+		"",
+		"deadbeef/notes",
+	}
+
+	t.Run("ViewVersion", func(t *testing.T) {
+		for _, tok := range badTokens {
+			spy := &spyReviser{}
+			svc := &Service{git: spy}
+			_, err := svc.ViewVersion(context.Background(), "notes/page.md", tok)
+			if !errors.Is(err, ErrInvalidVersion) {
+				t.Fatalf("ViewVersion(%q) err = %v, want ErrInvalidVersion", tok, err)
+			}
+			if spy.ShowAtCalled {
+				t.Fatalf("ViewVersion(%q) reached ShowAt — bad token must be rejected first", tok)
+			}
+		}
+	})
+
+	t.Run("RestoreVersion", func(t *testing.T) {
+		for _, tok := range badTokens {
+			spy := &spyReviser{}
+			svc := &Service{git: spy}
+			err := svc.RestoreVersion(context.Background(), "notes/page.md", tok, "Sam")
+			if !errors.Is(err, ErrInvalidVersion) {
+				t.Fatalf("RestoreVersion(%q) err = %v, want ErrInvalidVersion", tok, err)
+			}
+			if spy.ShowAtCalled {
+				t.Fatalf("RestoreVersion(%q) reached ShowAt — bad token must be rejected first", tok)
+			}
+		}
+	})
+
+	// A genuine token must still reach git: ViewVersion with a real committed
+	// token flows past the format check into ShowAt.
+	svc, r, _ := newServiceFixture(t, false)
+	ctx := context.Background()
+	path, err := svc.Create(ctx, "notes", "Page", "Sam")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	waitForFile(t, r, path)
+	hist, err := svc.History(ctx, path)
+	if err != nil || len(hist) == 0 {
+		t.Fatalf("History: %v (len=%d)", err, len(hist))
+	}
+	if !validVersionToken(hist[0].Version) {
+		t.Fatalf("real token %q is not a valid hex token — premise broken", hist[0].Version)
+	}
+	if _, err := svc.ViewVersion(ctx, path, hist[0].Version); err != nil {
+		t.Fatalf("ViewVersion with a real token failed: %v", err)
 	}
 }
 
