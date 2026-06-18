@@ -70,7 +70,27 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. A user can view a page's version history, restore a previous version, and (when configured) have commits pushed to a remote
   6. Saving a page with missing required frontmatter fills in the required fields without corrupting the file's Markdown bytes
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+**Wave 1**
+
+- [ ] 01-01-PLAN.md — okf byte-stable round-trip (golden-corpus exit gate) + CommitJob single-writer spine + drafts migration (wave 1)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 01-02-PLAN.md — create/read/edit/save slice: page service + 409 floor + live tree (replaces PLACEHOLDER_TREE) + folder create + recents (wave 2)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 01-03-PLAN.md — rename/move with eager link rewrite (round-trip-safe) + link picker + page action menu (wave 3)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 01-04-PLAN.md — delete-to-trash + restore with provenance and collision handling (wave 4)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 01-05-PLAN.md — version history (no SHAs) + restore-version forward commit + config-gated remote push (wave 5)
 **UI hint**: yes
 **Notes**: Spike recommended (not full phase research): prototype the single-writer Git batching + stale-lock recovery and the `internal/okf` byte-stable round-trip early — both have subtle failure modes. A golden-corpus byte-stable round-trip test is the Phase 1 exit gate (blocks Markdown round-trip rot). Per-file optimistic-concurrency floor (revision = content hash, 409 on mismatch) is scaffolded here and hardened in Phase 5. Confirm rename/move link-integrity strategy (eager rewrite vs. alias-redirect) during planning. The `internal/jobs` async worker is introduced here (CommitJob) and reused in Phases 2 and 3.
 
@@ -152,7 +172,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Skeleton, Auth & Foundations | 4/4 | Complete | 2026-06-18 |
-| 1. OKF Pages, Navigation & Hidden Git | 0/TBD | Not started | - |
+| 1. OKF Pages, Navigation & Hidden Git | 0/5 | Planned | - |
 | 2. Attachments & Text Extraction | 0/TBD | Not started | - |
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 0/TBD | Not started | - |
