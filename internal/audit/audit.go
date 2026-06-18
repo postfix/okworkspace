@@ -36,6 +36,9 @@ const (
 	ActionUserDeactivate    = "user_deactivate"
 	ActionProfileChange     = "profile_change"
 	ActionConfigChange      = "config_change"
+	ActionPageCreate        = "page_create"
+	ActionPageEdit          = "page_edit"
+	ActionFolderCreate      = "folder_create"
 )
 
 // Event is one audit record. It carries only non-secret provenance — there is

@@ -10,6 +10,7 @@ import (
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
+	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/store"
 	"github.com/postfix/okworkspace/internal/users"
 )
@@ -30,6 +31,10 @@ type Deps struct {
 	// SQLite mirror + a structured slog line (SEC-05). Optional; when nil the
 	// handlers use a no-op recorder so audit never breaks a request path.
 	Audit *audit.Logger
+	// Pages is the page lifecycle service backing the tree/get/create/save/folder
+	// routes. Optional; when nil those routes return a 500 (the SPA is wired with
+	// the real service in main.go).
+	Pages *pages.Service
 }
 
 // New builds the HTTP handler: chi mux with the middleware stack (recover,
@@ -50,6 +55,7 @@ func New(deps Deps) (http.Handler, error) {
 		users:    deps.UserRepo,
 		config:   deps.Config,
 		audit:    rec,
+		pages:    deps.Pages,
 	}
 	health := &healthHandler{checker: deps.Health}
 
@@ -76,6 +82,26 @@ func New(deps Deps) (http.Handler, error) {
 			// Self-service profile (any authenticated user, self only — D-06).
 			authed.Put("/profile", h.handleUpdateProfile)
 			authed.Put("/profile/password", h.handleChangePassword)
+
+			// Page reads — available to ANY authenticated user (readers included).
+			// The `/pages/*` catch-all matches slash-bearing page paths; the
+			// wildcard is read via chi.URLParam(r, "*"). A regex `{path:.*}` param
+			// is NOT used because chi mis-routes multi-segment paths when a GET and
+			// a PUT share the same regex-wildcard node (sibling-route conflict);
+			// the plain `*` catch-all routes every depth correctly.
+			authed.Get("/tree", h.handleTree)
+			authed.Get("/pages/*", h.handleGetPage)
+
+			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin
+			// subgroup). Authorization is read from the session role via
+			// RequireRole, never client input (T-02-02). Admin passes the editor
+			// gate (roleSatisfies).
+			authed.Group(func(editor chi.Router) {
+				editor.Use(auth.RequireRole(auth.RoleEditor))
+				editor.Post("/pages", h.handleCreatePage)
+				editor.Put("/pages/*", h.handleSavePage)
+				editor.Post("/folders", h.handleCreateFolder)
+			})
 
 			// Admin-only user management (D-05). Every route is gated by
 			// RequireRole(admin) in addition to the global nosurf CSRF on

@@ -12,6 +12,7 @@ import (
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
+	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/users"
 )
 
@@ -39,6 +40,10 @@ type authHandlers struct {
 	users    *users.Repository
 	config   config.Config
 	audit    auditRecorder
+	// pages is the page lifecycle service (tree/get/create/save/folder).
+	// Optional: when nil the page/tree handlers return a 500 rather than panic,
+	// following the existing optional-dependency pattern.
+	pages *pages.Service
 }
 
 type loginRequest struct {

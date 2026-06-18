@@ -189,6 +189,11 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	defer worker.Stop()
 	logger.Info("job worker started")
 
+	// Page lifecycle service: create/get/save/folder + the nested tree, all
+	// mutations flowing through the single-writer CommitJob above. PushOnCommit is
+	// threaded from config so Plan 05 only flips the config value.
+	pagesSvc := pages.NewService(contentRepo, gs, worker, st.DB(), cfg.Git.PushOnCommit)
+
 	spa, err := web.Handler()
 	if err != nil {
 		return fmt.Errorf("build SPA handler: %w", err)
@@ -200,6 +205,7 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		SPAHandler: spa,
 		Health:     healthAdapter{gs: gs},
 		Audit:      auditLog,
+		Pages:      pagesSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)
