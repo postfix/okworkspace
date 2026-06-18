@@ -74,7 +74,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — okf byte-stable round-trip (golden-corpus exit gate) + CommitJob single-writer spine + drafts migration (wave 1)
+- [x] 01-01-PLAN.md — okf byte-stable round-trip (golden-corpus exit gate) + CommitJob single-writer spine + drafts migration (wave 1)
 
 **Wave 2** *(blocked on Wave 1)*
 

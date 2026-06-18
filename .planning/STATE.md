@@ -4,12 +4,12 @@ milestone: v0.9.9
 milestone_name: milestone
 status: executing
 stopped_at: Phase 1 UI-SPEC approved
-last_updated: "2026-06-18T15:58:37.035Z"
-last_activity: 2026-06-18 -- Completed 00-04 (audit/config/packaging); Phase 0 complete (4 of 4)
+last_updated: "2026-06-18T19:36:31.410Z"
+last_activity: 2026-06-18 -- Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 4
+  total_plans: 9
   completed_plans: 4
   percent: 17
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** A non-technical teammate can create, edit, and find knowledge — and get useful AI help on it — while every byte stays as plain Markdown + original files on disk, versioned in Git, with no proprietary store to escape.
-**Current focus:** Phase 00 — skeleton-auth-foundations
+**Current focus:** Phase 01 — okf-pages-navigation-hidden-git
 
 ## Current Position
 
-Phase: 00 (skeleton-auth-foundations) — COMPLETE
-Plan: 4 of 4 (all complete)
-Status: Ready to execute
-Last activity: 2026-06-18 -- Completed 00-04 (audit/config/packaging); Phase 0 complete (4 of 4)
+Phase: 01 (okf-pages-navigation-hidden-git) — EXECUTING
+Plan: 2 of 5
+Status: Executing Phase 01
+Last activity: 2026-06-18 -- Completed 01-01-PLAN.md (okf round-trip spine + CommitJob + drafts migration)
 
 Progress: [██████████] 100%
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100%
 | Phase 00 P02 | 12 | 3 tasks | 19 files |
 | Phase 00 P03 | 84 | 2 tasks | 20 files |
 | Phase 00 P04 | 14 | 2 tasks | 17 files |
+| Phase 01 P01 | 25 | 2 tasks | 20 files |
 
 ## Accumulated Context
 
