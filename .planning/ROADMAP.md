@@ -82,7 +82,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 01-03-PLAN.md — rename/move with eager link rewrite (round-trip-safe) + link picker + page action menu (wave 3)
+- [x] 01-03-PLAN.md — rename/move with eager link rewrite (round-trip-safe) + link picker + page action menu (wave 3)
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -172,7 +172,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Skeleton, Auth & Foundations | 4/4 | Complete | 2026-06-18 |
-| 1. OKF Pages, Navigation & Hidden Git | 2/5 | Executing | - |
+| 1. OKF Pages, Navigation & Hidden Git | 3/5 | Executing | - |
 | 2. Attachments & Text Extraction | 0/TBD | Not started | - |
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 0/TBD | Not started | - |

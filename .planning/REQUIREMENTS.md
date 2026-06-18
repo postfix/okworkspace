@@ -21,11 +21,11 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 - [x] **PAGE-01**: User can create a page in the selected folder
 - [x] **PAGE-02**: User can edit a page's title, tags, description, and body
 - [x] **PAGE-03**: User can save a page and view it rendered as Markdown
-- [ ] **PAGE-04**: User can rename a page
-- [ ] **PAGE-05**: User can move a page to another folder
+- [x] **PAGE-04**: User can rename a page
+- [x] **PAGE-05**: User can move a page to another folder
 - [ ] **PAGE-06**: User can delete a page to trash
 - [ ] **PAGE-07**: User can restore a page from trash
-- [ ] **PAGE-08**: User can link from one page to another
+- [x] **PAGE-08**: User can link from one page to another
 - [ ] **PAGE-09**: When a page is saved with missing required frontmatter, the system fills in the required fields
 
 ### Navigation
@@ -146,11 +146,11 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | PAGE-01 | Phase 1 | Complete |
 | PAGE-02 | Phase 1 | Complete |
 | PAGE-03 | Phase 1 | Complete |
-| PAGE-04 | Phase 1 | Pending |
-| PAGE-05 | Phase 1 | Pending |
+| PAGE-04 | Phase 1 | Complete |
+| PAGE-05 | Phase 1 | Complete |
 | PAGE-06 | Phase 1 | Pending |
 | PAGE-07 | Phase 1 | Pending |
-| PAGE-08 | Phase 1 | Pending |
+| PAGE-08 | Phase 1 | Complete |
 | PAGE-09 | Phase 1 | Pending |
 | NAV-01 | Phase 1 | Complete |
 | NAV-02 | Phase 1 | Complete |

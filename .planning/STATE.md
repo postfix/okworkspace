@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-06-18T19:36:31.410Z"
-last_activity: 2026-06-18 -- Completed 01-02-PLAN.md (page service + page API + read/edit/tree UI)
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-06-18T20:24:00.000Z"
+last_activity: 2026-06-18 -- Completed 01-03-PLAN.md (rename/move + structural link rewrite + link picker)
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
-  percent: 67
+  completed_plans: 7
+  percent: 78
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 01 (okf-pages-navigation-hidden-git) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Executing Phase 01
-Last activity: 2026-06-18 -- Completed 01-02-PLAN.md (page service + page API + read/edit/tree UI; 409 floor + RBAC)
+Last activity: 2026-06-18 -- Completed 01-03-PLAN.md (rename/move with eager repo-wide link rewrite committed atomically; link-to-page picker)
 
-Progress: [████░░░░░░] 40%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [████░░░░░░] 40%
 | Phase 00 P04 | 14 | 2 tasks | 17 files |
 | Phase 01 P01 | 25 | 2 tasks | 20 files |
 | Phase 01 P02 | 70 | 4 tasks | 42 files |
+| Phase 01 P03 | 75 | 2 tasks | 25 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,9 @@ Recent decisions affecting current work:
 - [Phase 1 P02]: Optimistic-concurrency revision = `git rev-parse HEAD:<path>` blob SHA (gitstore.BlobRevision); 409 floor checked before enqueue — stale save never silently overwrites
 - [Phase 1 P02]: chi page routes use the plain `/pages/*` catch-all (not `{path:.*}` regex) — the regex wildcard mis-routes multi-segment paths when a GET and a PUT share the node
 - [Phase 1 P02]: Read mode renders via react-markdown + remark-gfm + rehype-sanitize with the raw-HTML plugin OFF (no innerHTML) — stored-XSS guard per CLAUDE.md
+- [Phase 1 P03]: Link rewrite is structural (byte scanner skips fenced/inline code, escapes, external URLs) on okf.Doc.Body, never an AST — code blocks containing link-like text are provably never corrupted (TestRename_NoCorruption)
+- [Phase 1 P03]: Rename/move = delete-old + write-new + inbound rewrites staged in ONE commit (D-07); git rename detection keeps `git log --follow` continuous — no `git mv` plumbing needed
+- [Phase 1 P03]: One /rename endpoint dispatches new_title→Rename / new_parent→Move (exactly-one-of); mounted on the /pages/* catch-all (handler strips /rename) to avoid the chi sibling-wildcard 405
 
 ### Pending Todos
 
@@ -109,6 +113,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-18T19:36:31.410Z
-Stopped at: Completed 01-02-PLAN.md
-Resume file: .planning/phases/01-okf-pages-navigation-hidden-git/01-03-PLAN.md
+Last session: 2026-06-18T20:24:00.000Z
+Stopped at: Completed 01-03-PLAN.md
+Resume file: .planning/phases/01-okf-pages-navigation-hidden-git/01-04-PLAN.md
