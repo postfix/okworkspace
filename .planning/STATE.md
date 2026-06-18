@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 01 (okf-pages-navigation-hidden-git) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Executing Phase 01
-Last activity: 2026-06-18 -- Completed 01-03-PLAN.md (rename/move with eager repo-wide link rewrite committed atomically; link-to-page picker)
+Last activity: 2026-06-18 -- Completed 01-04-PLAN.md (delete-to-trash via recoverable git mv with provenance; restore with collision auto-suffix; DeleteConfirmDialog + TrashView)
 
-Progress: [██████░░░░] 60%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
