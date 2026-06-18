@@ -63,15 +63,28 @@ func BootstrapAdmin(ctx context.Context, repo *Repository, cfg config.Config) (u
 }
 
 // generatePassword returns a cryptographically-random password of the given
-// length using the unambiguous alphabet.
+// length using the unambiguous alphabet. It uses rejection sampling over
+// crypto/rand so the mapping from random bytes to alphabet indices is uniform —
+// plain `byte % len(alphabet)` would skew the distribution (modulo bias) since
+// 256 is not a multiple of the 56-character alphabet, lowering effective
+// entropy. Bytes at or above the largest multiple of len(alphabet) <= 256 are
+// rejected and re-drawn.
 func generatePassword(length int) (string, error) {
-	buf := make([]byte, length)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
+	n := len(passwordAlphabet)
+	// threshold is the largest multiple of n that fits in a byte (0..255).
+	// Bytes >= threshold are rejected to keep buf[0]%n uniform.
+	threshold := byte(256 - (256 % n))
 	out := make([]byte, length)
-	for i, b := range buf {
-		out[i] = passwordAlphabet[int(b)%len(passwordAlphabet)]
+	buf := make([]byte, 1)
+	for i := 0; i < length; {
+		if _, err := rand.Read(buf); err != nil {
+			return "", err
+		}
+		if buf[0] >= threshold {
+			continue // reject to remove modulo bias
+		}
+		out[i] = passwordAlphabet[int(buf[0])%n]
+		i++
 	}
 	return string(out), nil
 }
