@@ -81,10 +81,17 @@ func CommitHandler(r *repo.Repo, g *gitstore.GitStore) jobs.Handler {
 			return fmt.Errorf("pages: commit: %w", err)
 		}
 
-		// Push branch is activated in Plan 05 (gitstore.Push). Until then a
-		// commitPayload.Push is recorded but not acted on; the commit is local.
+		// Optional remote push AFTER the commit (VER-04). Push is config-gated
+		// (RemoteEnabled+PushOnCommit+Remote) inside gitstore.Push, so this is a
+		// no-op when no remote is configured even though p.Push is true. On
+		// divergence Push alerts (sets diverged) and returns nil — it never
+		// force-pushes or auto-merges (T-05-05). p.Push carries config.Git.
+		// PushOnCommit threaded from every EnqueueCommit call site, so toggling
+		// the config flag alone enables push for every mutation.
 		if p.Push {
-			_ = p.Push // Plan 05: g.Push(ctx) after Commit when remote is enabled.
+			if err := g.Push(ctx); err != nil {
+				return fmt.Errorf("pages: push: %w", err)
+			}
 		}
 		return nil
 	}

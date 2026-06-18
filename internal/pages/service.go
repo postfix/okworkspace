@@ -36,10 +36,14 @@ type enqueuer interface {
 }
 
 // reviser reads the committed blob revision of a path (the optimistic-
-// concurrency token). *gitstore.GitStore satisfies it; kept as an interface so
-// the service does not need a live git repo in every unit test.
+// concurrency token) AND the page's version history / old blobs (VER-02/03).
+// *gitstore.GitStore satisfies it; kept as an interface so the service does not
+// need a live git repo in every unit test. The History/ShowAt methods back the
+// hidden-Git history view and forward-commit restore.
 type reviser interface {
 	BlobRevision(ctx context.Context, path string) (string, error)
+	History(ctx context.Context, path string) ([]gitstore.Commit, error)
+	ShowAt(ctx context.Context, ref, path string) ([]byte, error)
 }
 
 // Service is the page lifecycle service (SPEC §17.2/§17.3). Every mutation
