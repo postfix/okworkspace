@@ -6,6 +6,8 @@ import Login from "./routes/Login";
 import AppShell from "./routes/AppShell";
 import Admin from "./routes/Admin";
 import Profile from "./routes/Profile";
+import PageView from "./routes/PageView";
+import PageEditor from "./routes/PageEditor";
 import ForcePasswordChange from "./routes/ForcePasswordChange";
 import { me, type Me } from "./api/client";
 
@@ -72,6 +74,26 @@ export default function App() {
         element={
           <RequireAuth>
             <AppShell />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/app/page/*"
+        element={
+          <RequireAuth>
+            <AppShell>
+              <PageView />
+            </AppShell>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/app/edit/*"
+        element={
+          <RequireAuth>
+            <AppShell>
+              <PageEditor />
+            </AppShell>
           </RequireAuth>
         }
       />

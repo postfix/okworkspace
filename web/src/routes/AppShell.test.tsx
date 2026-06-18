@@ -6,11 +6,15 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// Mock api/client so no real fetch calls happen.
+// Mock api/client so no real fetch calls happen. AppShell now mounts LeftTree
+// (getTree) and the create modals (createPage/createFolder) in the nav rail.
 vi.mock("../api/client", () => ({
   me: vi.fn(),
   health: vi.fn(),
   logout: vi.fn(),
+  getTree: vi.fn().mockResolvedValue([]),
+  createPage: vi.fn(),
+  createFolder: vi.fn(),
 }));
 
 import * as client from "../api/client";
