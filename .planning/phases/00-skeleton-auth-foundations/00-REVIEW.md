@@ -51,7 +51,7 @@ findings:
   warning: 7
   info: 4
   total: 14
-status: issues_found
+status: resolved
 ---
 
 # Phase 0: Code Review Report
@@ -215,6 +215,36 @@ That is `tags: null` with a stray `[]` child mapping rather than `tags: []`. All
 **File:** `internal/repo/files.go:81-110`
 **Issue:** `Tree` uses `filepath.WalkDir` directly on `r.root` (not through `Resolve`/`os.Root`). `WalkDir` does not follow symlinked directories for recursion, so escape is limited, but it will still *list* symlink entries that point outside the root, and the listing bypasses the SEC-01 chokepoint the package docstring claims is universal ("no other package constructs absolute repo paths"). Currently only used for seed verification, low impact this phase.
 **Fix:** When the tree API is promoted beyond seed verification (Phase 1), skip symlinks during the walk or validate each entry through the resolver, and note the current limitation.
+
+---
+
+## Resolution
+
+Resolved 2026-06-18. All 3 Critical/Blocker findings and all 7 Warnings are
+fixed; the 4 Info findings (IN-01..IN-04) are deferred to a later phase.
+
+Gate after fixes (all green):
+- `CGO_ENABLED=0 go build ./...` — pass
+- `CGO_ENABLED=0 go test ./internal/... ./cmd/... -count=1` — pass (all packages ok)
+- `go vet ./internal/... ./cmd/...` — pass
+- `cd web && npm run build && npm run lint` — pass
+
+| Finding | Status | Commit | Notes |
+|---------|--------|--------|-------|
+| CR-01 | Fixed | c822055 | `loadCurrentUser` rejects all authenticated routes (403) except `PUT /api/v1/profile/password` while `must_change_password` is set; `/auth/me` stays reachable. Regression test `TestMustChangePasswordGate`. |
+| CR-02 | Fixed | 1c1701a | `generatePassword` uses rejection sampling over `crypto/rand` (no modulo bias); same alphabet/length/error path. |
+| CR-03 | Fixed | 7bd9d2d, c822055, ec44e4f | Added `CountActiveAdmins` + `ErrLastAdmin`; `SetRole`/`Deactivate` reject dropping active admins to zero (→409 in handlers); Admin UI hides Deactivate for self and last admin. Regression test `TestLastAdminInvariant`. |
+| WR-01 | Fixed | 7bd9d2d, c822055 | Username validated against `^[A-Za-z0-9._-]{1,64}$` in `Create` (`ErrInvalidUsername` → 400). Test `TestCreateRejectsInvalidUsername`. |
+| WR-02 | Fixed | 7bd9d2d | `DeleteSessionsForUser` decodes SCS gob session blobs and revokes the target's sessions on `Deactivate`/`ResetPassword` (best-effort; CR-01 already forces re-auth on reset). |
+| WR-03 | Fixed | ec44e4f | `markDone` no longer increments `attempts`. |
+| WR-04 | Fixed | ec44e4f | `Worker` gains a slog logger; non-`ErrNoRows` claim errors and previously-discarded mark* errors are logged at warn; wired in `main`. |
+| WR-05 | Fixed | ec44e4f | `handleHealth` `slog.Error`s the underlying error; `AppShell` surfaces a generic `!ok` storage banner. |
+| WR-06 | Fixed | ec44e4f | Server gate (CR-01) is authoritative; `ForcePasswordChange` no longer accepts a plaintext-password prop — the user re-enters the temp password. |
+| WR-07 | Fixed | ec44e4f | Single `auth.SecureCookies` (case-insensitive `https://`) drives both the session and CSRF cookie `Secure` flags. |
+| IN-01 | Deferred | — | Empty `tags: []` YAML indentation; latent path, deferred. |
+| IN-02 | Deferred | — | Unexposed `SetActive(true)` reactivate; deferred. |
+| IN-03 | Deferred | — | Empty `dummyHash` timing edge; deferred. |
+| IN-04 | Deferred | — | `repo.Tree` symlink listing; deferred to Phase 1 per finding. |
 
 ---
 
