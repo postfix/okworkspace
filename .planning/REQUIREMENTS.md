@@ -92,7 +92,7 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 - [ ] **SEC-02**: Risky attachment downloads are served with `Content-Disposition: attachment`
 - [x] **SEC-03**: Passwords are hashed with Argon2id (or bcrypt)
 - [x] **SEC-04**: Session cookies are HTTPOnly with SameSite set, and mutating requests are CSRF-protected
-- [ ] **SEC-05**: Key actions (login, page/attachment changes, agent prompts and approvals, config changes) are recorded in an audit log
+- [x] **SEC-05**: Key actions (login, page/attachment changes, agent prompts and approvals, config changes) are recorded in an audit log
 
 ## v2 Requirements
 
@@ -142,7 +142,7 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | SEC-01 | Phase 0 | Complete |
 | SEC-03 | Phase 0 | Complete |
 | SEC-04 | Phase 0 | Complete |
-| SEC-05 | Phase 0 | Pending |
+| SEC-05 | Phase 0 | Complete |
 | PAGE-01 | Phase 1 | Pending |
 | PAGE-02 | Phase 1 | Pending |
 | PAGE-03 | Phase 1 | Pending |

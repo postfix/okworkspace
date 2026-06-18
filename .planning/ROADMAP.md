@@ -13,7 +13,7 @@ OKF Workspace is built dependency-first: a safe foundation (single binary, auth,
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 0: Skeleton, Auth & Foundations** - Single binary serves the React shell behind a login; RBAC, sessions, safe-path resolver, and Git repo init are in place
+- [x] **Phase 0: Skeleton, Auth & Foundations** - Single binary serves the React shell behind a login; RBAC, sessions, safe-path resolver, and Git repo init are in place
 - [ ] **Phase 1: OKF Pages, Navigation & Hidden Git** - Users create, edit, organize, and version pages with automatic hidden Git history and restore
 - [ ] **Phase 2: Attachments & Text Extraction** - Users upload, preview, download, and manage original-fidelity attachments with searchable extracted text
 - [ ] **Phase 3: Search** - Users find pages, headings, and attachments across titles, body, tags, filenames, and extracted text
@@ -50,7 +50,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 00-04-PLAN.md — Audit log (SEC-05, SQLite mirror + slog) + full config.yaml schema + systemd/Docker packaging (wave 4)
+- [x] 00-04-PLAN.md — Audit log (SEC-05, SQLite mirror + slog) + full config.yaml schema + systemd/Docker packaging (wave 4)
 
 **UI hint**: yes
 **Notes**: SEC-* land here as the cross-cutting security floor (path resolver, Argon2id hashing, HTTPOnly/SameSite cookies, CSRF, audit scaffolding). The single-writer Git service and async job worker are introduced here as spines reused by every later phase. Remote-push divergence behavior (fast-forward-only pull with alert) and `pull_on_startup` semantics should be defined during Phase 0/1 planning. No phase research needed — chi middleware, Argon2id, SCS sessions, and nosurf CSRF are standard, well-documented patterns.
@@ -151,7 +151,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Skeleton, Auth & Foundations | 3/4 | In Progress|  |
+| 0. Skeleton, Auth & Foundations | 4/4 | Complete | 2026-06-18 |
 | 1. OKF Pages, Navigation & Hidden Git | 0/TBD | Not started | - |
 | 2. Attachments & Text Extraction | 0/TBD | Not started | - |
 | 3. Search | 0/TBD | Not started | - |

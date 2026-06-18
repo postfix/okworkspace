@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
-status: executing
-stopped_at: Completed 00-03-PLAN.md
-last_updated: "2026-06-18T12:32:16.538Z"
-last_activity: 2026-06-18 -- Completed 00-03 (RBAC & team-management); plan 4 of 4 remaining
+status: phase-complete
+stopped_at: Completed 00-04-PLAN.md
+last_updated: "2026-06-18T12:45:00.000Z"
+last_activity: 2026-06-18 -- Completed 00-04 (audit/config/packaging); Phase 0 complete (4 of 4)
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 00 (skeleton-auth-foundations) — EXECUTING
-Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-06-18 -- Completed 00-03 (RBAC & team-management); plan 4 of 4 remaining
+Phase: 00 (skeleton-auth-foundations) — COMPLETE
+Plan: 4 of 4 (all complete)
+Status: Phase complete — ready to plan Phase 1
+Last activity: 2026-06-18 -- Completed 00-04 (audit/config/packaging); Phase 0 complete (4 of 4)
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [████████░░] 75%
 | Phase 00 P01 | 18 | 3 tasks | 43 files |
 | Phase 00 P02 | 12 | 3 tasks | 19 files |
 | Phase 00 P03 | 84 | 2 tasks | 20 files |
+| Phase 00 P04 | 14 | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 0: jobs.run_after stored as REAL fractional epoch (SQLite datetime truncates to seconds)
 - [Phase ?]: Phase 0: RequireRole RBAC reads role only from the session-bound user (never client input); admin is a superset this phase (D-07)
 - [Phase ?]: Phase 0: self-service profile/password paths accept no role parameter — own-role escalation impossible by construction (D-06)
+- [Phase 0]: SEC-05 audit log is write-only (dual-write SQLite mirror + structured slog line); audit.Record is non-fatal and never records a secret
+- [Phase 0]: Resolved LLM API key is unexported + redacted in Config String()/GoString(); read only via Agent.APIKey()
+- [Phase 0]: Runtime Docker base is pinned minimal Alpine (ships git for the single-writer Git CLI), not scratch/distroless; still non-root
 
 ### Pending Todos
 
@@ -100,6 +104,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-18T12:31:52.811Z
-Stopped at: Completed 00-02-PLAN.md
+Last session: 2026-06-18T12:45:00.000Z
+Stopped at: Completed 00-04-PLAN.md (Phase 0 complete)
 Resume file: None
