@@ -14,7 +14,7 @@ OKF Workspace is built dependency-first: a safe foundation (single binary, auth,
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 0: Skeleton, Auth & Foundations** - Single binary serves the React shell behind a login; RBAC, sessions, safe-path resolver, and Git repo init are in place
-- [ ] **Phase 1: OKF Pages, Navigation & Hidden Git** - Users create, edit, organize, and version pages with automatic hidden Git history and restore
+- [x] **Phase 1: OKF Pages, Navigation & Hidden Git** - Users create, edit, organize, and version pages with automatic hidden Git history and restore (completed 2026-06-18)
 - [ ] **Phase 2: Attachments & Text Extraction** - Users upload, preview, download, and manage original-fidelity attachments with searchable extracted text
 - [ ] **Phase 3: Search** - Users find pages, headings, and attachments across titles, body, tags, filenames, and extracted text
 - [ ] **Phase 4: Eino Agent** - Users get approval-gated AI help over pages, selections, attachments, and the workspace
@@ -90,7 +90,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 01-05-PLAN.md — version history (no SHAs) + restore-version forward commit + config-gated remote push (wave 5)
+- [x] 01-05-PLAN.md — version history (no SHAs) + restore-version forward commit + config-gated remote push (wave 5)
+
 **UI hint**: yes
 **Notes**: Spike recommended (not full phase research): prototype the single-writer Git batching + stale-lock recovery and the `internal/okf` byte-stable round-trip early — both have subtle failure modes. A golden-corpus byte-stable round-trip test is the Phase 1 exit gate (blocks Markdown round-trip rot). Per-file optimistic-concurrency floor (revision = content hash, 409 on mismatch) is scaffolded here and hardened in Phase 5. Confirm rename/move link-integrity strategy (eager rewrite vs. alias-redirect) during planning. The `internal/jobs` async worker is introduced here (CommitJob) and reused in Phases 2 and 3.
 
@@ -172,7 +173,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Skeleton, Auth & Foundations | 4/4 | Complete | 2026-06-18 |
-| 1. OKF Pages, Navigation & Hidden Git | 4/5 | Executing | - |
+| 1. OKF Pages, Navigation & Hidden Git | 5/5 | Complete   | 2026-06-18 |
 | 2. Attachments & Text Extraction | 0/TBD | Not started | - |
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 0/TBD | Not started | - |

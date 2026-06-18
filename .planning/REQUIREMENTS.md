@@ -39,9 +39,9 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 ### Versioning (hidden Git)
 
 - [ ] **VER-01**: The system commits to Git automatically after a page save, recording the user's identity
-- [ ] **VER-02**: User can view a page's version history
-- [ ] **VER-03**: User can restore a previous version of a page
-- [ ] **VER-04**: The system can push commits to a configured Git remote when enabled
+- [x] **VER-02**: User can view a page's version history
+- [x] **VER-03**: User can restore a previous version of a page
+- [x] **VER-04**: The system can push commits to a configured Git remote when enabled
 
 ### Attachments
 
@@ -158,9 +158,9 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | NAV-04 | Phase 1 | Complete |
 | NAV-05 | Phase 1 | Complete |
 | VER-01 | Phase 1 | Pending |
-| VER-02 | Phase 1 | Pending |
-| VER-03 | Phase 1 | Pending |
-| VER-04 | Phase 1 | Pending |
+| VER-02 | Phase 1 | Complete |
+| VER-03 | Phase 1 | Complete |
+| VER-04 | Phase 1 | Complete |
 | ATT-01 | Phase 2 | Pending |
 | ATT-02 | Phase 2 | Pending |
 | ATT-03 | Phase 2 | Pending |

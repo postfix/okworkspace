@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
-status: executing
+status: verifying
 stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-06-18T20:24:00.000Z"
-last_activity: 2026-06-18 -- Completed 01-03-PLAN.md (rename/move + structural link rewrite + link picker)
+last_updated: "2026-06-18T20:59:39.397Z"
+last_activity: 2026-06-18 -- Completed 01-04-PLAN.md (delete-to-trash via recoverable git mv with provenance; restore with collision auto-suffix; DeleteConfirmDialog + TrashView)
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 9
+  percent: 33
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 Phase: 01 (okf-pages-navigation-hidden-git) — EXECUTING
 Plan: 5 of 5
-Status: Executing Phase 01
+Status: Phase complete — ready for verification
 Last activity: 2026-06-18 -- Completed 01-04-PLAN.md (delete-to-trash via recoverable git mv with provenance; restore with collision auto-suffix; DeleteConfirmDialog + TrashView)
 
 Progress: [████████░░] 80%
@@ -59,6 +59,7 @@ Progress: [████████░░] 80%
 | Phase 01 P01 | 25 | 2 tasks | 20 files |
 | Phase 01 P02 | 70 | 4 tasks | 42 files |
 | Phase 01 P03 | 75 | 2 tasks | 25 files |
+| Phase 01 P05 | 13m | 2 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,9 @@ Recent decisions affecting current work:
 - [Phase 1 P03]: Link rewrite is structural (byte scanner skips fenced/inline code, escapes, external URLs) on okf.Doc.Body, never an AST — code blocks containing link-like text are provably never corrupted (TestRename_NoCorruption)
 - [Phase 1 P03]: Rename/move = delete-old + write-new + inbound rewrites staged in ONE commit (D-07); git rename detection keeps `git log --follow` continuous — no `git mv` plumbing needed
 - [Phase 1 P03]: One /rename endpoint dispatches new_title→Rename / new_parent→Move (exactly-one-of); mounted on the /pages/* catch-all (handler strips /rename) to avoid the chi sibling-wildcard 405
+- [Phase ?]: VER-03 restore is a forward commit through the single-writer path (RestoreVersion); history is never rewritten
+- [Phase ?]: VER-02 history hides the SHA in an opaque version token; no Git-named field is serialized to the UI
+- [Phase ?]: VER-04 push is config-gated and ff-aware: non-ff sets diverged and alerts, never force/auto-merge
 
 ### Pending Todos
 
@@ -113,6 +117,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-18T20:24:00.000Z
+Last session: 2026-06-18T20:59:31.421Z
 Stopped at: Completed 01-03-PLAN.md
 Resume file: .planning/phases/01-okf-pages-navigation-hidden-git/01-04-PLAN.md
