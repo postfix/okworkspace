@@ -100,6 +100,13 @@ func New(deps Deps) (http.Handler, error) {
 				editor.Use(auth.RequireRole(auth.RoleEditor))
 				editor.Post("/pages", h.handleCreatePage)
 				editor.Put("/pages/*", h.handleSavePage)
+				// Rename/move share one endpoint: POST /pages/{path}/rename.
+				// chi cannot host a `{path:.*}` regex node and the `/pages/*`
+				// catch-all (used by GET/PUT) as siblings — they conflict and
+				// yield a 405 (the same sibling-wildcard issue Plan 02 hit). So
+				// rename is registered on the SAME `/pages/*` catch-all under POST,
+				// and the handler strips the trailing `/rename` from the wildcard.
+				editor.Post("/pages/*", h.handleRenamePage)
 				editor.Post("/folders", h.handleCreateFolder)
 			})
 

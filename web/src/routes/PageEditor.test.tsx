@@ -6,10 +6,15 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-vi.mock("../api/client", () => ({
-  getPage: vi.fn(),
-  savePage: vi.fn(),
-}));
+vi.mock("../api/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/client")>();
+  return {
+    ...actual,
+    getPage: vi.fn(),
+    savePage: vi.fn(),
+    getTree: vi.fn().mockResolvedValue([]),
+  };
+});
 
 // Mock the heavy markdown editor with a plain textarea so the test stays fast
 // and deterministic (the editor's exact rendering is not under test here).

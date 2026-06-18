@@ -46,12 +46,36 @@ type createFolderRequest struct {
 	Name   string `json:"name"`
 }
 
-// cleanPathParam reads the {path} wildcard, trims a leading slash, and rejects
+// renamePageRequest is the POST /pages/{path}/rename body. Exactly ONE of the
+// two fields must be non-empty: NewTitle dispatches to Rename (slug a new
+// filename in the same folder), NewParent dispatches to Move (relocate to
+// another folder). Both-set or neither-set is a 400 (the discriminant is
+// exactly-one-of).
+type renamePageRequest struct {
+	NewTitle  string `json:"new_title"`
+	NewParent string `json:"new_parent"`
+}
+
+// renamePageResponse returns the new repo-relative path so the SPA can navigate
+// to the renamed/moved page.
+type renamePageResponse struct {
+	Path string `json:"path"`
+}
+
+// cleanPathParam reads the `*` wildcard, trims a leading slash, and rejects
 // traversal/absolute/NUL inputs before the service re-resolves through the repo
 // resolver (defense in depth — T-02-01). It writes a 400 and returns ok=false on
 // a rejected path.
 func cleanPathParam(w http.ResponseWriter, r *http.Request) (string, bool) {
-	p := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	return cleanPathString(w, strings.TrimPrefix(chi.URLParam(r, "*"), "/"))
+}
+
+// cleanPathString validates an already-extracted page path string: it rejects
+// empty / NUL / absolute / traversal inputs before the service re-resolves
+// through the repo resolver (defense in depth — T-02-01). It writes a 400 and
+// returns ok=false on a rejected path.
+func cleanPathString(w http.ResponseWriter, p string) (string, bool) {
+	p = strings.TrimPrefix(p, "/")
 	if p == "" || strings.ContainsRune(p, 0x00) || strings.HasPrefix(p, "/") {
 		writeError(w, http.StatusBadRequest, "Invalid request.")
 		return "", false
@@ -154,6 +178,80 @@ func (h *authHandlers) handleSavePage(w http.ResponseWriter, r *http.Request) {
 		Source: auditSourceWeb,
 	})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRenamePage dispatches a rename OR a move on the single /rename endpoint
+// (editor only). The request body discriminates the operation: a non-empty
+// new_title calls s.Rename (and audits Action "rename"); a non-empty new_parent
+// calls s.Move (and audits Action "move"). Exactly one of the two must be
+// present — both or neither returns 400 and performs no mutation. Inbound links
+// are rewritten and committed atomically with the move by the service (D-07).
+func (h *authHandlers) handleRenamePage(w http.ResponseWriter, r *http.Request) {
+	if h.pages == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	// The route is POST /pages/*; the wildcard is "{path}/rename". Strip the
+	// trailing "/rename" to recover the page path. A POST to /pages/* WITHOUT the
+	// /rename suffix is not a valid operation here (404).
+	wild := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	if !strings.HasSuffix(wild, "/rename") {
+		writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+		return
+	}
+	path, ok := cleanPathString(w, strings.TrimSuffix(wild, "/rename"))
+	if !ok {
+		return
+	}
+	var req renamePageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	title := strings.TrimSpace(req.NewTitle)
+	parent := strings.TrimSpace(req.NewParent)
+
+	// Exactly-one-of discriminant: both set or neither set is rejected before any
+	// mutation.
+	hasTitle := title != ""
+	hasParent := parent != ""
+	if hasTitle == hasParent {
+		writeError(w, http.StatusBadRequest, "Choose a new title or a new folder, not both.")
+		return
+	}
+
+	user := h.actorUsername(r.Context())
+	var (
+		newPath string
+		err     error
+		action  string
+	)
+	if hasTitle {
+		action = audit.ActionPageRename
+		newPath, err = h.pages.Rename(r.Context(), path, title, user)
+	} else {
+		action = audit.ActionPageMove
+		newPath, err = h.pages.Move(r.Context(), path, parent, user)
+	}
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		if errors.Is(err, pages.ErrTitleRequired) {
+			writeError(w, http.StatusBadRequest, "Give your page a title.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: action,
+		Actor:  user,
+		Target: newPath,
+		Source: auditSourceWeb,
+	})
+	writeJSON(w, http.StatusOK, renamePageResponse{Path: newPath})
 }
 
 // handleCreateFolder creates a folder (seeded with a blank index.md, editor

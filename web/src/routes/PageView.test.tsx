@@ -6,10 +6,17 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-vi.mock("../api/client", () => ({
-  getPage: vi.fn(),
-  me: vi.fn(),
-}));
+vi.mock("../api/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/client")>();
+  return {
+    ...actual,
+    getPage: vi.fn(),
+    me: vi.fn(),
+    getTree: vi.fn().mockResolvedValue([]),
+    renamePage: vi.fn(),
+    movePage: vi.fn(),
+  };
+});
 
 import * as client from "../api/client";
 import { useRecent } from "../stores/recent";

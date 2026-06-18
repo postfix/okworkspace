@@ -17,6 +17,13 @@
   margin: 0;
 }
 
+.pageview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
 .pageview-status {
   color: var(--color-text-muted);
   display: flex;

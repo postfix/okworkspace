@@ -6,6 +6,7 @@ import MDEditor from "@uiw/react-md-editor";
 import { getPage, savePage, type Page } from "../api/client";
 import { readField, setField } from "../lib/frontmatter";
 import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
+import LinkPicker from "../components/LinkPicker";
 import "./PageEditor.css";
 
 // Debounce intervals (RESEARCH Open Q2: client-driven idle save). A keystroke
@@ -108,6 +109,14 @@ export default function PageEditor() {
     scheduleAutosave();
   }
 
+  // insertLink appends a relative `.md` Markdown link emitted by the LinkPicker
+  // to the body (D-05/D-06) and schedules an autosave.
+  function insertLink(markdown: string) {
+    setBody((b) => (b === "" ? markdown : `${b} ${markdown}`));
+    setSaveState("idle");
+    scheduleAutosave();
+  }
+
   function onFieldChange(field: string, value: string) {
     setFrontmatter((fm) => setField(fm, field, value));
     setSaveState("idle");
@@ -170,6 +179,10 @@ export default function PageEditor() {
             onChange={(e) => onFieldChange("description", e.target.value)}
           />
         </div>
+      </div>
+
+      <div className="pageeditor-toolbar">
+        <LinkPicker fromPath={path} onInsert={insertLink} />
       </div>
 
       <div className="pageeditor-surface" data-color-mode="light">

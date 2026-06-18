@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
@@ -7,6 +7,9 @@ import { getPage, me, type Me, type Page } from "../api/client";
 import { okfTitle } from "../lib/frontmatter";
 import { useRecent } from "../stores/recent";
 import MarkdownProse from "../components/MarkdownProse";
+import PageActionMenu from "../components/PageActionMenu";
+import RenameModal from "../components/RenameModal";
+import MoveDialog from "../components/MoveDialog";
 import "./PageView.css";
 
 // PageView is Read mode (/app/page/:path). It renders the committed Markdown via
@@ -20,6 +23,8 @@ export default function PageView() {
 
   const { data: meData } = useQuery<Me>({ queryKey: ["me"], queryFn: me });
   const canEdit = meData?.role === "editor" || meData?.role === "admin";
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery<Page>({
     queryKey: ["page", path],
@@ -67,22 +72,43 @@ export default function PageView() {
     <article className="pageview">
       <header className="pageview-header">
         <h1 className="pageview-title">{title}</h1>
-        {canEdit && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => navigate(`/app/edit/${path}`)}
-          >
-            <Pencil size={16} aria-hidden="true" />
-            <span>Edit page</span>
-          </button>
-        )}
+        <div className="pageview-actions">
+          {canEdit && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate(`/app/edit/${path}`)}
+            >
+              <Pencil size={16} aria-hidden="true" />
+              <span>Edit page</span>
+            </button>
+          )}
+          <PageActionMenu
+            canEdit={canEdit}
+            onEdit={() => navigate(`/app/edit/${path}`)}
+            onRename={() => setRenameOpen(true)}
+            onMove={() => setMoveOpen(true)}
+            onHistory={() => {
+              /* Version history panel arrives in a later plan (VER-02). */
+            }}
+            onDelete={() => {
+              /* Delete-to-trash arrives in a later plan (PAGE-06). */
+            }}
+          />
+        </div>
       </header>
       {body.trim() === "" ? (
         <p className="pageview-empty">This page is empty. Select Edit to start writing.</p>
       ) : (
         <MarkdownProse body={body} />
       )}
+      <RenameModal
+        open={renameOpen}
+        path={path}
+        currentTitle={title}
+        onClose={() => setRenameOpen(false)}
+      />
+      <MoveDialog open={moveOpen} path={path} onClose={() => setMoveOpen(false)} />
     </article>
   );
 }

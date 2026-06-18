@@ -246,3 +246,49 @@ export async function savePage(
 export async function createFolder(parent: string, name: string): Promise<void> {
   await mutate<void>("/api/v1/folders", { parent, name });
 }
+
+// renamePage renames a page to a new title within its folder (PAGE-04). The
+// backend slugs a new filename, rewrites every inbound link, and returns the new
+// page path to navigate to. Links to this page keep working.
+export async function renamePage(
+  path: string,
+  newTitle: string,
+): Promise<{ path: string }> {
+  return mutate<{ path: string }>(`/api/v1/pages/${path}/rename`, {
+    new_title: newTitle,
+  });
+}
+
+// movePage moves a page into another folder (PAGE-05). The same /rename endpoint
+// dispatches on the new_parent field. Inbound links are rewritten and history
+// stays continuous; the new path is returned.
+export async function movePage(
+  path: string,
+  newParent: string,
+): Promise<{ path: string }> {
+  return mutate<{ path: string }>(`/api/v1/pages/${path}/rename`, {
+    new_parent: newParent,
+  });
+}
+
+// relativeMdLink computes a relative `.md` link destination from the page at
+// fromPath to the page at toPath (both repo-relative slash paths), matching the
+// canonical on-disk link format (D-05). Used by the LinkPicker so an inserted
+// link is a portable relative path (e.g. ../runbooks/deploy.md), not a wiki or
+// ID link. In read mode such links navigate within the app (D-06).
+export function relativeMdLink(fromPath: string, toPath: string): string {
+  const fromDir = fromPath.split("/").slice(0, -1);
+  const toParts = toPath.split("/");
+  let i = 0;
+  while (
+    i < fromDir.length &&
+    i < toParts.length - 1 &&
+    fromDir[i] === toParts[i]
+  ) {
+    i++;
+  }
+  const ups = fromDir.slice(i).map(() => "..");
+  const downs = toParts.slice(i);
+  const rel = [...ups, ...downs].join("/");
+  return rel === "" ? toParts[toParts.length - 1] : rel;
+}

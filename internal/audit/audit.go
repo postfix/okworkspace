@@ -38,6 +38,8 @@ const (
 	ActionConfigChange      = "config_change"
 	ActionPageCreate        = "page_create"
 	ActionPageEdit          = "page_edit"
+	ActionPageRename        = "rename"
+	ActionPageMove          = "move"
 	ActionFolderCreate      = "folder_create"
 )
 
