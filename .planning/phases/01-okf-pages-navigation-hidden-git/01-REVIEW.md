@@ -54,10 +54,27 @@ findings:
   warning: 7
   info: 4
   total: 13
-status: issues_found
+critical_resolved: 2
+status: criticals_resolved
 ---
 
 # Phase 1: Code Review Report
+
+> **Orchestrator resolution (execute-phase, 2026-06-19):** Both CRITICAL findings were
+> fixed and regression-tested before phase verification:
+> - **CR-01** — `fix(01): anchor /pages sub-resource dispatch on .md boundary` (`b5f625a`);
+>   regression `TestGetPageInVersionFolder`.
+> - **CR-02** — `fix(01): quote YAML-unsafe frontmatter values on the client` (`7bddef6`);
+>   new `web/src/lib/frontmatter.test.ts` (24 assertions).
+>
+> Separately, a MEDIUM argv flag-smuggling finding from the commit-time security review was
+> fixed in `2c66ef1` (hex-validated version token at the gitstore + pages layers).
+>
+> The 7 WARNING and 4 INFO findings below remain **open** for user triage (not auto-fixed) —
+> run `/gsd-code-review 1 --fix` to address them, or `/gsd-secure-phase 1` for the
+> threat-model pass. Highest-value follow-ups: WR-01 (DB/Git divergence on trash), WR-02
+> (MarkdownProse relative-link resolution), WR-04 (version token not bound to the page's
+> own history), WR-05 (push failure re-commit / over-broad `rejected` match).
 
 **Reviewed:** 2026-06-19
 **Depth:** standard
