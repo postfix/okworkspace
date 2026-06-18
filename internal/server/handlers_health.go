@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 )
 
@@ -30,6 +31,10 @@ func (h *healthHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	status, err := h.checker.RepoHealth(r.Context())
 	if err != nil {
+		// WR-05: log the underlying failure server-side (a failing `git status`
+		// / unreachable repo) before returning the generic not-ok payload, so the
+		// problem is diagnosable rather than silently masked.
+		slog.ErrorContext(r.Context(), "health: repo health check failed", "error", err)
 		writeJSON(w, http.StatusOK, RepoHealth{OK: false, Detail: "Storage health check failed"})
 		return
 	}

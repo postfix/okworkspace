@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -15,6 +16,7 @@ import (
 type Worker struct {
 	db  *sql.DB
 	cfg Config
+	log *slog.Logger
 
 	mu       sync.RWMutex
 	handlers map[string]Handler
@@ -25,14 +27,24 @@ type Worker struct {
 	stopOnce sync.Once
 }
 
-// New constructs a Worker over the shared *sql.DB.
+// New constructs a Worker over the shared *sql.DB. It logs via slog.Default();
+// use SetLogger to inject a specific logger before Start.
 func New(db *sql.DB, cfg Config) *Worker {
 	return &Worker{
 		db:       db,
 		cfg:      cfg.withDefaults(),
+		log:      slog.Default(),
 		handlers: make(map[string]Handler),
 		stop:     make(chan struct{}),
 		stopped:  make(chan struct{}),
+	}
+}
+
+// SetLogger overrides the worker's logger (WR-04 observability). Call before
+// Start; a nil logger leaves the existing default in place.
+func (w *Worker) SetLogger(l *slog.Logger) {
+	if l != nil {
+		w.log = l
 	}
 }
 
@@ -115,27 +127,39 @@ func (w *Worker) drainOne(ctx context.Context) bool {
 		return false
 	}
 	if err != nil {
+		// WR-04: a non-ErrNoRows claim error (schema mismatch, corrupted row,
+		// context cancellation) was previously swallowed, leaving a wedged worker
+		// spinning silently every tick. Log it so the failure is observable.
+		w.log.WarnContext(ctx, "jobs: claim next due failed", "error", err)
 		return false // transient DB error; retry on next tick
 	}
 
 	h, ok := w.handlerFor(jr.kind)
 	if !ok {
 		// No handler registered: fail terminally rather than spin forever.
-		_ = w.markFailed(ctx, jr.id, errors.New("no handler registered for kind "+jr.kind))
+		if err := w.markFailed(ctx, jr.id, errors.New("no handler registered for kind "+jr.kind)); err != nil {
+			w.log.WarnContext(ctx, "jobs: mark failed (no handler) failed", "job_id", jr.id, "error", err)
+		}
 		return true
 	}
 
 	if runErr := h(ctx, jr.payload); runErr != nil {
 		nextAttempt := jr.attempts + 1
 		if nextAttempt >= w.cfg.MaxAttempts {
-			_ = w.markFailed(ctx, jr.id, runErr)
+			if err := w.markFailed(ctx, jr.id, runErr); err != nil {
+				w.log.WarnContext(ctx, "jobs: mark failed failed", "job_id", jr.id, "error", err)
+			}
 		} else {
-			_ = w.markRetry(ctx, jr.id, runErr, w.backoff(nextAttempt))
+			if err := w.markRetry(ctx, jr.id, runErr, w.backoff(nextAttempt)); err != nil {
+				w.log.WarnContext(ctx, "jobs: mark retry failed", "job_id", jr.id, "error", err)
+			}
 		}
 		return true
 	}
 
-	_ = w.markDone(ctx, jr.id)
+	if err := w.markDone(ctx, jr.id); err != nil {
+		w.log.WarnContext(ctx, "jobs: mark done failed", "job_id", jr.id, "error", err)
+	}
 	return true
 }
 

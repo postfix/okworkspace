@@ -105,10 +105,14 @@ func (w *Worker) claimNextDue(ctx context.Context) (jobRow, error) {
 	return jr, nil
 }
 
-// markDone flips a job to done.
+// markDone flips a job to done. It does NOT increment attempts (WR-03): the
+// attempts column counts tries CONSUMED before this outcome, consistent with
+// markRetry/markFailed. drainOne computes the retry/fail decision from
+// jr.attempts+1, so a job that succeeds on its first try correctly persists
+// attempts=0, not 1.
 func (w *Worker) markDone(ctx context.Context, id int64) error {
 	_, err := w.db.ExecContext(ctx,
-		`UPDATE jobs SET status=?, attempts=attempts+1, last_error='', updated_at=datetime('now') WHERE id=?`,
+		`UPDATE jobs SET status=?, last_error='', updated_at=datetime('now') WHERE id=?`,
 		statusDone, id)
 	return err
 }

@@ -180,6 +180,7 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	}
 
 	worker := jobs.New(st.DB(), jobs.Config{})
+	worker.SetLogger(logger)
 	worker.Register("commit", func(_ context.Context, _ string) error { return nil })
 	worker.Start(ctx)
 	defer worker.Stop()

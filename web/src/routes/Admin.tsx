@@ -7,8 +7,10 @@ import {
   createUser,
   deactivateUser,
   listUsers,
+  me,
   resetUserPassword,
   type AdminUser,
+  type Me,
   type UserRole,
 } from "../api/client";
 import Table, { type Column } from "../components/Table";
@@ -25,6 +27,24 @@ export default function Admin() {
     queryKey: USERS_KEY,
     queryFn: listUsers,
   });
+  const { data: current } = useQuery<Me>({ queryKey: ["me"], queryFn: me });
+
+  // CR-03 (UI mirror of the server invariant): the server rejects demoting or
+  // deactivating the last active admin and self-lockout. Mirror that here so the
+  // destructive control is hidden rather than failing the user with a 409.
+  const activeAdminCount = users.filter(
+    (u) => u.role === "admin" && u.active,
+  ).length;
+
+  // canDeactivate reports whether the Deactivate control should be shown for u.
+  // It hides the control for the signed-in user (no self-deactivate) and for the
+  // last active admin (would lock the instance out of admin functions).
+  function canDeactivate(u: AdminUser): boolean {
+    if (!u.active) return false;
+    if (current && u.username === current.username) return false;
+    if (u.role === "admin" && activeAdminCount <= 1) return false;
+    return true;
+  }
 
   // Add-user dialog state.
   const [addOpen, setAddOpen] = useState(false);
@@ -167,7 +187,7 @@ export default function Admin() {
               >
                 Reset password
               </button>
-              {u.active && (
+              {canDeactivate(u) && (
                 <button
                   type="button"
                   className="btn btn-ghost-destructive"

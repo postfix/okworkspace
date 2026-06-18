@@ -8,18 +8,18 @@ import "./CenteredCard.css";
 
 // ForcePasswordChange gates the app when /auth/me reports must_change_password
 // (D-02). It is rendered by the App router guard, NOT reachable as a normal
-// route, so a user with a temporary password cannot bypass it. The current
-// (temporary) password is required to set the new one.
-export default function ForcePasswordChange({
-  currentPassword,
-}: {
-  // The temporary password the user just signed in with. The forced-change
-  // form needs it to satisfy the server's current-password check.
-  currentPassword?: string;
-}) {
+// route, so a user with a temporary password cannot bypass it. The server is
+// the authority for the gate (CR-01) — any authenticated route except the
+// password change is rejected while must_change_password is set.
+//
+// WR-06: this component DELIBERATELY takes no props. The temporary password is
+// never threaded through props/state from a parent — the user re-enters it in
+// the field below, so plaintext credentials cannot leak via React
+// devtools/error boundaries/props inspection.
+export default function ForcePasswordChange() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [current, setCurrent] = useState(currentPassword ?? "");
+  const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -62,23 +62,21 @@ export default function ForcePasswordChange({
           You're using a temporary password. Choose a new one to continue.
         </div>
 
-        {!currentPassword && (
-          <div className="field">
-            <label className="field-label" htmlFor="fpc-current">
-              Temporary password
-            </label>
-            <input
-              id="fpc-current"
-              className="input"
-              type="password"
-              autoComplete="current-password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              disabled={submitting}
-              required
-            />
-          </div>
-        )}
+        <div className="field">
+          <label className="field-label" htmlFor="fpc-current">
+            Temporary password
+          </label>
+          <input
+            id="fpc-current"
+            className="input"
+            type="password"
+            autoComplete="current-password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            disabled={submitting}
+            required
+          />
+        </div>
 
         <div className="field">
           <label className="field-label" htmlFor="fpc-new">

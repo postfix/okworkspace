@@ -95,6 +95,12 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         </nav>
 
         <main className="mainpane">
+          {repoHealth && !repoHealth.ok && !repoHealth.diverged && (
+            <div className="banner banner-warning" role="alert">
+              Storage is reporting a problem. Your work may not be saving —
+              contact your administrator.
+            </div>
+          )}
           {repoHealth?.diverged && (
             <div className="banner banner-warning" role="alert">
               The remote repository has diverged. Automatic sync was paused to

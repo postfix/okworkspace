@@ -101,9 +101,10 @@ func New(deps Deps) (http.Handler, error) {
 	})
 
 	// Wrap with session load/save, then CSRF (outermost so the token cookie is
-	// set even for the /csrf GET).
-	secure := deps.Config.Server.PublicURL != "" &&
-		len(deps.Config.Server.PublicURL) >= 8 && deps.Config.Server.PublicURL[:8] == "https://"
+	// set even for the /csrf GET). WR-07: the Secure flag for the CSRF cookie is
+	// derived from the SAME auth.SecureCookies helper the session manager uses,
+	// so the two cookies' Secure flags can never diverge.
+	secure := auth.SecureCookies(deps.Config.Server.PublicURL)
 	handler := sessionLoad(sm, r)
 	handler = csrfProtect(handler, secure)
 	return handler, nil
