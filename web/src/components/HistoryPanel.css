@@ -1,0 +1,59 @@
+/* HistoryPanel — version history list (VER-02). Calm, no Git vocabulary. The
+   version list is the focal point; each row's "Restore this version" is the
+   per-row action anchor (accent). */
+
+.historypanel-status,
+.historypanel-empty {
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+  margin: 0;
+  padding: var(--space-2, 0.5rem) 0;
+}
+
+.historypanel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 0.25rem);
+}
+
+.historypanel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+  padding: var(--space-2, 0.5rem) var(--space-1, 0.25rem);
+  border-bottom: 1px solid var(--color-border);
+  min-height: 44px;
+}
+
+.historypanel-row:last-child {
+  border-bottom: none;
+}
+
+.historypanel-row-meta {
+  color: var(--color-text, #1a1a1a);
+  font-size: 0.9375rem;
+}
+
+.historypanel-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 0.5rem);
+  flex-shrink: 0;
+}
+
+/* The "view this version" preview uses the success-derived add tint as a calm
+   wash behind the rendered old version (status-signal tint, never a button
+   fill). */
+.historypanel-preview {
+  margin-top: var(--space-3, 0.75rem);
+  padding: var(--space-3, 0.75rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-diff-add, rgba(22, 163, 74, 0.12));
+  max-height: 40vh;
+  overflow: auto;
+}

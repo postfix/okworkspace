@@ -90,7 +90,11 @@ func New(deps Deps) (http.Handler, error) {
 			// a PUT share the same regex-wildcard node (sibling-route conflict);
 			// the plain `*` catch-all routes every depth correctly.
 			authed.Get("/tree", h.handleTree)
-			authed.Get("/pages/*", h.handleGetPage)
+			// GET /pages/* serves a plain page read, the version history
+			// (".../history"), or an old version (".../version/{v}") — the
+			// dispatcher routes on the wildcard suffix since chi cannot host
+			// sibling wildcard routes (VER-02/03 reads, any authenticated user).
+			authed.Get("/pages/*", h.handleGetPageOrHistory)
 			// Trash listing — readable by any authenticated user (the trash view
 			// surfaces provenance only, never page content or Git vocabulary).
 			authed.Get("/trash", h.handleListTrash)

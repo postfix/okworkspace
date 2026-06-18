@@ -89,6 +89,26 @@ func cleanPathString(w http.ResponseWriter, p string) (string, bool) {
 	return p, true
 }
 
+// handleGetPageOrHistory dispatches the GET /pages/* catch-all: a wildcard ending
+// in "/history" returns the version history (VER-02), one containing "/version/"
+// returns an old version (VER-03 view), and anything else is a plain page read.
+// chi cannot host a sibling `{path}/history` route next to the `/pages/*`
+// wildcard (the sibling-wildcard conflict Plans 02-04 hit), so the suffixes are
+// dispatched here on the SAME catch-all.
+func (h *authHandlers) handleGetPageOrHistory(w http.ResponseWriter, r *http.Request) {
+	wild := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	switch {
+	case strings.HasSuffix(wild, "/history"):
+		h.handleHistory(w, r)
+		return
+	case strings.Contains(wild, "/version/"):
+		h.handleViewVersion(w, r)
+		return
+	default:
+		h.handleGetPage(w, r)
+	}
+}
+
 // handleGetPage returns a page's frontmatter, body, and revision (any
 // authenticated user). 404 when the page does not exist.
 func (h *authHandlers) handleGetPage(w http.ResponseWriter, r *http.Request) {
@@ -191,10 +211,25 @@ func (h *authHandlers) handleRenamePage(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
 		return
 	}
-	// The route is POST /pages/*; the wildcard is "{path}/rename". Strip the
-	// trailing "/rename" to recover the page path. A POST to /pages/* WITHOUT the
-	// /rename suffix is not a valid operation here (404).
+	// The route is POST /pages/*; the wildcard is "{path}/rename" or
+	// "{path}/restore" (the sibling-wildcard conflict forbids separate routes, so
+	// both POST sub-actions are dispatched here on the same catch-all).
 	wild := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	if strings.HasSuffix(wild, "/restore") {
+		path, ok := cleanPathString(w, strings.TrimSuffix(wild, "/restore"))
+		if !ok {
+			return
+		}
+		var rreq struct {
+			Version string `json:"version"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&rreq); err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid request.")
+			return
+		}
+		h.handleRestoreVersion(w, r, path, rreq.Version)
+		return
+	}
 	if !strings.HasSuffix(wild, "/rename") {
 		writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
 		return

@@ -11,6 +11,7 @@ import PageActionMenu from "../components/PageActionMenu";
 import RenameModal from "../components/RenameModal";
 import MoveDialog from "../components/MoveDialog";
 import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
+import HistoryPanel from "../components/HistoryPanel";
 import "./PageView.css";
 
 // PageView is Read mode (/app/page/:path). It renders the committed Markdown via
@@ -27,6 +28,7 @@ export default function PageView() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery<Page>({
     queryKey: ["page", path],
@@ -90,9 +92,7 @@ export default function PageView() {
             onEdit={() => navigate(`/app/edit/${path}`)}
             onRename={() => setRenameOpen(true)}
             onMove={() => setMoveOpen(true)}
-            onHistory={() => {
-              /* Version history panel arrives in a later plan (VER-02). */
-            }}
+            onHistory={() => setHistoryOpen(true)}
             onDelete={() => setDeleteOpen(true)}
           />
         </div>
@@ -114,6 +114,11 @@ export default function PageView() {
         path={path}
         title={title}
         onClose={() => setDeleteOpen(false)}
+      />
+      <HistoryPanel
+        open={historyOpen}
+        path={path}
+        onClose={() => setHistoryOpen(false)}
       />
     </article>
   );

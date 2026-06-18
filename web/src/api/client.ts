@@ -308,6 +308,57 @@ export async function restoreFromTrash(id: number): Promise<{ path: string }> {
   return mutate<{ path: string }>(`/api/v1/trash/${id}/restore`, undefined);
 }
 
+// --- Version history & restore (VER-02/03) ---
+
+// HistoryEntry mirrors one row of a page's version history. It carries ONLY
+// human-readable fields plus an OPAQUE version token (used to view/restore a
+// version) — there is NO sha/hash/commit field, so no Git internals reach the UI
+// (VER-02). The frontend renders action+who+when as "Edited by Sam · 2 hours
+// ago"; the version token is never displayed.
+export interface HistoryEntry {
+  version: string;
+  action: string;
+  who: string;
+  when: string;
+}
+
+// getHistory fetches a page's version history (a GET, newest-first). Available
+// to any authenticated user.
+export async function getHistory(path: string): Promise<HistoryEntry[]> {
+  const res = await fetch(`/api/v1/pages/${path}/history`, {
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    throw new Error("Couldn't load this page's history — try again.");
+  }
+  return (await res.json()) as HistoryEntry[];
+}
+
+// viewVersion fetches a page as it existed at the given opaque version token (a
+// GET). Returns the same Page shape as getPage — read-only.
+export async function viewVersion(
+  path: string,
+  version: string,
+): Promise<Page> {
+  const res = await fetch(`/api/v1/pages/${path}/version/${version}`, {
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    throw new Error("Couldn't load that version — try again.");
+  }
+  return (await res.json()) as Page;
+}
+
+// restoreVersion restores a page to an old version as a NEW forward version
+// (VER-03). The current version is kept in history — nothing is lost. The
+// version token is the opaque handle the client received from getHistory.
+export async function restoreVersion(
+  path: string,
+  version: string,
+): Promise<{ path: string }> {
+  return mutate<{ path: string }>(`/api/v1/pages/${path}/restore`, { version });
+}
+
 // relativeMdLink computes a relative `.md` link destination from the page at
 // fromPath to the page at toPath (both repo-relative slash paths), matching the
 // canonical on-disk link format (D-05). Used by the LinkPicker so an inserted
