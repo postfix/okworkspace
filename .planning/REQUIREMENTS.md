@@ -10,10 +10,10 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 ### Authentication & Users
 
 - [x] **AUTH-01**: User can log in with a username and password
-- [ ] **AUTH-02**: User can log out from any page
+- [x] **AUTH-02**: User can log out from any page
 - [x] **AUTH-03**: User session persists across browser refresh via a secure cookie
 - [x] **AUTH-04**: An admin user is created automatically on first startup
-- [ ] **AUTH-05**: User actions are gated by role (admin / editor / reader)
+- [x] **AUTH-05**: User actions are gated by role (admin / editor / reader)
 - [x] **AUTH-06**: User has a display name shown in the UI
 
 ### Pages
@@ -134,10 +134,10 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | AUTH-01 | Phase 0 | Complete |
-| AUTH-02 | Phase 0 | Pending |
+| AUTH-02 | Phase 0 | Complete |
 | AUTH-03 | Phase 0 | Complete |
 | AUTH-04 | Phase 0 | Complete |
-| AUTH-05 | Phase 0 | Pending |
+| AUTH-05 | Phase 0 | Complete |
 | AUTH-06 | Phase 0 | Complete |
 | SEC-01 | Phase 0 | Complete |
 | SEC-03 | Phase 0 | Complete |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
 status: executing
-stopped_at: Completed 00-02-PLAN.md
-last_updated: "2026-06-17T17:12:40.934Z"
-last_activity: 2026-06-17 -- Phase 00 execution started
+stopped_at: Completed 00-03-PLAN.md
+last_updated: "2026-06-18T12:32:16.538Z"
+last_activity: 2026-06-18 -- Completed 00-03 (RBAC & team-management); plan 4 of 4 remaining
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 00 (skeleton-auth-foundations) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-06-17 -- Phase 00 execution started
+Last activity: 2026-06-18 -- Completed 00-03 (RBAC & team-management); plan 4 of 4 remaining
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 00 P01 | 18 | 3 tasks | 43 files |
 | Phase 00 P02 | 12 | 3 tasks | 19 files |
+| Phase 00 P03 | 84 | 2 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 0: SEC-01 resolver
 - [Phase ?]: Phase 0: single-writer Git via one mutex + exec.Command arg slices; push deferred to Phase 1
 - [Phase ?]: Phase 0: jobs.run_after stored as REAL fractional epoch (SQLite datetime truncates to seconds)
+- [Phase ?]: Phase 0: RequireRole RBAC reads role only from the session-bound user (never client input); admin is a superset this phase (D-07)
+- [Phase ?]: Phase 0: self-service profile/password paths accept no role parameter — own-role escalation impossible by construction (D-06)
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-17T17:12:40.929Z
+Last session: 2026-06-18T12:31:52.811Z
 Stopped at: Completed 00-02-PLAN.md
 Resume file: None
