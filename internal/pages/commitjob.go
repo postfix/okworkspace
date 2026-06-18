@@ -29,13 +29,19 @@ type fileWrite struct {
 }
 
 // commitPayload is the JSON payload enqueued for a commit job. It batches one or
-// more writes into exactly one commit (D-01). Spec reuses gitstore.CommitSpec
-// verbatim (no parallel commit type). Push activates the optional remote push
-// added in Plan 05.
+// more writes (and optional removes) into exactly one commit (D-01). Spec reuses
+// gitstore.CommitSpec verbatim (no parallel commit type). Push activates the
+// optional remote push added in Plan 05.
+//
+// Removes lists repo-relative paths to delete from the working tree before the
+// commit (the source path of a rename/move). The delete plus the new-path write
+// are staged in the SAME commit so git's rename detection traces history across
+// the move (`git log --follow`) — D-07/D-08.
 type commitPayload struct {
-	Writes []fileWrite         `json:"writes"`
-	Spec   gitstore.CommitSpec `json:"spec"`
-	Push   bool                `json:"push"`
+	Writes  []fileWrite         `json:"writes"`
+	Removes []string            `json:"removes,omitempty"`
+	Spec    gitstore.CommitSpec `json:"spec"`
+	Push    bool                `json:"push"`
 }
 
 // CommitHandler returns the jobs.Handler registered for KindCommit. On each job
@@ -57,6 +63,16 @@ func CommitHandler(r *repo.Repo, g *gitstore.GitStore) jobs.Handler {
 		for _, fw := range p.Writes {
 			if err := r.Write(fw.Path, fw.Bytes); err != nil {
 				return fmt.Errorf("pages: write %q: %w", fw.Path, err)
+			}
+		}
+
+		// Remove the source path(s) of a rename/move from the working tree. The
+		// deletion is staged in the SAME commit as the new-path write (the Spec
+		// already lists both paths) so git records the move as a rename and
+		// `git log --follow` keeps history continuous (D-07/D-08).
+		for _, rm := range p.Removes {
+			if err := r.Remove(rm); err != nil {
+				return fmt.Errorf("pages: remove %q: %w", rm, err)
 			}
 		}
 

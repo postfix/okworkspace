@@ -49,6 +49,21 @@ func (r *Repo) Write(rel string, data []byte) error {
 	return os.WriteFile(abs, data, fileMode)
 }
 
+// Remove deletes the repo-relative file at rel, routing through Resolve. A
+// missing file is not an error (idempotent), so a rename that has already
+// removed the source does not fail the commit. Only used by the CommitJob to
+// delete the source path of a rename/move before staging the deletion.
+func (r *Repo) Remove(rel string) error {
+	abs, err := r.Resolve(rel)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // MkdirAll creates the repo-relative directory (and parents), routing through
 // Resolve.
 func (r *Repo) MkdirAll(rel string) error {
