@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/jobs"
@@ -105,6 +106,10 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	}
 	logger.Info("store ready", slog.String("db_path", dbPath))
 
+	// SEC-05 audit log: records key actions to the SQLite mirror + a structured
+	// slog line. Shared by the startup path (bootstrap/seed) and the server.
+	auditLog := audit.New(st.DB(), logger)
+
 	// Bootstrap the admin user on first run (D-01): print the one-time password
 	// exactly once. Never logs plaintext on any other path.
 	userRepo := users.NewRepository(st.DB())
@@ -118,6 +123,14 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 			slog.String("one_time_password", adminPassword),
 			slog.Bool("must_change_password", true),
 		)
+		// Audit the bootstrap (actor=system); the one-time password is NEVER
+		// recorded in the audit trail (T-00.04-02).
+		_ = auditLog.Record(ctx, audit.Event{
+			Action: audit.ActionBootstrap,
+			Actor:  "system",
+			Target: adminUser,
+			Source: "bootstrap",
+		})
 	}
 
 	// --- Storage + safety spines (Plan 02) ---
@@ -157,6 +170,12 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		}
 		if seeded {
 			logger.Info("seeded starter repository layout", slog.String("user", adminUser))
+			_ = auditLog.Record(ctx, audit.Event{
+				Action: audit.ActionSeed,
+				Actor:  "system",
+				Target: adminUser,
+				Source: "bootstrap",
+			})
 		}
 	}
 
@@ -176,6 +195,7 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		UserRepo:   userRepo,
 		SPAHandler: spa,
 		Health:     healthAdapter{gs: gs},
+		Audit:      auditLog,
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)

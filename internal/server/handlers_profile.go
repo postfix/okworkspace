@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/users"
 )
@@ -39,6 +40,12 @@ func (h *authHandlers) handleUpdateProfile(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
 		return
 	}
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionProfileChange,
+		Actor:  h.actorUsername(r.Context()),
+		Detail: "display_name",
+		Source: auditSourceWeb,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -75,5 +82,13 @@ func (h *authHandlers) handleChangePassword(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
 		return
 	}
+	// SEC-05: record the self-service password change. The new password is NEVER
+	// recorded (T-00.04-02).
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionProfileChange,
+		Actor:  h.actorUsername(r.Context()),
+		Detail: "password",
+		Source: auditSourceWeb,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }

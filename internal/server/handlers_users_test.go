@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
@@ -19,6 +20,14 @@ import (
 // newServerWith builds a server and bootstraps the admin, returning the handler,
 // the admin one-time password, and the user repository for seeding extra users.
 func newServerWith(t *testing.T) (http.Handler, string, *users.Repository) {
+	t.Helper()
+	h, pw, repo, _ := newServerWithStore(t)
+	return h, pw, repo
+}
+
+// newServerWithStore is like newServerWith but also returns the store so a test
+// can assert audit_log rows were written by the handlers.
+func newServerWithStore(t *testing.T) (http.Handler, string, *users.Repository, *store.Store) {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "app.db"))
 	if err != nil {
@@ -38,11 +47,26 @@ func newServerWith(t *testing.T) (http.Handler, string, *users.Repository) {
 	if err != nil {
 		t.Fatalf("BootstrapAdmin: %v", err)
 	}
-	h, err := server.New(server.Deps{Store: st, Config: cfg, UserRepo: repo})
+	h, err := server.New(server.Deps{
+		Store:    st,
+		Config:   cfg,
+		UserRepo: repo,
+		Audit:    audit.New(st.DB(), nil),
+	})
 	if err != nil {
 		t.Fatalf("server.New: %v", err)
 	}
-	return h, pw, repo
+	return h, pw, repo, st
+}
+
+// countAudit returns the number of audit_log rows with the given action.
+func countAudit(t *testing.T, st *store.Store, action string) int {
+	t.Helper()
+	var n int
+	if err := st.DB().QueryRow(`SELECT COUNT(1) FROM audit_log WHERE action=?`, action).Scan(&n); err != nil {
+		t.Fatalf("count audit %q: %v", action, err)
+	}
+	return n
 }
 
 // loginAs signs in and returns the session cookies + a fresh CSRF token/cookies
@@ -165,8 +189,8 @@ func TestAdminCreateAndDeactivateFlow(t *testing.T) {
 		t.Fatalf("create user = %d, body=%s", rec.Code, rec.Body.String())
 	}
 	var created struct {
-		ID                int64  `json:"id"`
-		OneTimePassword   string `json:"one_time_password"`
+		ID              int64  `json:"id"`
+		OneTimePassword string `json:"one_time_password"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode created: %v (%s)", err, rec.Body.String())
@@ -215,6 +239,93 @@ func TestProfilePasswordRejectsRoleParam(t *testing.T) {
 	if got.DisplayName != "Ed Two" {
 		t.Errorf("display name not updated: %q", got.DisplayName)
 	}
+}
+
+// TestAuditRowsForLoginLogoutCreate asserts the audit wiring: a login, a logout,
+// and an admin user-create each produce the corresponding audit_log row with the
+// expected actor (and target for the create).
+func TestAuditRowsForLoginLogoutCreate(t *testing.T) {
+	h, _, repo, st := newServerWithStore(t)
+
+	// Give the admin a known password and clear must_change so login is clean.
+	admin, _ := repo.GetByUsername(context.Background(), "admin")
+	if err := users.ChangeOwnPassword(context.Background(), repo, admin.ID, mustChangeBootstrapPW(t, repo), "admin-long-password"); err != nil {
+		// The admin one-time password is unknown here; instead reset via repo.
+		t.Logf("change admin password fallback: %v", err)
+	}
+
+	// Use a freshly created editor whose OTP we control for a clean login path.
+	_, otp, err := users.Create(context.Background(), repo, users.NewUser{Username: "auditee", DisplayName: "Audit Ee", Role: users.RoleEditor})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	ed, _ := repo.GetByUsername(context.Background(), "auditee")
+	if err := users.ChangeOwnPassword(context.Background(), repo, ed.ID, otp, "auditee-long-password"); err != nil {
+		t.Fatalf("set editor password: %v", err)
+	}
+
+	// Login -> expect a login row.
+	cookies := loginAs(t, h, "auditee", "auditee-long-password")
+	if got := countAudit(t, st, audit.ActionLogin); got < 1 {
+		t.Errorf("login audit rows = %d, want >=1", got)
+	}
+
+	// Logout -> expect a logout row.
+	rec := doMutate(t, h, http.MethodPost, "/api/v1/auth/logout", nil, cookies)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("logout = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := countAudit(t, st, audit.ActionLogout); got < 1 {
+		t.Errorf("logout audit rows = %d, want >=1", got)
+	}
+
+	// Admin user-create -> expect a user_create row naming actor+target.
+	adminCookies := loginAsAdmin(t, h, repo)
+	rec = doMutate(t, h, http.MethodPost, "/api/v1/admin/users",
+		map[string]string{"username": "created", "display_name": "Created", "role": "reader"}, adminCookies)
+	if rec.Code != http.StatusCreated && rec.Code != http.StatusOK {
+		t.Fatalf("create = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := countAudit(t, st, audit.ActionUserCreate); got < 1 {
+		t.Errorf("user_create audit rows = %d, want >=1", got)
+	}
+	var actor, target string
+	if err := st.DB().QueryRow(
+		`SELECT actor, target FROM audit_log WHERE action=? ORDER BY id DESC LIMIT 1`, audit.ActionUserCreate,
+	).Scan(&actor, &target); err != nil {
+		t.Fatalf("scan user_create row: %v", err)
+	}
+	if actor != "admin" {
+		t.Errorf("user_create actor = %q, want admin", actor)
+	}
+	if target != "created" {
+		t.Errorf("user_create target = %q, want created", target)
+	}
+}
+
+// loginAsAdmin resets the admin to a known password (via the repo, the same path
+// the admin CLI uses) and logs in, returning the session cookies.
+func loginAsAdmin(t *testing.T, h http.Handler, repo *users.Repository) []*http.Cookie {
+	t.Helper()
+	admin, err := repo.GetByUsername(context.Background(), "admin")
+	if err != nil {
+		t.Fatalf("get admin: %v", err)
+	}
+	otp, err := users.ResetPassword(context.Background(), repo, admin.ID)
+	if err != nil {
+		t.Fatalf("reset admin: %v", err)
+	}
+	if err := users.ChangeOwnPassword(context.Background(), repo, admin.ID, otp, "admin-long-password"); err != nil {
+		t.Fatalf("set admin password: %v", err)
+	}
+	return loginAs(t, h, "admin", "admin-long-password")
+}
+
+// mustChangeBootstrapPW is a placeholder returning an obviously-wrong password;
+// the admin OTP is unknown in this helper, so the change is expected to fail and
+// the test instead uses loginAsAdmin (repo-driven reset). Kept to document intent.
+func mustChangeBootstrapPW(_ *testing.T, _ *users.Repository) string {
+	return "unknown-bootstrap-password"
 }
 
 func itoa(i int64) string {

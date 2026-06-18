@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/store"
@@ -25,6 +26,10 @@ type Deps struct {
 	// Health reports repository health for GET /api/v1/health. Optional; when
 	// nil the endpoint reports a default healthy status.
 	Health HealthChecker
+	// Audit records key actions (login/logout/user-management/profile) to the
+	// SQLite mirror + a structured slog line (SEC-05). Optional; when nil the
+	// handlers use a no-op recorder so audit never breaks a request path.
+	Audit *audit.Logger
 }
 
 // New builds the HTTP handler: chi mux with the middleware stack (recover,
@@ -36,10 +41,15 @@ func New(deps Deps) (http.Handler, error) {
 	}
 
 	sm := auth.NewSessionManager(deps.Store.DB(), deps.Config)
+	var rec auditRecorder = deps.Audit
+	if deps.Audit == nil {
+		rec = nopAudit{}
+	}
 	h := &authHandlers{
 		sessions: sm,
 		users:    deps.UserRepo,
 		config:   deps.Config,
+		audit:    rec,
 	}
 	health := &healthHandler{checker: deps.Health}
 

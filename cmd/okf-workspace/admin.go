@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/store"
 	"github.com/postfix/okworkspace/internal/users"
@@ -86,5 +87,14 @@ func runAdminResetPassword(ctx context.Context, dbPath, username string) (string
 	if err != nil {
 		return "", fmt.Errorf("reset password for %q: %w", username, err)
 	}
+	// SEC-05: record the CLI password reset (actor=cli, the shared bootstrap
+	// trust boundary). The one-time password is NEVER recorded (T-00.04-02).
+	auditLog := audit.New(st.DB(), slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	_ = auditLog.Record(ctx, audit.Event{
+		Action: audit.ActionUserResetPassword,
+		Actor:  "cli",
+		Target: username,
+		Source: "cli",
+	})
 	return otp, nil
 }

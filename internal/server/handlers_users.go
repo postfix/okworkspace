@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -8,9 +9,34 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/users"
 )
+
+// actorUsername resolves the session-bound user's username for the audit actor
+// field. Falls back to "unknown" if the user cannot be resolved.
+func (h *authHandlers) actorUsername(ctx context.Context) string {
+	cur, ok := auth.CurrentUser(ctx)
+	if !ok {
+		return "unknown"
+	}
+	u, err := h.users.GetByID(ctx, cur.UserID())
+	if err != nil {
+		return "unknown"
+	}
+	return u.Username
+}
+
+// targetUsername resolves a target user's username by id for the audit target
+// field. Falls back to the numeric id string when the user cannot be resolved.
+func (h *authHandlers) targetUsername(ctx context.Context, id int64) string {
+	u, err := h.users.GetByID(ctx, id)
+	if err != nil {
+		return strconv.FormatInt(id, 10)
+	}
+	return u.Username
+}
 
 // sessionUser adapts *users.User to auth.SessionUser so RequireRole can read
 // the role from the session-bound user without the auth package importing users.
@@ -19,7 +45,7 @@ type sessionUser struct {
 	role string
 }
 
-func (s sessionUser) UserID() int64   { return s.id }
+func (s sessionUser) UserID() int64    { return s.id }
 func (s sessionUser) UserRole() string { return s.role }
 
 // loadCurrentUser is middleware that resolves the session user id to the full
@@ -115,6 +141,13 @@ func (h *authHandlers) handleCreateUser(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Could not create the user. The username may already be taken.")
 		return
 	}
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionUserCreate,
+		Actor:  h.actorUsername(r.Context()),
+		Target: u.Username,
+		Detail: "role=" + u.Role,
+		Source: auditSourceWeb,
+	})
 	writeJSON(w, http.StatusCreated, createUserResponse{userView: toUserView(*u), OneTimePassword: otp})
 }
 
@@ -145,6 +178,13 @@ func (h *authHandlers) handleSetRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
 		return
 	}
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionUserRoleChange,
+		Actor:  h.actorUsername(r.Context()),
+		Target: h.targetUsername(r.Context(), id),
+		Detail: "role=" + req.Role,
+		Source: auditSourceWeb,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -159,6 +199,9 @@ func (h *authHandlers) handleResetPassword(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
+	// Resolve the target name BEFORE the reset (the reset does not change it,
+	// but doing so here keeps the lookup adjacent to the audit call).
+	target := h.targetUsername(r.Context(), id)
 	otp, err := users.ResetPassword(r.Context(), h.users, id)
 	if err != nil {
 		if errors.Is(err, users.ErrNotFound) {
@@ -168,6 +211,14 @@ func (h *authHandlers) handleResetPassword(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
 		return
 	}
+	// SEC-05: record WHO reset WHOSE password. The one-time password is NEVER
+	// recorded (T-00.04-02).
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionUserResetPassword,
+		Actor:  h.actorUsername(r.Context()),
+		Target: target,
+		Source: auditSourceWeb,
+	})
 	writeJSON(w, http.StatusOK, resetPasswordResponse{OneTimePassword: otp})
 }
 
@@ -177,6 +228,7 @@ func (h *authHandlers) handleDeactivate(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	target := h.targetUsername(r.Context(), id)
 	if err := users.Deactivate(r.Context(), h.users, id); err != nil {
 		if errors.Is(err, users.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "That user no longer exists.")
@@ -185,6 +237,12 @@ func (h *authHandlers) handleDeactivate(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
 		return
 	}
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionUserDeactivate,
+		Actor:  h.actorUsername(r.Context()),
+		Target: target,
+		Source: auditSourceWeb,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 
