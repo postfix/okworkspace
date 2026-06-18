@@ -78,7 +78,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 01-02-PLAN.md — create/read/edit/save slice: page service + 409 floor + live tree (replaces PLACEHOLDER_TREE) + folder create + recents (wave 2)
+- [x] 01-02-PLAN.md — create/read/edit/save slice: page service + 409 floor + live tree (replaces PLACEHOLDER_TREE) + folder create + recents (wave 2)
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -172,7 +172,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Skeleton, Auth & Foundations | 4/4 | Complete | 2026-06-18 |
-| 1. OKF Pages, Navigation & Hidden Git | 0/5 | Planned | - |
+| 1. OKF Pages, Navigation & Hidden Git | 2/5 | Executing | - |
 | 2. Attachments & Text Extraction | 0/TBD | Not started | - |
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 0/TBD | Not started | - |

@@ -18,9 +18,9 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 
 ### Pages
 
-- [ ] **PAGE-01**: User can create a page in the selected folder
-- [ ] **PAGE-02**: User can edit a page's title, tags, description, and body
-- [ ] **PAGE-03**: User can save a page and view it rendered as Markdown
+- [x] **PAGE-01**: User can create a page in the selected folder
+- [x] **PAGE-02**: User can edit a page's title, tags, description, and body
+- [x] **PAGE-03**: User can save a page and view it rendered as Markdown
 - [ ] **PAGE-04**: User can rename a page
 - [ ] **PAGE-05**: User can move a page to another folder
 - [ ] **PAGE-06**: User can delete a page to trash
@@ -30,11 +30,11 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 
 ### Navigation
 
-- [ ] **NAV-01**: User can browse pages in a left-side tree
-- [ ] **NAV-02**: User can expand and collapse folders in the tree
-- [ ] **NAV-03**: User can create a folder
-- [ ] **NAV-04**: User sees the currently open page highlighted in the tree
-- [ ] **NAV-05**: User can see a list of recently visited pages
+- [x] **NAV-01**: User can browse pages in a left-side tree
+- [x] **NAV-02**: User can expand and collapse folders in the tree
+- [x] **NAV-03**: User can create a folder
+- [x] **NAV-04**: User sees the currently open page highlighted in the tree
+- [x] **NAV-05**: User can see a list of recently visited pages
 
 ### Versioning (hidden Git)
 
@@ -143,20 +143,20 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | SEC-03 | Phase 0 | Complete |
 | SEC-04 | Phase 0 | Complete |
 | SEC-05 | Phase 0 | Complete |
-| PAGE-01 | Phase 1 | Pending |
-| PAGE-02 | Phase 1 | Pending |
-| PAGE-03 | Phase 1 | Pending |
+| PAGE-01 | Phase 1 | Complete |
+| PAGE-02 | Phase 1 | Complete |
+| PAGE-03 | Phase 1 | Complete |
 | PAGE-04 | Phase 1 | Pending |
 | PAGE-05 | Phase 1 | Pending |
 | PAGE-06 | Phase 1 | Pending |
 | PAGE-07 | Phase 1 | Pending |
 | PAGE-08 | Phase 1 | Pending |
 | PAGE-09 | Phase 1 | Pending |
-| NAV-01 | Phase 1 | Pending |
-| NAV-02 | Phase 1 | Pending |
-| NAV-03 | Phase 1 | Pending |
-| NAV-04 | Phase 1 | Pending |
-| NAV-05 | Phase 1 | Pending |
+| NAV-01 | Phase 1 | Complete |
+| NAV-02 | Phase 1 | Complete |
+| NAV-03 | Phase 1 | Complete |
+| NAV-04 | Phase 1 | Complete |
+| NAV-05 | Phase 1 | Complete |
 | VER-01 | Phase 1 | Pending |
 | VER-02 | Phase 1 | Pending |
 | VER-03 | Phase 1 | Pending |
