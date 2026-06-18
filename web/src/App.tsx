@@ -8,6 +8,7 @@ import Admin from "./routes/Admin";
 import Profile from "./routes/Profile";
 import PageView from "./routes/PageView";
 import PageEditor from "./routes/PageEditor";
+import TrashView from "./components/TrashView";
 import ForcePasswordChange from "./routes/ForcePasswordChange";
 import { me, type Me } from "./api/client";
 
@@ -103,6 +104,16 @@ export default function App() {
           <RequireAuth>
             <AppShell>
               <Profile />
+            </AppShell>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/trash"
+        element={
+          <RequireAuth>
+            <AppShell>
+              <TrashView />
             </AppShell>
           </RequireAuth>
         }

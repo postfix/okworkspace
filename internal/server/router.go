@@ -91,6 +91,9 @@ func New(deps Deps) (http.Handler, error) {
 			// the plain `*` catch-all routes every depth correctly.
 			authed.Get("/tree", h.handleTree)
 			authed.Get("/pages/*", h.handleGetPage)
+			// Trash listing — readable by any authenticated user (the trash view
+			// surfaces provenance only, never page content or Git vocabulary).
+			authed.Get("/trash", h.handleListTrash)
 
 			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin
 			// subgroup). Authorization is read from the session role via
@@ -107,7 +110,12 @@ func New(deps Deps) (http.Handler, error) {
 				// rename is registered on the SAME `/pages/*` catch-all under POST,
 				// and the handler strips the trailing `/rename` from the wildcard.
 				editor.Post("/pages/*", h.handleRenamePage)
+				editor.Delete("/pages/*", h.handleDeletePage)
 				editor.Post("/folders", h.handleCreateFolder)
+				// Restore a trashed page to its original folder (auto-suffix on a
+				// live-page collision, D-10). {id} is the trash row id, not a path,
+				// so this does not collide with the /pages/* wildcard.
+				editor.Post("/trash/{id}/restore", h.handleRestoreFromTrash)
 			})
 
 			// Admin-only user management (D-05). Every route is gated by

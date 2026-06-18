@@ -10,6 +10,7 @@ import MarkdownProse from "../components/MarkdownProse";
 import PageActionMenu from "../components/PageActionMenu";
 import RenameModal from "../components/RenameModal";
 import MoveDialog from "../components/MoveDialog";
+import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
 import "./PageView.css";
 
 // PageView is Read mode (/app/page/:path). It renders the committed Markdown via
@@ -25,6 +26,7 @@ export default function PageView() {
   const canEdit = meData?.role === "editor" || meData?.role === "admin";
   const [renameOpen, setRenameOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery<Page>({
     queryKey: ["page", path],
@@ -91,9 +93,7 @@ export default function PageView() {
             onHistory={() => {
               /* Version history panel arrives in a later plan (VER-02). */
             }}
-            onDelete={() => {
-              /* Delete-to-trash arrives in a later plan (PAGE-06). */
-            }}
+            onDelete={() => setDeleteOpen(true)}
           />
         </div>
       </header>
@@ -109,6 +109,12 @@ export default function PageView() {
         onClose={() => setRenameOpen(false)}
       />
       <MoveDialog open={moveOpen} path={path} onClose={() => setMoveOpen(false)} />
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        path={path}
+        title={title}
+        onClose={() => setDeleteOpen(false)}
+      />
     </article>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus, FolderPlus, Shield } from "lucide-react";
+import { FilePlus, FolderPlus, Shield, Trash2 } from "lucide-react";
 
 import { health, logout, me, type Me, type RepoHealth } from "../api/client";
 import UserMenu from "../components/UserMenu";
@@ -87,6 +87,17 @@ export default function AppShell({ children }: { children?: ReactNode }) {
 
           <LeftTree />
           <RecentList />
+
+          <div className="navrail-trash">
+            <button
+              type="button"
+              className="navrow navrow-action"
+              onClick={() => navigate("/trash")}
+            >
+              <Trash2 size={16} aria-hidden="true" />
+              <span>Trash</span>
+            </button>
+          </div>
 
           {isAdmin && (
             <div className="navrail-admin">

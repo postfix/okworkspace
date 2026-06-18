@@ -40,6 +40,8 @@ const (
 	ActionPageEdit          = "page_edit"
 	ActionPageRename        = "rename"
 	ActionPageMove          = "move"
+	ActionPageTrash         = "trash"
+	ActionPageRestore       = "restore"
 	ActionFolderCreate      = "folder_create"
 )
 

@@ -39,6 +39,24 @@ func waitForRevisionChange(t *testing.T, svc *Service, path, prev string) {
 	t.Fatalf("revision of %q never changed from %q (commit did not drain)", path, prev)
 }
 
+// waitForCommitCount polls `git rev-list --count HEAD` until it reaches want (or
+// the deadline). The commit object is created at the end of the single-writer
+// commit, slightly after the working-tree files appear, so a count sampled right
+// after waitForFile/waitForGone can lag by one; polling removes that race.
+func waitForCommitCount(t *testing.T, root string, want int) int {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	last := 0
+	for time.Now().Before(deadline) {
+		last = commitCount(t, root)
+		if last >= want {
+			return last
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return last
+}
+
 func TestRename(t *testing.T) {
 	svc, r, _ := newServiceFixture(t, false)
 	ctx := context.Background()
@@ -80,7 +98,9 @@ func TestRename(t *testing.T) {
 	waitForGone(t, svc, target)
 
 	// Exactly ONE new commit for the move + the inbound rewrite (D-07 atomic).
-	commitsAfter := commitCount(t, r.Root())
+	// Poll: the commit object lands shortly after the working-tree write, so the
+	// rev-list count can momentarily lag the file appearing.
+	commitsAfter := waitForCommitCount(t, r.Root(), commitsBefore+1)
 	if commitsAfter != commitsBefore+1 {
 		t.Fatalf("expected exactly 1 new commit for rename, got %d (before=%d after=%d)",
 			commitsAfter-commitsBefore, commitsBefore, commitsAfter)
@@ -133,7 +153,7 @@ func TestMove(t *testing.T) {
 	waitForFile(t, svc.repo, newPath)
 	waitForGone(t, svc, target)
 
-	commitsAfter := commitCount(t, r.Root())
+	commitsAfter := waitForCommitCount(t, r.Root(), commitsBefore+1)
 	if commitsAfter != commitsBefore+1 {
 		t.Fatalf("expected exactly 1 new commit for move, got %d", commitsAfter-commitsBefore)
 	}

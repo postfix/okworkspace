@@ -50,7 +50,7 @@ async function ensureCSRF(): Promise<string> {
 async function mutate<T>(
   path: string,
   body: unknown,
-  method: "POST" | "PUT" = "POST",
+  method: "POST" | "PUT" | "DELETE" = "POST",
 ): Promise<T> {
   const token = await ensureCSRF();
   const res = await fetch(path, {
@@ -269,6 +269,43 @@ export async function movePage(
   return mutate<{ path: string }>(`/api/v1/pages/${path}/rename`, {
     new_parent: newParent,
   });
+}
+
+// --- Trash: delete-to-trash & restore (PAGE-06/07) ---
+
+// TrashEntry mirrors a deleted-page record (GET /trash). It carries provenance
+// only — title, where the page came from, who deleted it, and when — never page
+// content or any Git vocabulary.
+export interface TrashEntry {
+  id: number;
+  title: string;
+  original_path: string;
+  deleted_by: string;
+  deleted_at: string;
+}
+
+// deletePage moves a page to trash (PAGE-06). Delete is recoverable — the page
+// moves to Trash and can be restored anytime; nothing is permanently removed.
+export async function deletePage(path: string): Promise<void> {
+  await mutate<void>(`/api/v1/pages/${path}`, undefined, "DELETE");
+}
+
+// listTrash fetches the deleted pages (a GET). The user sees title, who deleted
+// it, and when — rendered as a relative time in the UI.
+export async function listTrash(): Promise<TrashEntry[]> {
+  const res = await fetch("/api/v1/trash", { credentials: "same-origin" });
+  if (!res.ok) {
+    throw new Error("Couldn't load Trash — try again.");
+  }
+  return (await res.json()) as TrashEntry[];
+}
+
+// restoreFromTrash restores a trashed page to its original folder (PAGE-07). If
+// a page with the same name already exists, the backend restores this one as
+// "{title} (restored)" so nothing is clobbered (D-10); the returned path is the
+// page's actual restored location.
+export async function restoreFromTrash(id: number): Promise<{ path: string }> {
+  return mutate<{ path: string }>(`/api/v1/trash/${id}/restore`, undefined);
 }
 
 // relativeMdLink computes a relative `.md` link destination from the page at
