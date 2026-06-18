@@ -66,9 +66,26 @@ func (h *authHandlers) loadCurrentUser(next http.Handler) http.Handler {
 			return
 		}
 		ctx := auth.WithCurrentUser(r.Context(), sessionUser{id: u.ID, role: u.Role})
+		// CR-01: enforce the forced-password-change gate SERVER-SIDE, not just in
+		// the SPA. A user holding a temporary/one-time password obtains a valid
+		// session, so without this check they could call any authenticated
+		// endpoint (profile edits, and if admin, all user-management routes) by
+		// issuing the HTTP request directly. While must_change_password is set we
+		// reject every authenticated route EXCEPT the self-service password
+		// change. (GET /api/v1/auth/me is NOT in this group — it is served on the
+		// unauthenticated /auth subtree — so the SPA can still read the flag.)
+		if u.MustChangePassword && r.URL.Path != changePasswordPath {
+			writeError(w, http.StatusForbidden, "Set a new password to continue.")
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// changePasswordPath is the single self-service route exempted from the
+// must_change_password gate (CR-01). It MUST match the route registered in
+// router.go (authed.Put("/profile/password", ...)) exactly.
+const changePasswordPath = "/api/v1/profile/password"
 
 // userView is the safe user shape returned to the admin screen — it never
 // includes the password hash.
@@ -138,6 +155,10 @@ func (h *authHandlers) handleCreateUser(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusBadRequest, "Enter a display name.")
 			return
 		}
+		if errors.Is(err, users.ErrInvalidUsername) {
+			writeError(w, http.StatusBadRequest, "Usernames can use letters, numbers, dots, dashes, and underscores (max 64 characters).")
+			return
+		}
 		writeError(w, http.StatusBadRequest, "Could not create the user. The username may already be taken.")
 		return
 	}
@@ -173,6 +194,10 @@ func (h *authHandlers) handleSetRole(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, users.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "That user no longer exists.")
+			return
+		}
+		if errors.Is(err, users.ErrLastAdmin) {
+			writeError(w, http.StatusConflict, "This is the last admin — promote another admin before changing this role.")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
@@ -232,6 +257,10 @@ func (h *authHandlers) handleDeactivate(w http.ResponseWriter, r *http.Request) 
 	if err := users.Deactivate(r.Context(), h.users, id); err != nil {
 		if errors.Is(err, users.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "That user no longer exists.")
+			return
+		}
+		if errors.Is(err, users.ErrLastAdmin) {
+			writeError(w, http.StatusConflict, "This is the last admin — promote another admin before deactivating this account.")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")

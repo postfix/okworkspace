@@ -119,8 +119,11 @@ func doMutate(t *testing.T, h http.Handler, method, path string, body any, cooki
 }
 
 func TestAdminListUsersAsAdmin(t *testing.T) {
-	h, pw, _ := newServerWith(t)
-	cookies := loginAs(t, h, "admin", pw)
+	h, _, repo := newServerWith(t)
+	// The bootstrap admin starts with must_change_password=true; loginAsAdmin
+	// clears it (resets + changes the password) so the CR-01 gate lets admin
+	// routes through.
+	cookies := loginAsAdmin(t, h, repo)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
 	for _, c := range cookies {
 		req.AddCookie(c)
@@ -179,8 +182,10 @@ func TestEditorForbiddenFromAdminAPI(t *testing.T) {
 }
 
 func TestAdminCreateAndDeactivateFlow(t *testing.T) {
-	h, pw, _ := newServerWith(t)
-	cookies := loginAs(t, h, "admin", pw)
+	h, _, repo := newServerWith(t)
+	// Clear the bootstrap admin's must_change_password gate (CR-01) before
+	// exercising admin routes.
+	cookies := loginAsAdmin(t, h, repo)
 
 	// Create a user.
 	rec := doMutate(t, h, http.MethodPost, "/api/v1/admin/users",
@@ -300,6 +305,79 @@ func TestAuditRowsForLoginLogoutCreate(t *testing.T) {
 	}
 	if target != "created" {
 		t.Errorf("user_create target = %q, want created", target)
+	}
+}
+
+// TestMustChangePasswordGate covers CR-01: a logged-in user whose
+// must_change_password flag is set is rejected (403) from every authenticated
+// endpoint EXCEPT the self-service password change, while GET /auth/me stays
+// reachable. After the user changes their password the gate lifts.
+func TestMustChangePasswordGate(t *testing.T) {
+	h, _, repo := newServerWith(t)
+
+	// Create an EDITOR with the OTP intact (must_change_password=true) and log in
+	// directly with the OTP — no password change yet, so the gate is active.
+	_, otp, err := users.Create(context.Background(), repo, users.NewUser{Username: "tempuser", DisplayName: "Temp", Role: users.RoleEditor})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	cookies := loginAs(t, h, "tempuser", otp)
+
+	// GET /auth/me MUST stay reachable so the SPA can read the flag.
+	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	for _, c := range cookies {
+		meReq.AddCookie(c)
+	}
+	meRec := httptest.NewRecorder()
+	h.ServeHTTP(meRec, meReq)
+	if meRec.Code != http.StatusOK {
+		t.Fatalf("/auth/me while must_change = %d, want 200 (body=%s)", meRec.Code, meRec.Body.String())
+	}
+	if !strings.Contains(meRec.Body.String(), `"must_change_password":true`) {
+		t.Errorf("/auth/me did not report must_change_password=true: %s", meRec.Body.String())
+	}
+
+	// A protected self-service endpoint (PUT /profile) MUST be rejected with 403.
+	rec := doMutate(t, h, http.MethodPut, "/api/v1/profile",
+		map[string]string{"display_name": "Renamed"}, cookies)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("PUT /profile while must_change = %d, want 403 (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	// An admin route MUST also be rejected (403) — the gate runs before RBAC, so
+	// a must-change admin cannot manage users either. Promote tempuser to admin
+	// to exercise an admin route through the same gate.
+	tmp, _ := repo.GetByUsername(context.Background(), "tempuser")
+	if err := users.SetRole(context.Background(), repo, tmp.ID, users.RoleAdmin); err != nil {
+		t.Fatalf("SetRole admin: %v", err)
+	}
+	rec = doMutate(t, h, http.MethodPost, "/api/v1/admin/users",
+		map[string]string{"username": "x", "display_name": "X", "role": "reader"}, cookies)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("POST /admin/users while must_change = %d, want 403 (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	// The change-password endpoint MUST be reachable (gate exemption) and clear
+	// the flag.
+	rec = doMutate(t, h, http.MethodPut, "/api/v1/profile/password",
+		map[string]string{"current_password": otp, "new_password": "a-good-long-password"}, cookies)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("PUT /profile/password = %d, want 204 (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	// Gate lifted: PUT /profile now succeeds (user is admin now, but the profile
+	// route is allowed for any authenticated user).
+	rec = doMutate(t, h, http.MethodPut, "/api/v1/profile",
+		map[string]string{"display_name": "Renamed"}, cookies)
+	if rec.Code != http.StatusNoContent && rec.Code != http.StatusOK {
+		t.Errorf("PUT /profile after password change = %d, want 2xx (body=%s)", rec.Code, rec.Body.String())
+	}
+	got, _ := repo.GetByID(context.Background(), tmp.ID)
+	if got.MustChangePassword {
+		t.Error("must_change_password should be cleared after the change")
+	}
+	if got.DisplayName != "Renamed" {
+		t.Errorf("display name not updated after gate lifted: %q", got.DisplayName)
 	}
 }
 
