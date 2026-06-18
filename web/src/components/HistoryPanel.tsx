@@ -123,7 +123,7 @@ export default function HistoryPanel({
 
       {viewing && viewedPage && (
         <div className="historypanel-preview">
-          <MarkdownProse body={viewedPage.body} />
+          <MarkdownProse body={viewedPage.body} currentPath={path} />
         </div>
       )}
 

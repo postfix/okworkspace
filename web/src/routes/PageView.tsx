@@ -100,7 +100,7 @@ export default function PageView() {
       {body.trim() === "" ? (
         <p className="pageview-empty">This page is empty. Select Edit to start writing.</p>
       ) : (
-        <MarkdownProse body={body} />
+        <MarkdownProse body={body} currentPath={path} />
       )}
       <RenameModal
         open={renameOpen}
