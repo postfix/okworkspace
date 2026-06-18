@@ -274,6 +274,69 @@ func TestWildcardPath(t *testing.T) {
 	}
 }
 
+// TestGetPageInVersionFolder is the CR-01 regression: a page that literally
+// lives inside a folder named "version" (docs/version/notes.md) must read as the
+// PAGE, not be mis-routed to the view-version handler. The dispatch is anchored
+// on the ".md/version/" boundary, so a real "/version/" path segment no longer
+// hijacks the read.
+func TestGetPageInVersionFolder(t *testing.T) {
+	f := newPageServer(t)
+	editorCookies := loginEditor(t, f)
+
+	// Page under a folder named "version".
+	versionPagePath := createPageAs(t, f, editorCookies, "docs/version", "Notes")
+	if versionPagePath != "docs/version/notes.md" {
+		t.Fatalf("create path = %q, want docs/version/notes.md", versionPagePath)
+	}
+	rec := doGet(t, f.handler, "/api/v1/pages/"+versionPagePath, editorCookies)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET page under /version/ folder = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+	var vp struct {
+		Body     string `json:"body"`
+		Revision string `json:"revision"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &vp); err != nil {
+		t.Fatalf("decode page: %v (body=%s)", err, rec.Body.String())
+	}
+	if vp.Revision == "" {
+		t.Fatal("page under /version/ folder read returned empty revision (mis-routed to view-version?)")
+	}
+
+	// A page in a folder named "history" must also read as a page (the "/history"
+	// suffix only triggers history when it directly follows the ".md").
+	histPagePath := createPageAs(t, f, editorCookies, "docs/history", "Log")
+	if histPagePath != "docs/history/log.md" {
+		t.Fatalf("create path = %q, want docs/history/log.md", histPagePath)
+	}
+	rec = doGet(t, f.handler, "/api/v1/pages/"+histPagePath, editorCookies)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET page under /history folder = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	// Sanity: the real sub-routes still work on this page. History returns a
+	// version list ...
+	entries := waitForHistoryLen(t, f, editorCookies, versionPagePath, 1)
+	version, _ := entries[len(entries)-1]["version"].(string)
+	if version == "" {
+		t.Fatal("history of page under /version/ folder returned no version token")
+	}
+	// ... and view-version returns the page at that opaque token.
+	vrec := doGet(t, f.handler, "/api/v1/pages/"+versionPagePath+"/version/"+version, editorCookies)
+	if vrec.Code != http.StatusOK {
+		t.Fatalf("GET .md/version/<token> = %d, want 200 (body=%s)", vrec.Code, vrec.Body.String())
+	}
+	var vv struct {
+		Revision string `json:"revision"`
+	}
+	if err := json.Unmarshal(vrec.Body.Bytes(), &vv); err != nil {
+		t.Fatalf("decode view-version: %v (body=%s)", err, vrec.Body.String())
+	}
+	if vv.Revision == "" {
+		t.Fatal("view-version of page under /version/ folder returned empty revision")
+	}
+}
+
 // --- small helpers ---
 
 func doGet(t *testing.T, h http.Handler, path string, cookies []*http.Cookie) *httptest.ResponseRecorder {

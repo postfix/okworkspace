@@ -72,13 +72,18 @@ func (h *authHandlers) handleViewVersion(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	wild := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
-	idx := strings.LastIndex(wild, "/version/")
+	// Split on the ".md/version/" boundary (not bare "/version/") so the page
+	// part keeps its trailing ".md" and a page that itself lives under a folder
+	// named "version" is not mis-parsed (CR-01). The page file always ends in
+	// ".md", so the marker includes it; the token is everything after.
+	const marker = ".md/version/"
+	idx := strings.Index(wild, marker)
 	if idx < 0 {
 		writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
 		return
 	}
-	pathPart := wild[:idx]
-	version := strings.TrimPrefix(wild[idx:], "/version/")
+	pathPart := wild[:idx+len(".md")]
+	version := wild[idx+len(marker):]
 	if version == "" || strings.ContainsRune(version, '/') {
 		writeError(w, http.StatusBadRequest, "Invalid request.")
 		return

@@ -89,19 +89,26 @@ func cleanPathString(w http.ResponseWriter, p string) (string, bool) {
 	return p, true
 }
 
-// handleGetPageOrHistory dispatches the GET /pages/* catch-all: a wildcard ending
-// in "/history" returns the version history (VER-02), one containing "/version/"
-// returns an old version (VER-03 view), and anything else is a plain page read.
+// handleGetPageOrHistory dispatches the GET /pages/* catch-all. The dispatch is
+// anchored on the ".md" page-file boundary so that real pages which happen to
+// live in a folder named "version" or "history" (e.g. docs/version/notes.md) are
+// NOT mis-routed to the sub-resource handlers and rendered permanently
+// unreadable (CR-01). Every page file ends in ".md"; the sub-resources are
+// "<page>.md/history" and "<page>.md/version/<token>", so:
+//   - history iff trimming the "/history" suffix leaves a path ending in ".md"
+//   - version iff the wildcard contains the literal segment ".md/version/"
+//   - otherwise it is a plain page read.
+//
 // chi cannot host a sibling `{path}/history` route next to the `/pages/*`
 // wildcard (the sibling-wildcard conflict Plans 02-04 hit), so the suffixes are
 // dispatched here on the SAME catch-all.
 func (h *authHandlers) handleGetPageOrHistory(w http.ResponseWriter, r *http.Request) {
 	wild := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
 	switch {
-	case strings.HasSuffix(wild, "/history"):
+	case strings.HasSuffix(wild, "/history") && strings.HasSuffix(strings.TrimSuffix(wild, "/history"), ".md"):
 		h.handleHistory(w, r)
 		return
-	case strings.Contains(wild, "/version/"):
+	case strings.Contains(wild, ".md/version/"):
 		h.handleViewVersion(w, r)
 		return
 	default:
