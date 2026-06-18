@@ -16,6 +16,7 @@ import (
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/jobs"
+	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/repo"
 	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
@@ -181,7 +182,9 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 
 	worker := jobs.New(st.DB(), jobs.Config{})
 	worker.SetLogger(logger)
-	worker.Register("commit", func(_ context.Context, _ string) error { return nil })
+	// Single-writer commit spine (D-04): a page write becomes one hidden Git
+	// commit through this handler. Replaces the Phase-0 no-op stub.
+	worker.Register(pages.KindCommit, pages.CommitHandler(contentRepo, gs))
 	worker.Start(ctx)
 	defer worker.Stop()
 	logger.Info("job worker started")
