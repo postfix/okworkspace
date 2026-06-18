@@ -55,6 +55,14 @@
   --color-success: #16a34a;
   --color-warning: #d97706;
 
+  /* Phase 1 — page/tree/editor/prose surfaces */
+  --tree-indent: 16px;
+  --prose-max-width: 720px;
+  --editor-min-height: 480px;
+  --color-code-bg: #f2f3f5;
+  --color-tree-hover: var(--color-surface);
+  --color-tree-active-bg: rgba(37, 99, 235, 0.08);
+
   /* Radius & elevation */
   --radius-sm: 6px;
   --radius-md: 10px;

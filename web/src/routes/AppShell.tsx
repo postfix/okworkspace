@@ -1,24 +1,20 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Folder, Shield } from "lucide-react";
+import { FilePlus, FolderPlus, Shield } from "lucide-react";
 
 import { health, logout, me, type Me, type RepoHealth } from "../api/client";
 import UserMenu from "../components/UserMenu";
+import LeftTree from "../components/LeftTree";
+import RecentList from "../components/RecentList";
+import CreatePageModal from "../components/CreatePageModal";
+import CreateFolderModal from "../components/CreateFolderModal";
 import "./AppShell.css";
-
-// Static placeholder tree (read-only/disabled). The real seeded tree is wired
-// in a later phase; here it only communicates "editing arrives next".
-const PLACEHOLDER_TREE = [
-  { label: "index.md", kind: "file" as const },
-  { label: "runbooks", kind: "folder" as const },
-  { label: "architecture", kind: "folder" as const },
-  { label: "decisions", kind: "folder" as const },
-];
 
 // AppShell is the authenticated chrome (top bar + nav rail + main pane). When
 // given children it renders them in the main pane (e.g. Admin, Profile);
-// otherwise it shows the Phase-0 empty-state placeholder.
+// otherwise it shows the empty-state. The nav rail hosts the live page tree
+// (LeftTree) and the client-side recent list (RecentList).
 export default function AppShell({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -29,6 +25,11 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   });
 
   const isAdmin = data?.role === "admin";
+  // Editors (and admins) can create pages/folders; readers cannot (RBAC mirror
+  // of the server gate — the create affordances are hidden for readers).
+  const canEdit = data?.role === "editor" || data?.role === "admin";
+  const [createPageOpen, setCreatePageOpen] = useState(false);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
 
   async function handleLogout() {
     await logout();
@@ -63,22 +64,29 @@ export default function AppShell({ children }: { children?: ReactNode }) {
 
       <div className="appshell-body">
         <nav className="navrail" aria-label="Workspace navigation">
-          <ul className="navtree">
-            {PLACEHOLDER_TREE.map((node) => (
-              <li
-                key={node.label}
-                className="navrow navrow-disabled"
-                aria-disabled="true"
+          {canEdit && (
+            <div className="navrail-actions">
+              <button
+                type="button"
+                className="navrow navrow-action"
+                onClick={() => setCreatePageOpen(true)}
               >
-                {node.kind === "folder" ? (
-                  <Folder size={16} aria-hidden="true" />
-                ) : (
-                  <FileText size={16} aria-hidden="true" />
-                )}
-                <span>{node.label}</span>
-              </li>
-            ))}
-          </ul>
+                <FilePlus size={16} aria-hidden="true" />
+                <span>New page</span>
+              </button>
+              <button
+                type="button"
+                className="navrow navrow-action"
+                onClick={() => setCreateFolderOpen(true)}
+              >
+                <FolderPlus size={16} aria-hidden="true" />
+                <span>New folder</span>
+              </button>
+            </div>
+          )}
+
+          <LeftTree />
+          <RecentList />
 
           {isAdmin && (
             <div className="navrail-admin">
@@ -117,18 +125,26 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             children
           ) : (
             <div className="empty-state">
-              <h1 className="empty-state-heading">Your workspace is ready</h1>
+              <h1 className="empty-state-heading">Pick a page to get started</h1>
               <p className="empty-state-body">
-                Page editing arrives in the next release. For now you can browse
-                the starter structure on the left.
-                {isAdmin
-                  ? " Your admin can add teammates from the admin screen."
-                  : ""}
+                Choose a page from the left, or create a new one.
               </p>
             </div>
           )}
         </main>
       </div>
+
+      <CreatePageModal
+        open={createPageOpen}
+        folder=""
+        folderName="your workspace"
+        onClose={() => setCreatePageOpen(false)}
+      />
+      <CreateFolderModal
+        open={createFolderOpen}
+        parent=""
+        onClose={() => setCreateFolderOpen(false)}
+      />
     </div>
   );
 }

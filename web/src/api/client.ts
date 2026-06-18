@@ -178,3 +178,71 @@ export async function resetUserPassword(
 export async function deactivateUser(id: number): Promise<void> {
   await mutate<void>(`/api/v1/admin/users/${id}/deactivate`, undefined);
 }
+
+// --- Pages, tree & folders (PAGE-01..03, NAV-01..05) ---
+
+// TreeNode mirrors the backend nested navigation tree (SPEC §17.2). A folder
+// carries children; a page is a leaf. The user never sees the path/filename —
+// only the title — but the path is the route token the SPA navigates to.
+export interface TreeNode {
+  type: "folder" | "page";
+  path: string;
+  title: string;
+  children?: TreeNode[];
+}
+
+// Page mirrors the GET /pages response: the frontmatter region (raw YAML text),
+// the opaque Markdown body, and the optimistic-concurrency revision.
+export interface Page {
+  frontmatter: string;
+  body: string;
+  revision: string;
+}
+
+// getTree fetches the nested navigation tree (a GET — no CSRF needed).
+export async function getTree(): Promise<TreeNode[]> {
+  const res = await fetch("/api/v1/tree", { credentials: "same-origin" });
+  if (!res.ok) {
+    throw new Error("Couldn't load your pages — try again.");
+  }
+  return (await res.json()) as TreeNode[];
+}
+
+// getPage fetches a single page by its repo-relative path (a GET).
+export async function getPage(path: string): Promise<Page> {
+  const res = await fetch(`/api/v1/pages/${path}`, { credentials: "same-origin" });
+  if (res.status === 404) {
+    const err = new Error(
+      "This page no longer exists. It may have been moved or deleted.",
+    ) as Error & { status?: number };
+    err.status = 404;
+    throw err;
+  }
+  if (!res.ok) {
+    throw new Error("Something went wrong. Check your connection and try again.");
+  }
+  return (await res.json()) as Page;
+}
+
+// createPage creates a page from a title in the selected folder (D-12). The
+// backend slugs the filename; we get back the new page's path to navigate to.
+export async function createPage(
+  folder: string,
+  title: string,
+): Promise<{ path: string }> {
+  return mutate<{ path: string }>("/api/v1/pages", { folder, title });
+}
+
+// savePage writes a new version of a page. base_revision carries the optimistic-
+// concurrency token; a stale value surfaces as a 409 (err.status === 409).
+export async function savePage(
+  path: string,
+  payload: { body: string; frontmatter: string; base_revision: string },
+): Promise<void> {
+  await mutate<void>(`/api/v1/pages/${path}`, payload, "PUT");
+}
+
+// createFolder creates a folder (seeded with a blank index.md, NAV-03).
+export async function createFolder(parent: string, name: string): Promise<void> {
+  await mutate<void>("/api/v1/folders", { parent, name });
+}

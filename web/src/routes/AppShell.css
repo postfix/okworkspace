@@ -111,6 +111,15 @@
   cursor: default;
 }
 
+.navrail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
 .navrail-admin {
   margin-top: var(--space-md);
   padding-top: var(--space-md);

@@ -1,0 +1,52 @@
+.lefttree-status {
+  padding: var(--space-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+}
+
+.navrow-folder {
+  cursor: default;
+}
+
+.navrow-page {
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text);
+  font-family: var(--font-family-ui);
+  text-align: left;
+}
+
+.navrow-page:hover {
+  background: var(--color-tree-hover);
+}
+
+.navrow-active {
+  background: var(--color-tree-active-bg);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+  color: var(--color-accent);
+}
+
+.tree-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--color-text-muted);
+  min-width: var(--space-md);
+}
+
+.tree-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+}
+
+.tree-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
