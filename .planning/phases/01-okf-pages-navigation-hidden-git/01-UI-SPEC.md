@@ -107,7 +107,7 @@ Inherited from Phase 0 verbatim — 60/30/10 split, light-theme baseline, semant
 | Warning (status only) — `--color-warning` | `#D97706` | Stale-draft / conflict (409) banner, Git-divergence banner (inherited), unsaved-changes notice |
 
 **Accent (`#2563EB`) reserved exclusively for (Phase-1 surfaces):**
-1. The single **primary button** per surface/dialog: editor **"Save"**, "New page" modal **"Create page"**, Move dialog **"Move page"**, History panel **"Restore this version"**, restore-from-trash **"Restore"**.
+1. The single **primary button** per surface/dialog: editor **"Save page"**, "New page" modal **"Create page"**, Move dialog **"Move page"**, History panel **"Restore this version"**, restore-from-trash **"Restore page"**.
 2. The **active / current-page** tree-row indicator (left accent bar + accent label) — NAV-04.
 3. **Internal page links** in rendered Markdown (read mode) — the in-app navigable `.md` links (D-06) render in accent (text-link treatment).
 4. Input **focus ring** (inherited `:focus-visible`), including the editor surface, tree rows, and frontmatter inputs.
@@ -139,17 +139,17 @@ Restore, rename, and move are **not** destructive (non-destructive, recoverable,
 
 ## Copywriting Contract
 
-Plain, calm, non-technical voice (the audience includes non-technical teammates). Sentence case, no jargon, no exclamation marks. **Hidden-Git rule (LOCKED, load-bearing):** the UI must NEVER surface Git vocabulary — no "commit", "branch", "SHA", "HEAD", "repository", "push", "merge", "diff" (as a noun the user reads), "checkout", "ref", or file paths. The user sees "Save", "version", "history", "restore", and human page titles only. Errors say what happened and what to do next.
+Plain, calm, non-technical voice (the audience includes non-technical teammates). Sentence case, no jargon, no exclamation marks. **Hidden-Git rule (LOCKED, load-bearing):** the UI must NEVER surface Git vocabulary — no "commit", "branch", "SHA", "HEAD", "repository", "push", "merge", "diff" (as a noun the user reads), "checkout", "ref", or file paths. The user sees "Save page", "version", "history", "restore", and human page titles only. Errors say what happened and what to do next.
 
 | Element | Copy |
 |---------|------|
-| Primary CTA — Save page (editor) | **Save** |
+| Primary CTA — Save page (editor) | **Save page** |
 | Primary CTA — Create page (modal) | **Create page** |
 | Primary CTA — Create folder | **Create folder** |
 | Primary CTA — Move page | **Move page** |
 | Primary CTA — Restore version (history) | **Restore this version** |
-| Primary CTA — Restore from trash | **Restore** |
-| Secondary action — Edit a page (read mode) | **Edit** |
+| Primary CTA — Restore from trash | **Restore page** |
+| Secondary action — Edit a page (read mode) | **Edit page** |
 | Secondary action — Insert page link (editor) | **Link to page** |
 | Page action menu items (read mode) | "Edit", "Rename", "Move", "Version history", "Delete" |
 | New-page modal title | "New page" · field label: "Page title" · helper: "We'll create it in {folderName}." (path/filename never shown) |
@@ -199,12 +199,12 @@ Each surface declares the single element that anchors attention (one focal point
 
 | Surface | Visual focal point |
 |---------|-------------------|
-| Page Read mode (`/app/page/:path`) | The **rendered Markdown prose** in the centered reading column (`--prose-max-width`) is the focal point, led by the **page title** (Display). The left tree and top bar recede (secondary surface); the **"Edit"** action sits top-right of the page as the primary affordance. |
-| Page Edit mode | The **editor surface** (`@uiw/react-md-editor`, body) is the focal point; the **frontmatter form** (title/tags/description) sits above it as a compact secondary block; the **"Save"** primary CTA + autosave status anchor the action. Tree/top bar recede. |
+| Page Read mode (`/app/page/:path`) | The **rendered Markdown prose** in the centered reading column (`--prose-max-width`) is the focal point, led by the **page title** (Display). The left tree and top bar recede (secondary surface); the **"Edit page"** action sits top-right of the page as the primary affordance. |
+| Page Edit mode | The **editor surface** (`@uiw/react-md-editor`, body) is the focal point; the **frontmatter form** (title/tags/description) sits above it as a compact secondary block; the **"Save page"** primary CTA + autosave status anchor the action. Tree/top bar recede. |
 | Left navigation tree | The **current/active page row** (accent indicator) is the focal point within the rail; expand/collapse carets and folder/file icons are secondary; "Recent" is a quiet supporting list below the tree. The tree itself is a secondary surface relative to the main pane. |
 | Version history (panel/dialog) | The **version list** is the focal point; the most recent version sits at top; each **"Restore this version"** is the per-row action anchor (accent), shown on the selected/hovered row so the list stays calm. |
 | New-page / New-folder / Rename / Move dialog | The **single input** (title/name) is the focal point; the **primary CTA** (Create/Move/Rename) is the action anchor; helper text is supporting. |
-| Trash view | The **list of deleted pages** is the focal point; each row's **"Restore"** is the action anchor; empty-trash state recedes to muted copy. |
+| Trash view | The **list of deleted pages** is the focal point; each row's **"Restore page"** is the action anchor; empty-trash state recedes to muted copy. |
 
 ---
 
@@ -231,7 +231,7 @@ Reuses Phase-0 primitives (`Button` variants, `Input`/`Field`, `Dialog`, `Banner
 | `HistoryPanel` | PageActionMenu "Version history" | version list (action + display name + relative time, NO SHA), "View this version" per row, "Restore this version" (primary), single-version empty state |
 | `RestoreConfirmDialog` | HistoryPanel | accent confirm ("Restore this version") / Cancel; non-destructive |
 | `DeleteConfirmDialog` | PageActionMenu "Delete" | destructive confirm ("Delete") / Cancel ("Keep page"); backdrop click does NOT confirm |
-| `TrashView` | nav/admin entry to trash | list of deleted pages (title, deleted-by, when), Restore per row, empty-trash state |
+| `TrashView` | nav/admin entry to trash | list of deleted pages (title, deleted-by, when), Restore page per row, empty-trash state |
 | `AutosaveStatus` | PageEditor | "Saving…" (spinner) / "Draft saved" / "Saved" (success tick) — muted, no layout shift |
 | `ConflictBanner` | PageEditor | warning banner with "Reload page" action (409 floor only) |
 | `Toast` | save/restore success | "Page saved." / "Page restored." (transient, success dot) |
@@ -239,9 +239,10 @@ Reuses Phase-0 primitives (`Button` variants, `Input`/`Field`, `Dialog`, `Banner
 **Routes styled this phase:** `/app` (AppShell with live tree replacing placeholder), `/app/page/:path` (Read mode), `/app/page/:path` Edit mode (same route, mode toggle in zustand per RESEARCH), trash view (entry point within AppShell). Diff-review page mode (§18.3) is **Phase 4** — not built here.
 
 **Interaction contracts (inherited + new):**
-- Every interactive element keeps the inherited **focus-visible accent ring** (2px / 2px offset) — tree rows, editor, toolbar buttons, history rows, dialog buttons all keyboard-operable.
+- Every interactive element keeps the inherited **focus-visible accent ring** (2px / 2px offset) — tree rows, editor, toolbar buttons, history rows, dialog buttons all keyboard-operable. This inherited focus-visible ring contract stays intact for all icon-only controls below.
+- **Icon-only controls require an `aria-label`:** every icon-only interactive element (no visible text label) MUST carry an `aria-label` matching the action it performs. Specifically: the tree expand/collapse caret uses `aria-label="Expand {folderName}"` when collapsed and `aria-label="Collapse {folderName}"` when expanded (`aria-expanded` reflects state); the `@uiw/react-md-editor` toolbar buttons must expose accessible names via the library's accessibility API (its `commands` accept a `buttonProps`/name so each icon button announces its action, e.g. "Bold", "Insert link"); the `PageActionMenu` trigger (kebab/overflow icon) uses `aria-label="Page actions"`; any icon-only close (×) on dialogs uses `aria-label="Close"`. Icon-only buttons keep the 44px hit target (`--hit-min-icon`) and the inherited focus-visible accent ring.
 - Tree: folders expand/collapse on row click or caret (NAV-02); the current page row is highlighted with the accent indicator (NAV-04); rows are now **interactive** (the Phase-0 `navrow-disabled` muted/no-hover style is removed for live page rows).
-- Editor autosave never blocks typing; "Save" (or ~5–10s idle, D-03) cuts a hidden version. The user never sees a SHA/commit — only the autosave status words.
+- Editor autosave never blocks typing; "Save page" (or ~5–10s idle, D-03) cuts a hidden version. The user never sees a SHA/commit — only the autosave status words.
 - Internal page links in read mode navigate **within the app** (D-06) — they do not open a raw file or leave the SPA.
 - Dialogs trap focus, close on Esc and backdrop click — **except** the `DeleteConfirmDialog`, where backdrop click does NOT confirm (only the explicit "Delete" button does), consistent with the Phase-0 destructive-dialog rule.
 - Loading buttons show an inline spinner and disable; no layout shift (inherited).
