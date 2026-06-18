@@ -2,6 +2,7 @@ package users_test
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -150,6 +151,92 @@ func TestChangeOwnPasswordValidation(t *testing.T) {
 	ok, _ := auth.VerifyPassword(got.PasswordHash, "a-good-long-password")
 	if !ok {
 		t.Error("new password should verify")
+	}
+}
+
+// TestCreateRejectsInvalidUsername covers WR-01: usernames are constrained to a
+// safe charset/length so they cannot corrupt the Git author identity / commit
+// audit trail. Each bad name must fail with ErrInvalidUsername; a clean name
+// must succeed.
+func TestCreateRejectsInvalidUsername(t *testing.T) {
+	ctx := context.Background()
+	repo := newRepo(t)
+
+	bad := []string{
+		"",                  // empty
+		"   ",               // whitespace only (trimmed to empty)
+		"has space",         // internal whitespace
+		"line\nbreak",       // newline
+		"tab\tchar",         // control char
+		"name=value",        // '=' could corrupt -c user.name=
+		"a<b>c",             // angle brackets corrupt the --author header
+		"naïve",             // non-ASCII outside the charset
+		strings.Repeat("a", 65), // exceeds 64 chars
+	}
+	for _, name := range bad {
+		_, _, err := users.Create(ctx, repo, users.NewUser{Username: name, DisplayName: "X", Role: users.RoleReader})
+		if !errors.Is(err, users.ErrInvalidUsername) {
+			t.Errorf("Create(%q) error = %v, want ErrInvalidUsername", name, err)
+		}
+	}
+
+	// A clean username succeeds.
+	if _, _, err := users.Create(ctx, repo, users.NewUser{Username: "good.user-1_2", DisplayName: "Good", Role: users.RoleReader}); err != nil {
+		t.Errorf("Create(valid username) unexpected error: %v", err)
+	}
+}
+
+// TestLastAdminInvariant covers CR-03: demoting or deactivating the last active
+// admin must be rejected, but the same action succeeds once a second active
+// admin exists.
+func TestLastAdminInvariant(t *testing.T) {
+	ctx := context.Background()
+	repo := newRepo(t)
+
+	// Seed the only admin (active).
+	a1, _, err := users.Create(ctx, repo, users.NewUser{Username: "admin1", DisplayName: "Admin One", Role: users.RoleAdmin})
+	if err != nil {
+		t.Fatalf("create admin1: %v", err)
+	}
+
+	// Demoting the sole admin is rejected.
+	if err := users.SetRole(ctx, repo, a1.ID, users.RoleReader); !errors.Is(err, users.ErrLastAdmin) {
+		t.Fatalf("SetRole(last admin -> reader) = %v, want ErrLastAdmin", err)
+	}
+	// Deactivating the sole admin is rejected.
+	if err := users.Deactivate(ctx, repo, a1.ID); !errors.Is(err, users.ErrLastAdmin) {
+		t.Fatalf("Deactivate(last admin) = %v, want ErrLastAdmin", err)
+	}
+	// The admin is still admin and active.
+	if got, _ := repo.GetByID(ctx, a1.ID); got.Role != users.RoleAdmin || !got.Active {
+		t.Fatalf("admin1 changed despite rejection: role=%q active=%v", got.Role, got.Active)
+	}
+
+	// Add a second active admin — now there are two.
+	a2, _, err := users.Create(ctx, repo, users.NewUser{Username: "admin2", DisplayName: "Admin Two", Role: users.RoleAdmin})
+	if err != nil {
+		t.Fatalf("create admin2: %v", err)
+	}
+
+	// Demoting one admin now succeeds (the other still covers admin).
+	if err := users.SetRole(ctx, repo, a2.ID, users.RoleReader); err != nil {
+		t.Fatalf("SetRole(admin2 -> reader) with two admins: %v", err)
+	}
+
+	// a1 is now the last admin again — deactivating it must be rejected.
+	if err := users.Deactivate(ctx, repo, a1.ID); !errors.Is(err, users.ErrLastAdmin) {
+		t.Fatalf("Deactivate(new last admin) = %v, want ErrLastAdmin", err)
+	}
+
+	// Promote a2 back to admin, then deactivating a1 succeeds.
+	if err := users.SetRole(ctx, repo, a2.ID, users.RoleAdmin); err != nil {
+		t.Fatalf("re-promote admin2: %v", err)
+	}
+	if err := users.Deactivate(ctx, repo, a1.ID); err != nil {
+		t.Fatalf("Deactivate(admin1) with two admins: %v", err)
+	}
+	if got, _ := repo.GetByID(ctx, a1.ID); got.Active {
+		t.Error("admin1 should be deactivated")
 	}
 }
 

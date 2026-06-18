@@ -99,6 +99,60 @@ func (r *Repository) Count(ctx context.Context) (int, error) {
 	return n, nil
 }
 
+// CountActiveAdmins returns the number of users who are BOTH role=admin AND
+// active=1. It backs the last-admin invariant (CR-03): demoting or deactivating
+// the final active admin is rejected so an instance can never lock itself out of
+// all administrative functions.
+func (r *Repository) CountActiveAdmins(ctx context.Context) (int, error) {
+	var n int
+	const q = `SELECT COUNT(1) FROM users WHERE role = ? AND active = 1`
+	if err := r.db.QueryRowContext(ctx, q, RoleAdmin).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count active admins: %w", err)
+	}
+	return n, nil
+}
+
+// DeleteSessionsForUser best-effort revokes every persisted SCS session that
+// belongs to the given user id, so a deactivation or admin password reset kicks
+// an already-logged-in user out immediately (WR-02). The SCS sessions live in
+// the shared `sessions` table as a gob-encoded map under the token PK; the
+// authenticated user id is stored at SessionUserIDKey. SCS does not expose a
+// per-user delete, so we decode each row's data and delete the rows whose
+// decoded user_id matches. Returns the number of sessions removed. Errors are
+// returned for logging but callers treat session revocation as best-effort
+// (CR-01 already forces re-auth on reset via the temp-password gate).
+func (r *Repository) DeleteSessionsForUser(ctx context.Context, id int64) (int, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT token, data FROM sessions`)
+	if err != nil {
+		return 0, fmt.Errorf("scan sessions for user %d: %w", id, err)
+	}
+	var tokens []string
+	func() {
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var token string
+			var data []byte
+			if err := rows.Scan(&token, &data); err != nil {
+				return
+			}
+			if sessionUserID(data) == id {
+				tokens = append(tokens, token)
+			}
+		}
+	}()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate sessions for user %d: %w", id, err)
+	}
+	deleted := 0
+	for _, token := range tokens {
+		if _, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE token = ?`, token); err != nil {
+			return deleted, fmt.Errorf("delete session for user %d: %w", id, err)
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
 // Create inserts a new user and returns its id.
 func (r *Repository) Create(ctx context.Context, u User) (int64, error) {
 	const q = `INSERT INTO users
