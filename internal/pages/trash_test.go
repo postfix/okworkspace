@@ -4,7 +4,23 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
+
+// waitForRevisionNonEmpty polls until the committed revision of path is non-empty
+// (the commit that created/updated it has fully drained), so a subsequent commit
+// count is measured against a settled baseline.
+func waitForRevisionNonEmpty(t *testing.T, svc *Service, path string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if rev, _ := svc.Revision(context.Background(), path); rev != "" {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("revision of %q never became non-empty (commit did not drain)", path)
+}
 
 // TestTrashRestore: Delete moves a page into .okf-workspace/trash/ via a commit
 // (the original path disappears, the page appears under trash) and records a
@@ -18,6 +34,10 @@ func TestTrashRestore(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	waitForFile(t, r, pagePath) // runbooks/deploy.md
+	// Wait for the CREATE commit to fully drain (revision non-empty) before
+	// sampling the commit count, so the create commit is not still in flight when
+	// we measure the baseline (otherwise the delete's +1 is miscounted).
+	waitForRevisionNonEmpty(t, svc, pagePath)
 
 	commitsBefore := commitCount(t, r.Root())
 
@@ -27,8 +47,17 @@ func TestTrashRestore(t *testing.T) {
 	// The page disappears from its original path.
 	waitForGone(t, svc, pagePath)
 
-	// Exactly one new commit for the trash move (D-08 — a real commit).
-	commitsAfter := commitCount(t, r.Root())
+	// Exactly one new commit for the trash move (D-08 — a real commit). Poll: the
+	// delete commit lands shortly after the working-tree removal.
+	deadline := time.Now().Add(3 * time.Second)
+	commitsAfter := commitsBefore
+	for time.Now().Before(deadline) {
+		commitsAfter = commitCount(t, r.Root())
+		if commitsAfter == commitsBefore+1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	if commitsAfter != commitsBefore+1 {
 		t.Fatalf("expected exactly 1 new commit for delete, got %d", commitsAfter-commitsBefore)
 	}
