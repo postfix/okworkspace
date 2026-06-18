@@ -2,12 +2,16 @@
 # Copy to config.yaml and adjust. config.yaml is gitignored.
 
 server:
+  # Bind address:port. Overridable via OKF_LISTEN (deployment).
   listen: "0.0.0.0:8080"
   # Set to your https URL in production; enables the Secure cookie flag.
   public_url: "http://localhost:8080"
 
 storage:
+  # The data directory: repo/, app.db, logs/, tmp/ (SPEC §20.2).
+  # Overridable via OKF_DATA_DIR (deployment).
   data_dir: "./data"
+  # Defaults to <data_dir>/repo when unset.
   repo_dir: "./data/repo"
   max_upload_mb: 100
 
@@ -33,6 +37,9 @@ agent:
   provider: "openai-compatible"
   model: "local-or-remote-model"
   base_url: "http://localhost:11434/v1"
+  # The LLM API key is read from THIS environment variable at startup — it is
+  # never stored in config.yaml and never logged. For Ollama any non-empty
+  # placeholder works; for a hosted provider set the real key in the env.
   api_key_env: "OKF_LLM_API_KEY"
 
 search:

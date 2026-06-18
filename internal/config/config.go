@@ -17,8 +17,16 @@ const (
 	DefaultAdminUsername     = "admin"
 )
 
-// EnvAdminUsername overrides admin.username when set (D-03).
-const EnvAdminUsername = "OKF_ADMIN_USERNAME"
+// Environment overrides for deployment (systemd/Docker). Each takes precedence
+// over the value parsed from config.yaml when set to a non-empty string.
+const (
+	// EnvAdminUsername overrides admin.username (D-03).
+	EnvAdminUsername = "OKF_ADMIN_USERNAME"
+	// EnvDataDir overrides storage.data_dir (the container/systemd data volume).
+	EnvDataDir = "OKF_DATA_DIR"
+	// EnvListen overrides server.listen (the bind address/port).
+	EnvListen = "OKF_LISTEN"
+)
 
 // Config mirrors config.yaml (SPEC §20.3). Agent/search/attachments keys are
 // parsed-but-unused placeholders this phase so a real config.yaml round-trips
@@ -64,14 +72,36 @@ type AdminConfig struct {
 	Username string `yaml:"username"`
 }
 
-// AgentConfig is parsed-but-unused in Phase 0 (placeholder for Phase 4).
+// AgentConfig is parsed-but-unused in Phase 0 (placeholder for Phase 4). The
+// resolved LLM API key is stored in an UNEXPORTED field and accessed only via
+// APIKey(), and the type implements fmt.Stringer/fmt.GoStringer to REDACT the
+// key — so a logged Config (%v / %+v / %#v) can never leak the secret
+// (T-00.04-02, T-00.04-05).
 type AgentConfig struct {
-	Enabled  bool   `yaml:"enabled"`
-	Provider string `yaml:"provider"`
-	Model    string `yaml:"model"`
-	BaseURL  string `yaml:"base_url"`
+	Enabled   bool   `yaml:"enabled"`
+	Provider  string `yaml:"provider"`
+	Model     string `yaml:"model"`
+	BaseURL   string `yaml:"base_url"`
 	APIKeyEnv string `yaml:"api_key_env"`
+
+	// apiKey is the value resolved from the APIKeyEnv environment variable at
+	// Load time. It is never serialized (no yaml tag), never printed, and only
+	// readable through APIKey().
+	apiKey string `yaml:"-"`
 }
+
+// APIKey returns the LLM API key resolved from the api_key_env environment
+// variable. It is the ONLY way to read the secret; it is never logged.
+func (a AgentConfig) APIKey() string { return a.apiKey }
+
+// String redacts the resolved API key so the agent config is safe to log.
+func (a AgentConfig) String() string {
+	return fmt.Sprintf("AgentConfig{Enabled:%t Provider:%q Model:%q BaseURL:%q APIKeyEnv:%q APIKey:[REDACTED]}",
+		a.Enabled, a.Provider, a.Model, a.BaseURL, a.APIKeyEnv)
+}
+
+// GoString redacts the resolved API key under the %#v verb.
+func (a AgentConfig) GoString() string { return a.String() }
 
 // SearchConfig is parsed-but-unused in Phase 0 (placeholder for Phase 3).
 type SearchConfig struct {
@@ -98,7 +128,18 @@ func Load(path string) (Config, error) {
 	}
 	cfg.applyDefaults()
 	cfg.applyEnvOverrides()
+	cfg.resolveSecrets()
 	return cfg, nil
+}
+
+// resolveSecrets reads the LLM API key from the named environment variable
+// (agent.api_key_env, e.g. OKF_LLM_API_KEY) into the unexported apiKey field.
+// The key is supplied at runtime via the environment (never baked into the
+// image, T-00.04-05) and is never logged.
+func (c *Config) resolveSecrets() {
+	if c.Agent.APIKeyEnv != "" {
+		c.Agent.apiKey = os.Getenv(c.Agent.APIKeyEnv)
+	}
 }
 
 func (c *Config) applyDefaults() {
@@ -116,5 +157,11 @@ func (c *Config) applyDefaults() {
 func (c *Config) applyEnvOverrides() {
 	if v := os.Getenv(EnvAdminUsername); v != "" {
 		c.Admin.Username = v
+	}
+	if v := os.Getenv(EnvDataDir); v != "" {
+		c.Storage.DataDir = v
+	}
+	if v := os.Getenv(EnvListen); v != "" {
+		c.Server.Listen = v
 	}
 }
