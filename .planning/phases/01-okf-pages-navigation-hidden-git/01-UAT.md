@@ -50,3 +50,12 @@ skipped: 0
 blocked: 0
 
 ## Gaps
+
+- truth: "After login, the app renders the workspace (left tree + page area) instead of a blank screen"
+  status: resolved
+  reason: "UAT blocker found during setup (before Test 1 could run): the SPA white-screened with `Uncaught TypeError: Cannot read properties of null (reading 'map')`. Root cause — the tree endpoint serialized a Go nil slice to JSON `null` for an empty/seed-empty repo root, and `LeftTree`'s react-query `data = []` default only guards `undefined`, not `null`, so `nodes.map` crashed. Classic Go-nil-slice→JSON-null integration bug; mocked unit tests returned `[]` and missed it. The trash/history endpoints already use `make([]T,0,…)` and were unaffected."
+  severity: blocker
+  test: 0
+  resolution: "Fixed in commit d0329fa — backend `Tree()` returns `[]Node{}` (never nil); `LeftTree` coalesces null→`[]`. Regression tests added both layers (TestTreeEmptyRepoSerializesToArray; LeftTree null-data test). All gates green."
+  artifacts: [internal/pages/tree.go, web/src/components/LeftTree.tsx]
+  missing: []
