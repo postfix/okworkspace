@@ -206,6 +206,13 @@ func (s *Service) CreateFolder(ctx context.Context, parent, name string, user st
 		return ErrTitleRequired
 	}
 	dir := slugify(name)
+	// A non-empty but punctuation/CJK-only name (e.g. "!!!", "##") slugs to "".
+	// Without this guard dir would be "" → indexPath "/index.md" (absolute), which
+	// the resolver rejects as a generic 500. Return the clean 400 instead, mirroring
+	// the empty-title contract (WR-07; parallels uniquePath's "untitled" fallback).
+	if dir == "" {
+		return ErrTitleRequired
+	}
 	if parent != "" {
 		dir = strings.TrimSuffix(parent, "/") + "/" + dir
 	}
