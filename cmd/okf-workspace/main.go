@@ -194,6 +194,17 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	// threaded from config so Plan 05 only flips the config value.
 	pagesSvc := pages.NewService(contentRepo, gs, worker, st.DB(), cfg.Git.PushOnCommit)
 
+	// Reconcile the trash table against the working tree at startup: a prior
+	// Delete/Restore whose async commit failed can leave a SQLite trash row that
+	// points at a trash_path never written to disk (WR-01). Prune those phantom
+	// rows so the trash view and the on-disk state reconverge. Best-effort: a
+	// reconcile error must not prevent the server from starting.
+	if pruned, err := pagesSvc.ReconcileTrash(context.Background()); err != nil {
+		logger.Warn("trash reconcile failed at startup", slog.String("error", err.Error()))
+	} else if pruned > 0 {
+		logger.Info("pruned phantom trash rows at startup", slog.Int("pruned", pruned))
+	}
+
 	spa, err := web.Handler()
 	if err != nil {
 		return fmt.Errorf("build SPA handler: %w", err)

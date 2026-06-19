@@ -104,6 +104,64 @@ func (s *Service) Delete(ctx context.Context, pagePath, user string) error {
 	return nil
 }
 
+// ReconcileTrash prunes trash rows whose trash_path no longer exists on disk and
+// reports how many rows were removed. It exists because Delete/Restore write the
+// SQLite trash row synchronously while the actual git commit runs LATER in the
+// single-writer worker (commitjob.go): if that commit fails, a Delete leaves a
+// phantom trash row pointing at a trash_path that was never written, and a Restore
+// can leave a row deleted while the page is still physically in trash. Running
+// this at startup (and after a worker drain) reconverges the two stores: a row
+// whose backing file is absent is unrecoverable through the UI and is pruned;
+// nothing on disk is touched, so a page still physically in trash with a surviving
+// row is left intact.
+//
+// RESIDUAL RISK (WR-01): this does NOT make the SQLite write atomic with the
+// commit — it converges AFTER the fact. A phantom row is visible in ListTrash
+// until the next reconcile pass, and a Restore whose commit fails AFTER its row
+// was deleted is not re-created here (the page is still on disk but no longer
+// listed). A full fix would record/delete the trash row from inside the commit
+// handler; that refactor is deferred to keep the single write path and existing
+// trash tests intact.
+func (s *Service) ReconcileTrash(ctx context.Context) (int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, trash_path FROM trash`)
+	if err != nil {
+		return 0, fmt.Errorf("pages: reconcile trash: %w", err)
+	}
+	type stale struct {
+		id   int64
+		path string
+	}
+	var orphans []stale
+	for rows.Next() {
+		var id int64
+		var tp string
+		if err := rows.Scan(&id, &tp); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("pages: scan trash row: %w", err)
+		}
+		exists, err := s.repo.Exists(tp)
+		if err != nil {
+			rows.Close()
+			return 0, err
+		}
+		if !exists {
+			orphans = append(orphans, stale{id: id, path: tp})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, fmt.Errorf("pages: iterate trash rows: %w", err)
+	}
+	rows.Close()
+
+	for _, o := range orphans {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM trash WHERE id = ?`, o.id); err != nil {
+			return 0, fmt.Errorf("pages: prune phantom trash row %d (%s): %w", o.id, o.path, err)
+		}
+	}
+	return len(orphans), nil
+}
+
 // ListTrash returns every trashed page, most recently deleted first, for the
 // trash view. It reports the title, original path, who deleted it, and when —
 // the SQLite-stored provenance, not page content.
