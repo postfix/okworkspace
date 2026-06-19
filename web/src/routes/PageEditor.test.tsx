@@ -52,11 +52,15 @@ function renderEditor(path: string) {
 
 describe("PageEditor", () => {
   beforeEach(() => {
+    // Reset call history between tests so per-test call-count assertions are not
+    // polluted by a prior test's savePage/getPage calls.
+    vi.clearAllMocks();
     vi.mocked(client.getPage).mockResolvedValue({
       frontmatter: "type: Page\ntitle: Notes\n",
       body: "original",
       revision: "rev-1",
     });
+    vi.mocked(client.getTree).mockResolvedValue([]);
   });
 
   it("issues a save PUT on Save page click", async () => {
@@ -74,6 +78,41 @@ describe("PageEditor", () => {
         expect.objectContaining({ body: "edited body", base_revision: "rev-1" }),
       ),
     );
+  });
+
+  it("does not start an overlapping save while one is in flight (WR-03)", async () => {
+    // savePage resolves on a deferred promise so we can hold the first save
+    // in-flight and prove a burst of Save clicks during that window is dropped.
+    let releaseSave: () => void = () => {};
+    let savePromise = new Promise<undefined>((resolve) => {
+      releaseSave = () => resolve(undefined);
+    });
+    vi.mocked(client.savePage).mockImplementation(() => savePromise);
+
+    renderEditor("notes.md");
+    await screen.findByLabelText("body");
+
+    // Fire a burst of Save clicks synchronously. The first starts a save (the
+    // returned promise is held unresolved); every subsequent click while it is
+    // in flight must be dropped by the in-flight guard, so savePage is called
+    // exactly once — two PUTs never race on the same base revision (WR-03). No
+    // fireEvent.change is used, so no autosave draft timer can perturb the count.
+    const saveBtn = screen.getByRole("button", { name: "Save page" });
+    fireEvent.click(saveBtn);
+    fireEvent.click(saveBtn);
+    fireEvent.click(saveBtn);
+    fireEvent.click(saveBtn);
+    expect(client.savePage).toHaveBeenCalledTimes(1);
+
+    // Release the in-flight save (resolve immediately); the getPage refetch
+    // advances the revision and clears the guard.
+    savePromise = Promise.resolve(undefined);
+    releaseSave();
+    await waitFor(() => expect(client.getPage).toHaveBeenCalled());
+
+    // A fresh save after the in-flight one settled is allowed again.
+    fireEvent.click(saveBtn);
+    await waitFor(() => expect(client.savePage).toHaveBeenCalledTimes(2));
   });
 
   it("surfaces the conflict banner on a 409", async () => {

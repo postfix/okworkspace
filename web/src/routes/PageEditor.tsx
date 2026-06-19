@@ -45,23 +45,44 @@ export default function PageEditor() {
   const draftTimer = useRef<number | null>(null);
   const idleTimer = useRef<number | null>(null);
 
+  // saving is the in-flight guard (WR-03): it drops any overlapping save so two
+  // PUTs never race on the same base revision and self-409. bodyRef/frontmatterRef
+  // always hold the LATEST edited content so a timer scheduled before a state
+  // update still saves fresh content (fixes the useCallback stale-closure).
+  const saving = useRef(false);
+  const bodyRef = useRef("");
+  const frontmatterRef = useRef("");
+
   // Seed local state once the page loads.
   useEffect(() => {
     if (data) {
       setBody(data.body);
       setFrontmatter(data.frontmatter);
+      bodyRef.current = data.body;
+      frontmatterRef.current = data.frontmatter;
       baseRevision.current = data.revision;
     }
   }, [data]);
 
   const doSave = useCallback(
     async (cutVersion: boolean) => {
+      // Drop overlapping saves: if a save is already in flight, skip this one so a
+      // second PUT cannot carry a stale base revision and self-409 (WR-03).
+      if (saving.current) return;
+      saving.current = true;
+      // Cancel any pending escalation; we re-arm it only after a draft settles.
+      if (idleTimer.current) {
+        window.clearTimeout(idleTimer.current);
+        idleTimer.current = null;
+      }
       setSaveState("saving");
       setSaveError(null);
       try {
         await savePage(path, {
-          body,
-          frontmatter,
+          // Read from refs so the most recent edit is saved even if a timer was
+          // scheduled before the last state update (stale-closure fix).
+          body: bodyRef.current,
+          frontmatter: frontmatterRef.current,
           base_revision: baseRevision.current,
         });
         // Refetch to pick up the new revision (and any frontmatter repair).
@@ -70,6 +91,14 @@ export default function PageEditor() {
         queryClient.invalidateQueries({ queryKey: ["page", path] });
         queryClient.invalidateQueries({ queryKey: ["tree"] });
         setSaveState(cutVersion ? "saved" : "draft-saved");
+        // After a settled DRAFT save, escalate to a single idle version save —
+        // armed only now (not always-on) so the two PUTs never race (WR-03).
+        if (!cutVersion) {
+          idleTimer.current = window.setTimeout(
+            () => void doSave(true),
+            IDLE_COMMIT_MS,
+          );
+        }
       } catch (err) {
         const status = (err as Error & { status?: number }).status;
         if (status === 409) {
@@ -81,18 +110,24 @@ export default function PageEditor() {
           "We couldn't save your page just now. Your changes are kept here — check your connection and try Save again.",
         );
         setSaveState("idle");
+      } finally {
+        saving.current = false;
       }
     },
-    [body, frontmatter, path, queryClient],
+    [path, queryClient],
   );
 
-  // Schedule a draft autosave and an idle version save on each edit. Rescheduled
-  // on every change so typing never triggers a mid-keystroke save.
+  // Schedule a draft autosave on each edit. A single draft timer is armed; the
+  // idle version-save is escalated from inside doSave's success path so two PUTs
+  // never race on the same base revision (WR-03). Rescheduled on every change so
+  // typing never triggers a mid-keystroke save.
   const scheduleAutosave = useCallback(() => {
     if (draftTimer.current) window.clearTimeout(draftTimer.current);
-    if (idleTimer.current) window.clearTimeout(idleTimer.current);
+    if (idleTimer.current) {
+      window.clearTimeout(idleTimer.current);
+      idleTimer.current = null;
+    }
     draftTimer.current = window.setTimeout(() => void doSave(false), DRAFT_DEBOUNCE_MS);
-    idleTimer.current = window.setTimeout(() => void doSave(true), IDLE_COMMIT_MS);
   }, [doSave]);
 
   useEffect(
@@ -104,7 +139,9 @@ export default function PageEditor() {
   );
 
   function onBodyChange(value?: string) {
-    setBody(value ?? "");
+    const next = value ?? "";
+    setBody(next);
+    bodyRef.current = next; // keep the ref the saver reads in sync (WR-03)
     setSaveState("idle");
     scheduleAutosave();
   }
@@ -112,13 +149,21 @@ export default function PageEditor() {
   // insertLink appends a relative `.md` Markdown link emitted by the LinkPicker
   // to the body (D-05/D-06) and schedules an autosave.
   function insertLink(markdown: string) {
-    setBody((b) => (b === "" ? markdown : `${b} ${markdown}`));
+    setBody((b) => {
+      const next = b === "" ? markdown : `${b} ${markdown}`;
+      bodyRef.current = next;
+      return next;
+    });
     setSaveState("idle");
     scheduleAutosave();
   }
 
   function onFieldChange(field: string, value: string) {
-    setFrontmatter((fm) => setField(fm, field, value));
+    setFrontmatter((fm) => {
+      const next = setField(fm, field, value);
+      frontmatterRef.current = next;
+      return next;
+    });
     setSaveState("idle");
     scheduleAutosave();
   }
