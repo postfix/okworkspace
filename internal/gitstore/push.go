@@ -40,13 +40,17 @@ func (g *GitStore) Push(ctx context.Context) error {
 	return nil
 }
 
-// isNonFastForward reports whether a push error is a non-fast-forward / rejected
-// push (the divergence case) rather than a transport/auth failure. git prints
-// "rejected" and "non-fast-forward" (or "fetch first") to stderr on this case,
-// which g.git folds into the wrapped error string.
+// isNonFastForward reports whether a push error is a non-fast-forward push (the
+// divergence case) rather than a transport/auth failure or a server-side hook
+// refusal. git prints the marker "! [rejected]" plus "non-fast-forward" (or
+// "fetch first") on this case, which g.git folds into the wrapped error string.
+// We match the bracketed "[rejected]" marker rather than a bare "rejected"
+// substring: pre-receive/update-hook denials and other server-side refusals also
+// contain the word "rejected" but are NOT divergence, and silently swallowing
+// them as divergence would mask a real push failure (WR-05).
 func isNonFastForward(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "non-fast-forward") ||
-		strings.Contains(msg, "rejected") ||
-		strings.Contains(msg, "fetch first")
+		strings.Contains(msg, "fetch first") ||
+		strings.Contains(msg, "[rejected]")
 }

@@ -2,6 +2,7 @@ package gitstore
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,5 +147,37 @@ func TestPushDiverged(t *testing.T) {
 	}
 	if health.OK {
 		t.Fatal("Health.OK = true after divergence; want false")
+	}
+}
+
+// TestIsNonFastForward proves the divergence matcher recognizes only true
+// non-fast-forward signals and does NOT over-match a bare "rejected" substring,
+// so a server-side hook denial (which also contains "rejected") is treated as a
+// real push failure rather than silently swallowed as divergence (WR-05).
+func TestIsNonFastForward(t *testing.T) {
+	diverged := []string{
+		"git push: ! [rejected]        main -> main (non-fast-forward)",
+		"Updates were rejected because the tip of your current branch is behind\nfetch first",
+		"! [rejected] (fetch first)",
+		"error: failed to push some refs (NON-FAST-FORWARD)",
+	}
+	for _, msg := range diverged {
+		if !isNonFastForward(errors.New(msg)) {
+			t.Fatalf("isNonFastForward(%q) = false, want true", msg)
+		}
+	}
+
+	notDiverged := []string{
+		// Bare "rejected" from a pre-receive/update hook is NOT divergence.
+		"remote: error: hook declined: push rejected by policy",
+		"remote: pre-receive hook rejected the push",
+		"fatal: Authentication failed",
+		"ssh: connect to host example.com port 22: Connection refused",
+		"fatal: unable to access 'https://...': Could not resolve host",
+	}
+	for _, msg := range notDiverged {
+		if isNonFastForward(errors.New(msg)) {
+			t.Fatalf("isNonFastForward(%q) = true, want false (over-match on bare \"rejected\")", msg)
+		}
 	}
 }

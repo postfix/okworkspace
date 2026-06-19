@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/jobs"
@@ -90,7 +91,16 @@ func CommitHandler(r *repo.Repo, g *gitstore.GitStore) jobs.Handler {
 		// the config flag alone enables push for every mutation.
 		if p.Push {
 			if err := g.Push(ctx); err != nil {
-				return fmt.Errorf("pages: push: %w", err)
+				// The local commit ALREADY landed and is durable; a push failure
+				// (transport, auth, DNS, or a server-side refusal) must NOT fail the
+				// whole job. Failing here would re-run the handler under the worker's
+				// retry policy, re-applying the writes/removes/commit (duplicate or
+				// empty commits) and re-pushing in a failure loop driven by a
+				// transient network error. Push is best-effort/alert-only (VER-04):
+				// divergence is already surfaced via Health inside Push; other push
+				// errors are logged and swallowed so the save is never lost (WR-05).
+				slog.WarnContext(ctx, "pages: push failed after commit (commit is durable; not failing job)",
+					slog.String("error", err.Error()))
 			}
 		}
 		return nil
