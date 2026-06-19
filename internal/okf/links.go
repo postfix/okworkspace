@@ -410,10 +410,10 @@ func isAbsoluteOrExternal(dest string) bool {
 	if dest == "" {
 		return true
 	}
+	// A leading '/' covers both an absolute repo path ("/x") and a
+	// protocol-relative URL ("//host/x") — neither is a repo-relative link, so
+	// both are treated as external and never rewritten.
 	if dest[0] == '/' {
-		return true
-	}
-	if len(dest) >= 2 && dest[0] == '/' && dest[1] == '/' {
 		return true
 	}
 	// scheme:... — a colon before any slash indicates a URL scheme.
