@@ -85,7 +85,14 @@ func (s *Service) Tree(ctx context.Context) ([]Node, error) {
 		return nil, fmt.Errorf("pages: walk tree: %w", err)
 	}
 
-	return assembleTree("", children), nil
+	// Guarantee a non-nil top-level slice so the tree endpoint serializes to a
+	// JSON array ([]) rather than null when the repo root has no direct entries.
+	// A null body would make the SPA's nodes.map crash (UAT blocker).
+	nodes := assembleTree("", children)
+	if nodes == nil {
+		nodes = []Node{}
+	}
+	return nodes, nil
 }
 
 // assembleTree recursively builds the nested node list for dir, attaching each

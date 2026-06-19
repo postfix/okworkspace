@@ -62,6 +62,15 @@ describe("LeftTree", () => {
     ).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("renders an empty tree without crashing when getTree resolves null (UAT blocker)", async () => {
+    // The tree endpoint can serialize an empty repo to JSON `null`; the
+    // component must coalesce to [] and not throw on nodes.map.
+    vi.mocked(client.getTree).mockResolvedValue(null as unknown as TreeNode[]);
+    renderTree();
+    const list = await screen.findByRole("list", { name: "Pages" });
+    expect(list).toBeEmptyDOMElement();
+  });
+
   it("highlights the active page row (NAV-04)", async () => {
     vi.mocked(client.getTree).mockResolvedValue(TREE);
     renderTree("/app/page/home.md");

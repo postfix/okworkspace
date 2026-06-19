@@ -2,8 +2,33 @@ package pages
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 )
+
+// TestTreeEmptyRepoSerializesToArray guards the UAT blocker: an empty repo (no
+// pages at the root) must serialize to a JSON array `[]`, never `null`. A null
+// body makes the SPA's nodes.map crash with a white screen.
+func TestTreeEmptyRepoSerializesToArray(t *testing.T) {
+	svc, _, _ := newServiceFixture(t, false)
+	ctx := context.Background()
+
+	nodes, err := svc.Tree(ctx)
+	if err != nil {
+		t.Fatalf("Tree: %v", err)
+	}
+	if nodes == nil {
+		t.Fatalf("Tree returned a nil slice; it must be non-nil so JSON is [] not null")
+	}
+
+	b, err := json.Marshal(nodes)
+	if err != nil {
+		t.Fatalf("Marshal tree: %v", err)
+	}
+	if got := string(b); got != "[]" {
+		t.Fatalf("empty repo tree serialized to %q, want %q", got, "[]")
+	}
+}
 
 func TestTree(t *testing.T) {
 	svc, r, _ := newServiceFixture(t, false)

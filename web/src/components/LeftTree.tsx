@@ -10,10 +10,14 @@ import "./LeftTree.css";
 // (NAV-01). Folders expand/collapse (NAV-02); the row matching the open page is
 // highlighted (NAV-04). Page rows are interactive (no more navrow-disabled).
 export default function LeftTree() {
-  const { data: nodes = [], isLoading, isError } = useQuery<TreeNode[]>({
+  const { data, isLoading, isError } = useQuery<TreeNode[]>({
     queryKey: ["tree"],
     queryFn: getTree,
   });
+  // Coalesce null/undefined to []. The endpoint can serialize an empty repo's
+  // tree to JSON `null`; a `= []` default only guards undefined, so without this
+  // nodes.map would throw on null and white-screen the app (UAT blocker).
+  const nodes = data ?? [];
 
   if (isLoading) {
     return (
