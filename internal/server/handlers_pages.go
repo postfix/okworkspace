@@ -272,8 +272,16 @@ func (h *authHandlers) handleRenamePage(w http.ResponseWriter, r *http.Request) 
 		action = audit.ActionPageRename
 		newPath, err = h.pages.Rename(r.Context(), path, title, user)
 	} else {
+		// Validate the attacker-controlled destination parent the same way page
+		// paths are validated (reject absolute / NUL / ".." segments) BEFORE it is
+		// used to build the move target, so a traversal-shaped new_parent fails with
+		// a clean 400 rather than relying solely on the resolver to 500 (WR-08).
+		cleanParent, okParent := cleanPathString(w, parent)
+		if !okParent {
+			return
+		}
 		action = audit.ActionPageMove
-		newPath, err = h.pages.Move(r.Context(), path, parent, user)
+		newPath, err = h.pages.Move(r.Context(), path, cleanParent, user)
 	}
 	if err != nil {
 		if errors.Is(err, pages.ErrPageNotFound) {
@@ -319,7 +327,9 @@ func (h *authHandlers) handleCreateFolder(w http.ResponseWriter, r *http.Request
 	_ = h.audit.Record(r.Context(), audit.Event{
 		Action: audit.ActionFolderCreate,
 		Actor:  h.actorUsername(r.Context()),
-		Target: req.Parent + "/" + req.Name,
+		// Trim so a root-level folder (empty Parent) does not produce a
+		// leading-slash target like "/myfolder" (IN-01).
+		Target: strings.Trim(req.Parent+"/"+req.Name, "/"),
 		Source: auditSourceWeb,
 	})
 	w.WriteHeader(http.StatusCreated)
