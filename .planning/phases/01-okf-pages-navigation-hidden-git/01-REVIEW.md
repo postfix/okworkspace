@@ -45,321 +45,291 @@ files_reviewed_list:
   - web/src/components/RestoreConfirmDialog.tsx
   - web/src/components/TrashView.tsx
   - web/src/lib/frontmatter.ts
+  - web/src/lib/mdlink.ts
   - web/src/routes/AppShell.tsx
   - web/src/routes/PageEditor.tsx
   - web/src/routes/PageView.tsx
   - web/src/stores/recent.ts
 findings:
-  critical: 2
-  warning: 7
+  critical: 0
+  warning: 6
   info: 4
-  total: 13
-critical_resolved: 2
-status: criticals_resolved
+  total: 10
+status: issues_found
 ---
 
 # Phase 1: Code Review Report
 
-> **Orchestrator resolution (execute-phase, 2026-06-19):** Both CRITICAL findings were
-> fixed and regression-tested before phase verification:
-> - **CR-01** — `fix(01): anchor /pages sub-resource dispatch on .md boundary` (`b5f625a`);
->   regression `TestGetPageInVersionFolder`.
-> - **CR-02** — `fix(01): quote YAML-unsafe frontmatter values on the client` (`7bddef6`);
->   new `web/src/lib/frontmatter.test.ts` (24 assertions).
->
-> Separately, a MEDIUM argv flag-smuggling finding from the commit-time security review was
-> fixed in `2c66ef1` (hex-validated version token at the gitstore + pages layers).
->
-> The 7 WARNING and 4 INFO findings below remain **open** for user triage (not auto-fixed) —
-> run `/gsd-code-review 1 --fix` to address them, or `/gsd-secure-phase 1` for the
-> threat-model pass. Highest-value follow-ups: WR-01 (DB/Git divergence on trash), WR-02
-> (MarkdownProse relative-link resolution), WR-04 (version token not bound to the page's
-> own history), WR-05 (push failure re-commit / over-broad `rejected` match).
-
-**Reviewed:** 2026-06-19
+**Reviewed:** 2026-06-19T00:00:00Z
 **Depth:** standard
 **Files Reviewed:** 45
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the OKF round-trip model (`internal/okf`), the page lifecycle service and
-its single-writer commit path (`internal/pages`), the git store reads/history/push,
-the chi HTTP surface, and the React/TS frontend. The hardened areas the scope note
-flagged hold up well: the SEC-01 path resolver is consistently routed through
-(`repo.*`), the argv flag-smuggling guard on the version token is enforced in both
-`gitstore` and `pages`, the hidden-Git contract is respected (no SHA leaks to the
-wire), Markdown render keeps raw HTML off (`rehype-sanitize`, no `dangerouslySetInnerHTML`),
-and mutating routes are editor-gated from the session role.
+This is a re-review of Phase 1 (OKF Workspace: Go + chi backend, React/TS frontend)
+after an initial review + fix cycle. The four prior Critical/Medium items were
+re-verified as correctly resolved (details below). No new Critical issues were
+found this pass.
 
-The defects worth blocking on are correctness gaps rather than the obvious security
-sinks: a **route-dispatch collision** that mis-handles any page living under a folder
-named `version` (CR-01), and **client-emitted frontmatter that produces invalid YAML**
-for a class of ordinary titles, which the server then rejects with a 500 and which can
-corrupt the title field (CR-02). Several WARNING-level consistency and navigation bugs
-follow.
+The remaining open items are 6 Warnings and 4 Info. The dominant themes are
+DB/Git divergence on async commit failure (the trash delete/restore write a
+SQLite row but the commit runs later in the worker, so a failed commit leaves
+the two stores inconsistent), the autosave dual-timer design that can self-409
+and has no in-flight guard, the version-token authorization gap (a hex token
+from any page's history is accepted for any path), and the push failure
+semantics that can fail an already-committed job and over-match "rejected".
 
-## Critical Issues
+### Previously-fixed items — re-verified RESOLVED
 
-### CR-01: Page paths containing a `version` (or `history`) folder segment are mis-dispatched
-
-**File:** `internal/server/handlers_pages.go:98-110`, `internal/server/handlers_history.go:69-89`
-**Issue:** `handleGetPageOrHistory` routes the `/pages/*` catch-all purely on
-substring/suffix matching of the wildcard:
-
-```go
-case strings.HasSuffix(wild, "/history"):  // -> history
-case strings.Contains(wild, "/version/"):  // -> view-version
-default:                                    // -> plain read
-```
-
-A legitimate page whose repo-relative path contains a `version` folder segment —
-e.g. `docs/version/notes.md` — produces `wild = "docs/version/notes.md"`, which
-satisfies `strings.Contains(wild, "/version/")`. It is therefore routed to
-`handleViewVersion`, which then computes `pathPart = "docs"` and
-`version = "notes.md"`. `validVersionToken("notes.md")` fails, so the user gets a
-generic 500/400 and **can never read or edit that page**. There is no guard that the
-folder names `version`/`history` are reserved, and `slugify` happily produces them
-(`slugify("Version") == "version"`). This silently bricks a content path.
-
-**Fix:** Do not overload the read wildcard with suffix/substring dispatch on
-user-controlled path segments. Anchor the version/history sub-resource on a token the
-content namespace cannot collide with — e.g. require the suffix to be the *final two*
-segments AND that the remaining path ends in `.md`:
-
-```go
-func (h *authHandlers) handleGetPageOrHistory(w http.ResponseWriter, r *http.Request) {
-	wild := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
-	if base, ok := strings.CutSuffix(wild, "/history"); ok && strings.HasSuffix(base, ".md") {
-		h.handleHistory(w, r); return
-	}
-	if i := strings.LastIndex(wild, "/version/"); i >= 0 && strings.HasSuffix(wild[:i], ".md") {
-		h.handleViewVersion(w, r); return
-	}
-	h.handleGetPage(w, r)
-}
-```
-
-Apply the same `.md`-anchored check in `handleRenamePage` for the `/rename` and
-`/restore` suffixes (a page named so its path ends `…/restore` is impossible because of
-`.md`, but a `restore`/`rename` folder segment is not the issue there — the suffix form
-is safe; the `version` substring is the dangerous one). Add a reserved-segment reject in
-`slugify`/`uniquePath` as defense in depth.
-
-### CR-02: Client `frontmatter.ts setField` emits invalid YAML for ordinary titles, breaking save and corrupting the title field
-
-**File:** `web/src/lib/frontmatter.ts:49-55` (`quoteIfNeeded`), used by `setField` (29-37)
-**Issue:** When the editor changes the title/description, the SPA patches the raw YAML
-text client-side and PUTs it. `quoteIfNeeded` only quotes when the value contains
-`[:#"']`:
-
-```js
-function quoteIfNeeded(value: string): string {
-  if (value === "") return '""';
-  if (/[:#"']/.test(value)) { return `"${value.replace(/"/g, '\\"')}"`; }
-  return value;
-}
-```
-
-This leaves many YAML-significant inputs unquoted and therefore mis-parsed by the
-server (`okf.Parse` → `yaml.Unmarshal`):
-
-- A title starting with `[` or `{` (e.g. `[Draft] Plan`) → parsed as a YAML flow
-  sequence/map → **parse error** → `Save` returns the generic 500 and the page cannot
-  be saved.
-- A title starting with `>`, `|`, `&`, `*`, `!`, `@`, `` ` `` → block-scalar / anchor /
-  reserved indicators → mis-parse or error.
-- A title with a leading/trailing space → silently trimmed on round-trip (data loss).
-- A value containing `\` → the server-side double-quoted parse interprets it as an
-  escape; combined with the client's own `\"` escaping this is lossy.
-
-Because `okf.Field` then reads back a different (or empty) title, the navigation tree
-and page header can silently show the wrong/blank title even when the save *does*
-succeed. The byte-stable round-trip guarantee is defeated at its client entry point.
-
-**Fix:** Quote far more conservatively (match YAML's plain-scalar rules), or — better —
-do not hand-roll YAML on the client at all. Either:
-1. Quote whenever the value is non-empty and not a safe plain scalar
-   (`/^[A-Za-z0-9][\w .-]*$/` style allow-list), and emit double-quoted with full JSON
-   escaping (`JSON.stringify(value)` produces a valid YAML double-quoted scalar); or
-2. Send the structured title/description fields to the backend and let `okf.SetField`
-   (already byte-safe, server-side) write them, rather than splicing raw YAML in the
-   browser.
+- **CR-01 (RESOLVED, b5f625a):** `/pages/*` sub-resource dispatch now anchors on
+  the `.md` boundary. Verified in `handlers_pages.go:108-116` and
+  `handlers_history.go:79-86`: a page at `docs/history.md` is not mis-routed
+  (the `/history` branch additionally requires the trimmed remainder to end in
+  `.md`), and a page under a folder named `version` (`docs/version/notes.md`) is
+  not mis-routed (the marker is the literal `.md/version/`, not bare `/version/`).
+  Fix is correct.
+- **CR-02 (RESOLVED, 7bddef6):** `frontmatter.ts quoteIfNeeded`
+  (`frontmatter.ts:72-87`) now quotes empty, whitespace-edged, indicator-leading,
+  `": "`/` #`-bearing, quote-bearing, reserved-word, and numeric scalars before
+  emitting them. YAML-unsafe titles round-trip safely. Fix is correct.
+- **WR-02 / WR-06 (RESOLVED, 0c8421e):** `mdlink.ts resolveRelativeMdLink`
+  (`mdlink.ts:12-67`) resolves relative `.md` links against the current page dir,
+  clamps `..` at root (`out.length > 0` guard, line 58), leaves external/scheme/
+  protocol-relative links untouched (line 21), and carries the fragment through.
+  `MarkdownProse` takes `currentPath` and uses it (`MarkdownProse.tsx:32`). Fix is
+  correct.
+- **MEDIUM argv injection (RESOLVED, 2c66ef1):** Version token is hex-validated at
+  both layers — `gitstore.isHexObjectName` gates `ShowAt` (`history.go:141-143`)
+  and `pages.validVersionToken` gates `ViewVersion`/`RestoreVersion`
+  (`history.go:96,130`). A flag-shaped token can no longer reach git as an object
+  spec. Fix is correct.
 
 ## Warnings
 
-### WR-01: Trash/restore mutate SQLite synchronously but the file move is asynchronous — DB and Git can diverge
+### WR-01: Trash delete/restore write SQLite synchronously but commit asynchronously — a failed commit leaves DB and Git divergent
 
 **File:** `internal/pages/trash.go:91-104` (Delete), `internal/pages/trash.go:188-195` (Restore)
-**Issue:** `Delete` enqueues the move commit (async, runs later in the worker drain
-goroutine) and then **synchronously** inserts the trash row. `Restore` enqueues the
-restore commit and then **synchronously** `DELETE`s the trash row. If the enqueued
-CommitJob later fails (git error, resolver reject, disk full), the SQLite side has
-already been mutated:
-- Failed delete: trash row exists but the page was never moved → `Restore` later reads
-  a `trash_path` that does not exist (`repo.Read` error), and the live page still
-  appears in the tree.
-- Failed restore: the trash row is gone but the file was never written back → the page
-  is unrecoverable from the UI even though its bytes still sit in `.okf-workspace/trash/`.
+**Issue:** `Delete` enqueues the trash commit via `EnqueueCommit` (which only
+*queues* a job on the worker; the actual `r.Write`/`r.Remove`/`g.Commit` run later
+in the drain goroutine — see `commitjob.go:51-97`), then **immediately and
+synchronously** INSERTs the trash row. If the commit job later fails (write error,
+git failure), the SQLite `trash` row persists pointing at a `trash_path` that was
+never written to disk — `ListTrash` shows a phantom entry and `Restore` will fail
+reading the missing file. `Restore` has the mirror-image bug: it enqueues the
+restore commit, then synchronously `DELETE`s the trash row; a later commit failure
+loses the row while the page is still physically in the trash directory, making it
+unrecoverable through the UI. The async enqueue makes the SQLite write and the Git
+write non-atomic.
+**Fix:** Do not treat enqueue as success. Either (a) perform the trash/restore
+commit synchronously and only touch SQLite after `g.Commit` returns, or (b) move
+the `trash` row INSERT/DELETE into the CommitHandler so it runs in the same
+goroutine after a successful commit (and is skipped on failure). Minimal option (a)
+for Delete:
+```go
+// after EnqueueCommit succeeds, the job is only QUEUED — do not record the row
+// until the commit actually lands. Prefer recording provenance from inside the
+// commit handler, or run the commit synchronously here and INSERT only on success.
+```
+At minimum, document and reconcile on startup: a `trash` row whose `trash_path`
+does not exist on disk must be pruned.
 
-There is no compensating action and no transactional coupling between the job queue and
-the metadata table.
+### WR-03: PageEditor autosave fires two overlapping saves per idle and has no in-flight guard — concurrent saves can self-409 and lose draft state
 
-**Fix:** Record the trash row (and delete it on restore) from inside the CommitJob
-handler after `g.Commit` succeeds, or make the metadata write idempotent and reconcile
-on startup. At minimum, document and handle the failure path so the two stores cannot
-silently disagree.
+**File:** `web/src/routes/PageEditor.tsx:91-96` (scheduleAutosave), `57-87` (doSave)
+**Issue:** `scheduleAutosave` arms BOTH a 1s `draftTimer` (`doSave(false)`) and a
+6s `idleTimer` (`doSave(true)`) on every edit. After 1s of idle the draft save
+fires; its body (`doSave`) is `async` and refetches to advance
+`baseRevision.current`. There is no guard preventing a second `doSave` from
+starting while the first is still in flight: if the 6s idle save (or an explicit
+Save click, or a later keystroke's draft save) begins before the first save's
+`getPage` refetch has updated `baseRevision.current`, the second PUT carries the
+**stale** base revision and the server returns 409 against the user's own
+just-committed write. The result is a spurious conflict banner on a single-user
+edit session. `doSave` also closes over `body`/`frontmatter` via `useCallback`
+deps, so a timer scheduled before a state update can save **stale** content.
+**Fix:** Add an in-flight ref guard and collapse the dual timers:
+```ts
+const saving = useRef(false);
+const doSave = useCallback(async (cutVersion: boolean) => {
+  if (saving.current) return;          // drop overlapping saves
+  saving.current = true;
+  try { /* ...existing body... */ }
+  finally { saving.current = false; }
+}, [body, frontmatter, path, queryClient]);
+```
+And drop the always-armed `idleTimer`; escalate to a version save only after the
+draft save settles (e.g. re-arm a single timer inside `doSave`'s success path), so
+two PUTs never race on the same base revision.
 
-### WR-02: MarkdownProse resolves only one level of `../` in internal links, breaking deep relative navigation
+### WR-04: View/restore accept any hex version token, not one belonging to THIS page's history — cross-page version disclosure / restore
 
-**File:** `web/src/components/MarkdownProse.tsx:24`
-**Issue:** Internal `.md` links are rewritten to in-app routes via:
+**File:** `internal/pages/history.go:95-99` (ViewVersion), `129-144` (RestoreVersion)
+**Issue:** `ViewVersion`/`RestoreVersion` validate only the *format* of `version`
+(7–64 hex via `validVersionToken`) and then run `git show <token>:<path>`. They
+never verify that `token` is actually a commit in `path`'s own history. Any
+authenticated user who learns (or brute-forces a short prefix of) another commit
+SHA can pass it with an arbitrary `path`: `git show <other-sha>:<path>` returns
+that path's bytes *as they existed at that unrelated commit* if the path existed
+there, and `RestoreVersion` will then write those bytes forward as a "restore."
+This breaks the hidden-Git contract's intent (the version token is supposed to be
+an opaque handle the server issued *for that page*) and lets a caller resurrect or
+view content states that were never offered in that page's history panel.
+**Fix:** Before `ShowAt`, confirm the token belongs to the page's `--follow`
+history. Cheapest correct check: list the page's history tokens and require
+membership.
+```go
+commits, err := s.git.History(ctx, path)
+if err != nil { return ... }
+ok := false
+for _, c := range commits { if c.Token == version { ok = true; break } }
+if !ok { return Page{}, fmt.Errorf("...: %w", ErrInvalidVersion) }
+```
+Apply the same membership check in both `ViewVersion` and `RestoreVersion`.
 
-```js
-const target = href!.replace(/^\.?\//, "").replace(/^\.\.\//, "");
+### WR-05: Push failure fails an already-committed job; isNonFastForward over-matches "rejected"
+
+**File:** `internal/pages/commitjob.go:91-95` (push after commit), `internal/gitstore/push.go:29-39,47-52`
+**Issue:** Two coupled problems:
+1. In `CommitHandler`, `g.Push` runs *after* `g.Commit` has already succeeded.
+   When `Push` returns a non-divergence error (transport, auth, DNS), the handler
+   returns that error (`commitjob.go:92-94`), which marks the **whole job failed**
+   even though the local commit is durable. Depending on the worker's retry policy
+   this re-runs the handler, re-applying `r.Write`/`r.Remove`/`g.Commit` (creating
+   duplicate/empty commits) and re-pushing — a failure loop driven by a transient
+   network error.
+2. `isNonFastForward` (`push.go:47-52`) matches the substring `"rejected"`. Git
+   prints `! [rejected]` for non-fast-forward, but pre-receive/update hook denials
+   and other server-side refusals also contain "rejected" — those would be
+   silently swallowed as "divergence" (set `diverged`, return nil) when they are
+   not divergence at all, masking a real push failure.
+**Fix:**
+1. Treat push failure as non-fatal to the commit job (the commit already
+   succeeded): log/alert and return nil, mirroring the divergence path, OR push
+   out-of-band rather than inside the commit handler.
+```go
+if p.Push {
+    if err := g.Push(ctx); err != nil {
+        // commit already landed; do not fail (and re-run) the whole job on a
+        // transient push error — surface via Health instead.
+        // log.Warn(...); return nil
+    }
+}
+```
+2. Tighten the divergence matcher to the non-fast-forward signals only and drop
+   the bare `"rejected"`:
+```go
+return strings.Contains(msg, "non-fast-forward") ||
+    strings.Contains(msg, "fetch first") ||
+    strings.Contains(msg, "[rejected]")  // the NFF marker, not bare "rejected"
 ```
 
-This strips at most one leading `./` and one leading `../`. The canonical link format
-(produced by `relativeMdLink`) emits multi-segment relatives like
-`../../runbooks/deploy.md` for cross-folder links. After the replace, `target` is still
-`../runbooks/deploy.md`, so the SPA navigates to `/app/page/../runbooks/deploy.md` —
-a broken route that does not resolve to the linked page. Deep relative links (the common
-case for a nested wiki) navigate to the wrong place or 404, defeating D-06.
+### WR-07: CreateFolder has no empty-slug fallback — a punctuation-only name yields an invalid path and a 500
 
-**Fix:** Resolve the relative destination against the current page's directory properly
-(mirror the server `relPath` / a `path.posix`-style join), not with two `replace`s. Use
-the current route path + the destination to compute the absolute repo-relative target,
-then route to `/app/page/<resolved>`.
+**File:** `internal/pages/service.go:203-222` (CreateFolder)
+**Issue:** `CreateFolder` rejects an empty/whitespace `name`, then computes
+`dir := slugify(name)`. `slugify` drops every char outside `[a-z0-9-]`, so a
+non-empty but punctuation-only name (e.g. `"!!!"`, `"***"`, `"##"`) slugs to `""`.
+With `parent == ""` this makes `indexPath = "" + "/index.md"` → `"/index.md"`
+(absolute), and with a parent it makes `parent + "//index.md"`. The resolver then
+rejects it and the handler returns a generic 500 ("Something went wrong") instead
+of the intended `ErrTitleRequired` 400 ("Give your folder a name"). Note `Create`
+(page) already guards this exact case with a `base = "untitled"` fallback
+(`service.go:262-264`); `CreateFolder` is missing the parallel guard.
+**Fix:** Add the same empty-slug fallback used by `uniquePath`:
+```go
+dir := slugify(name)
+if dir == "" {
+    return ErrTitleRequired // or dir = "untitled" to match page-create behavior
+}
+if parent != "" {
+    dir = strings.TrimSuffix(parent, "/") + "/" + dir
+}
+```
+Returning `ErrTitleRequired` gives the clean 400; a silent `"untitled"` also
+works but should match whatever `Create` does for consistency.
 
-### WR-03: Overlapping autosave timers can self-conflict and surface a spurious "changed elsewhere" banner
+### WR-08: Move/relocate stages an unclean oldPath and trusts a raw newParent path — traversal-shaped move targets bypass the slug-based path safety
 
-**File:** `web/src/routes/PageEditor.tsx:91-96, 57-87`
-**Issue:** `scheduleAutosave` arms *both* a 1s draft timer and a 6s idle timer, each
-calling `doSave`. `doSave` is not guarded against concurrent/overlapping invocations and
-holds no in-flight lock. If the 1s draft save is still in flight (slow network/commit)
-when the 6s idle timer fires, the second `doSave` reads `baseRevision.current`, which has
-not yet advanced (it only updates after the first save's refetch completes). The second
-save then races the first; once the first commit lands, the second save's
-`base_revision` is stale and the backend returns 409 → the editor shows the
-"This page was changed somewhere else" conflict banner to a single user editing alone.
-There is also no dirty-check: the idle timer can fire a no-op version save with the same
-bytes.
-
-**Fix:** Track an in-flight flag (or use a single serialized save queue / react-query
-mutation with `isPending` gating) so a new autosave never starts while one is running;
-re-run once after the in-flight save resolves if the content changed. Skip the save when
-the content is unchanged since the last successful save.
-
-### WR-04: `handleViewVersion` / `RestoreVersion` accept any hex token for any path — cross-page version read
-
-**File:** `internal/pages/history.go:95-116, 129-162`; `internal/gitstore/history.go:134-153`
-**Issue:** `ViewVersion`/`RestoreVersion` validate that `version` is a hex object name
-and that `path` resolves safely, then call `git show <ref>:<path>`. They never verify
-that `ref` actually belongs to *this page's* history. A caller who knows (or guesses) a
-40-char commit SHA can read the bytes of `path` at an arbitrary commit, including one in
-which `path` was different content, or pair a SHA harvested from one page's history with
-another page's path. Tokens are opaque and not enumerable from the UI, so exposure is
-limited, but the authorization model is "valid hex + safe path" rather than "this token
-is a version of this page." For `RestoreVersion` this lets a forward-commit be built from
-an unrelated tree state.
-
-**Fix:** Constrain the token to the page's own history: confirm `ref` appears in
-`History(ctx, path)` (or that `git show ref:path` corresponds to a commit returned by
-`git log --follow -- path`) before reading/restoring. Cache the page→tokens mapping if
-the extra `git log` is a concern.
-
-### WR-05: `Push` swallows all transport/auth failures as a hard error but divergence as success — silent staleness risk
-
-**File:** `internal/gitstore/push.go:18-41`, `internal/pages/commitjob.go:91-95`
-**Issue:** On a push failure that is *not* classified as non-fast-forward,
-`CommitHandler` returns the error from `g.Push`, which fails the whole job *after the
-local commit already succeeded and the response was already returned to the user*. The
-user sees a successful save; the job then errors and (depending on the worker's retry
-policy) may retry the entire commit batch — re-running `r.Write`/`g.Commit` against an
-already-committed tree. Conversely, `isNonFastForward` is a substring match on
-lowercased stderr (`"rejected"`, `"fetch first"`); an auth/transport error whose message
-happens to contain "rejected" is misclassified as divergence and silently sets
-`diverged` without alerting on the real cause.
-
-**Fix:** Make push failures non-fatal to the (already-committed) job — log/alert via
-Health and return nil, exactly as the divergence branch does — so a transient remote
-problem never triggers a re-commit. Tighten `isNonFastForward` to match git's specific
-non-ff phrasing rather than the broad `"rejected"` token.
-
-### WR-06: `relativeMdLink` returns a bare filename for same-directory links, but `MarkdownProse` cannot round-trip the inverse for nested pages
-
-**File:** `web/src/api/client.ts:367-382`, consumed by `web/src/components/LinkPicker.tsx:63-66`
-**Issue:** For two pages in the same nested folder, `relativeMdLink("a/b/x.md","a/b/y.md")`
-returns `"y.md"` (bare filename, correct on disk). But `MarkdownProse`'s link handler
-(WR-02) routes a bare `y.md` to `/app/page/y.md` — the repo root — not `/app/page/a/b/y.md`.
-So a link the LinkPicker itself inserts navigates to the wrong page whenever the editing
-page is not at the repo root. This is the same root cause as WR-02 (no directory-aware
-resolution) but is called out because the insert and render sides are inconsistent by
-construction, so the feature is broken for any non-root page.
-
-**Fix:** Resolve every internal link against the current page's directory in
-`MarkdownProse` (see WR-02). After that fix, both bare and `../`-prefixed destinations
-route correctly.
-
-### WR-07: `slugify` collapses distinct titles to the same slug, and `.`/`/` are silently folded — surprising collisions
-
-**File:** `internal/pages/service.go:293-312`
-**Issue:** `slugify` maps `/`, `.`, `_`, spaces, and `-` all to a single hyphen and drops
-everything else. Titles like `A/B`, `A.B`, `A B`, `A-B`, and `A_B` all slug to `a-b`,
-silently colliding (then suffixed `-2`). More importantly a title that is entirely
-non-`[a-z0-9]` (e.g. emoji-only, CJK-only, or `"..."`) slugs to `""`, and `Create`
-falls back to `untitled` only in `uniquePath` — but `CreateFolder` (`service.go:208`)
-calls `slugify(name)` directly with **no `untitled` fallback**, so a CJK-only or
-symbol-only folder name produces `dir == ""` and `indexPath == "/index.md"`, which then
-fails the resolver (or, if it didn't, would seed an index at the repo root). Non-ASCII
-titles are common for an international team.
-
-**Fix:** Apply the same empty-slug fallback in `CreateFolder` that `uniquePath` uses, and
-consider transliterating or preserving Unicode letters/digits in `slugify` so non-ASCII
-titles do not all collapse to `untitled`.
+**File:** `internal/pages/rename.go:57-86` (Move), `92-127` (relocate)
+**Issue:** Unlike `Create`/`CreateFolder` (which only ever build paths from
+`slugify` output), `Move` accepts `newParentDir` directly from the request body
+and only trims slashes/spaces (`rename.go:67`). It then builds
+`newPath = newParentDir + "/" + base`, `path.Clean`s it, and passes it to
+`uniqueExactPath` → `relocate`. The only safety net is `repo.Resolve` inside
+`uniqueExactPath`/`enqueueWrite`. A `newParent` such as `"../../etc"` cleans to a
+parent-escaping path; resolution *should* reject it, but the rejection surfaces as
+a generic 500 rather than a validated 400, and the design relies entirely on the
+resolver being airtight for an attacker-controlled multi-segment path — the
+handler does NOT run `cleanPathString` on `newParent` (it only cleans the source
+`path`). `relocate` also stages `oldPath` into `Spec.Paths` without re-cleaning it.
+This is defense-in-depth: a single resolver regression would turn into a write
+primitive.
+**Fix:** Validate `newParent` at the handler or service boundary the same way page
+paths are validated (reject `..` segments, absolute, NUL) before constructing
+`newPath`, e.g. reuse `cleanPathString` for `new_parent` in `handleRenamePage`, or
+add an explicit segment check in `Move` mirroring `cleanPathParam`. Fail with a 400
+rather than relying solely on `repo.Resolve` to 500.
 
 ## Info
 
-### IN-01: `CreateFolder` audit Target is malformed when parent is empty
+### IN-01: Folder-create audit target is malformed for root-level folders
 
-**File:** `internal/server/handlers_pages.go:315`
-**Issue:** `Target: req.Parent + "/" + req.Name` yields a leading-slash target like
-`/Docs` for a root-level folder. Cosmetic, but the audit trail's target should match the
-actual repo path.
-**Fix:** Build the target the same way the service does (`path.Join(parent, name)` or skip
-the separator when parent is empty).
+**File:** `internal/server/handlers_pages.go:319-324`
+**Issue:** The audit `Target` is built as `req.Parent + "/" + req.Name`. For a
+root-level folder `req.Parent == ""`, producing a leading-slash target
+`"/myfolder"` that does not match the actual created path (`myfolder/index.md`).
+Minor audit-trail accuracy defect (not a security issue — audit is non-fatal).
+**Fix:** Build the target consistently, e.g.
+`target := strings.Trim(req.Parent+"/"+req.Name, "/")`, or have `CreateFolder`
+return the created dir path and audit that.
 
-### IN-02: `readField`/`setField` interpolate the field name into a RegExp without escaping
+### IN-02: readField/setField interpolate the field name into a RegExp without escaping
 
-**File:** `web/src/lib/frontmatter.ts:21, 30`
-**Issue:** `new RegExp(\`^${field}:\\s*(.*)$\`, "m")` trusts `field`. All current call
-sites pass literals (`"title"`, `"description"`), so this is not currently exploitable,
-but the exported signature invites a future caller to pass a field containing regex
-metacharacters, producing a wrong match or a thrown error.
-**Fix:** Escape `field` before building the pattern, or constrain it to a known set.
+**File:** `web/src/lib/frontmatter.ts:21` (readField), `30` (setField)
+**Issue:** `new RegExp(\`^${field}:...\`)` interpolates `field` unescaped. All
+current callers pass literals (`"title"`, `"description"`), so this is not
+currently exploitable, but it is a latent bug: a field containing regex
+metacharacters would build a malformed or surprising pattern, and it is an easy
+footgun for the next caller.
+**Fix:** Escape the field before interpolation:
+```ts
+const esc = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const re = new RegExp(`^${esc}:\\s*(.*)$`, "m");
+```
+Apply in both `readField` and `setField`.
 
-### IN-03: `isAbsoluteOrExternal` protocol-relative (`//host`) branch is dead code
+### IN-03: Dead branch in isAbsoluteOrExternal — protocol-relative `//` is unreachable
 
 **File:** `internal/okf/links.go:413-417`
-**Issue:** The `dest[0] == '/'` check on line 413 returns true for any leading slash, so
-the subsequent `len(dest) >= 2 && dest[0] == '/' && dest[1] == '/'` branch (lines 415-417)
-is unreachable. The intent (treat `//host/path` as external) is already satisfied, but
-the dead branch is misleading.
-**Fix:** Remove the unreachable branch; the leading-slash check already covers it.
+**Issue:** The check `if dest[0] == '/' { return true }` (line 413) returns before
+the protocol-relative test `len(dest) >= 2 && dest[0] == '/' && dest[1] == '/'`
+(line 416) can ever be reached — any string whose first byte is `/` already
+returned. The `//` branch is dead code. (Behavior is still correct — `//foo` is
+treated as absolute/external either way — but the intent is misleading.)
+**Fix:** Remove the unreachable `//` branch, or fold it into a comment on the
+existing `dest[0] == '/'` check noting it covers both absolute and
+protocol-relative.
 
-### IN-04: `ViewVersion` returns the *current* live revision as the version's revision
+### IN-04: ViewVersion returns the LIVE HEAD revision for a historical version — restore-from-view can never 409
 
-**File:** `internal/pages/history.go:107-115`
-**Issue:** A viewed historical version carries `Revision: <current HEAD revision>`. This
-is intentional (so the editor still writes against HEAD), and is documented, but it means
-the frontend cannot tell from the payload that it is looking at an old, read-only
-version — it could let the user "Save" stale bytes over HEAD if a code path reused this
-Page for editing. Today the view path is read-only in the UI, so this is informational.
-**Fix:** Consider a `readOnly`/`historical` flag on the version-view response so the
-distinction is explicit rather than relying on caller discipline.
+**File:** `internal/pages/history.go:107-115` (ViewVersion), consumed by `web/src/components/HistoryPanel.tsx`
+**Issue:** `ViewVersion` returns `Page.Revision = s.Revision(ctx, path)` — the
+*current HEAD* blob revision, not the viewed historical version's identity. This
+is intentional per the doc comment (so an editor still writes against HEAD), but
+it means the `Revision` field is semantically ambiguous on a version-view
+response: the same value is returned regardless of which old version is being
+viewed, and any client that treated a version view as an editable base would write
+against HEAD silently. Currently the History panel only renders the version
+read-only (`HistoryPanel.tsx:124-128`), so there is no live bug — flagging for the
+contract clarity since restore-from-history is in scope.
+**Fix:** Either document on the API type that `revision` on a version response is
+always the live HEAD (not the viewed version), or omit/zero `revision` for the
+read-only version-view path so a future caller cannot mistake it for an editable
+base.
 
 ---
 
-_Reviewed: 2026-06-19_
+_Reviewed: 2026-06-19T00:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
