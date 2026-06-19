@@ -30,6 +30,27 @@ func validVersionToken(version string) bool {
 	return versionTokenPattern.MatchString(version)
 }
 
+// tokenInHistory reports whether the opaque version token belongs to path's own
+// (--follow) history. Format validation alone is insufficient: a well-formed hex
+// token from ANY page's history would otherwise be accepted for an arbitrary path,
+// letting a caller view or restore content states never offered in that page's
+// history panel (WR-04). The token stays opaque — we compare it against the tokens
+// the page's own History already issued. Returns ErrInvalidVersion when the token
+// is not a member, preserving the existing not-found/invalid error shape (no SHA
+// is ever leaked).
+func (s *Service) tokenInHistory(ctx context.Context, path, version string) error {
+	commits, err := s.git.History(ctx, path)
+	if err != nil {
+		return fmt.Errorf("pages: history %q: %w", path, err)
+	}
+	for _, c := range commits {
+		if c.Token == version {
+			return nil
+		}
+	}
+	return ErrInvalidVersion
+}
+
 // HistoryEntry is one row of a page's version history as the UI consumes it
 // (VER-02). It carries ONLY human-readable fields — what action cut the version,
 // who cut it, and when — plus an OPAQUE Version token the client passes back to
@@ -88,13 +109,26 @@ func (s *Service) History(ctx context.Context, path string) ([]HistoryEntry, err
 }
 
 // ViewVersion returns the page at path as it existed at the given opaque version
-// token, parsed back into the Page response form (frontmatter + body). The
-// revision returned is the CURRENT committed revision of the live path (so the
-// editor would still write against HEAD) — the old version is read-only here.
+// token, parsed back into the Page response form (frontmatter + body).
+//
+// CONTRACT (IN-04): the Revision field on a version-view response is ALWAYS the
+// live HEAD blob revision of path — it is NOT the identity of the viewed
+// historical version, and it is the same value regardless of which old version
+// is being viewed. This is intentional: a version view is read-only, and if an
+// editor ever wrote from this response it must write against HEAD (so a restore
+// is a forward commit via RestoreVersion, never a rewind). Callers MUST treat a
+// version view as read-only and MUST NOT use its Revision as an editable base for
+// the viewed version; the History panel renders it read-only today. ShowAt is
+// only reached after tokenInHistory authorizes the token for THIS page (WR-04).
 // ErrPageNotFound is returned when the live page no longer exists.
 func (s *Service) ViewVersion(ctx context.Context, path, version string) (Page, error) {
 	if !validVersionToken(version) {
 		return Page{}, fmt.Errorf("pages: view version %q: %w", path, ErrInvalidVersion)
+	}
+	// Authorize the token against THIS page's history before reading any bytes
+	// (WR-04) — a hex token from another page must not disclose this path's blob.
+	if err := s.tokenInHistory(ctx, path, version); err != nil {
+		return Page{}, fmt.Errorf("pages: view version %q: %w", path, err)
 	}
 	raw, err := s.git.ShowAt(ctx, version, path)
 	if err != nil {
@@ -136,6 +170,13 @@ func (s *Service) RestoreVersion(ctx context.Context, path, version, user string
 	}
 	if !exists {
 		return ErrPageNotFound
+	}
+
+	// Authorize the token against THIS page's history before reading/restoring
+	// (WR-04) — a hex token from another page must not be resurrected onto this
+	// path.
+	if err := s.tokenInHistory(ctx, path, version); err != nil {
+		return fmt.Errorf("pages: restore version %q: %w", path, err)
 	}
 
 	old, err := s.git.ShowAt(ctx, version, path)
