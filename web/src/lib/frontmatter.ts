@@ -16,9 +16,17 @@ export function okfTitle(frontmatter: string, path: string): string {
   return base.replace(/\.md$/, "");
 }
 
+// escapeRegExp escapes RegExp metacharacters so a field name can be safely
+// interpolated into a pattern. All current callers pass literals, but escaping
+// keeps a metacharacter-bearing field from building a malformed/surprising
+// pattern (IN-02).
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // readField returns a top-level scalar field's value, or "" when absent.
 export function readField(frontmatter: string, field: string): string {
-  const re = new RegExp(`^${field}:\\s*(.*)$`, "m");
+  const re = new RegExp(`^${escapeRegExp(field)}:\\s*(.*)$`, "m");
   const m = frontmatter.match(re);
   return m ? stripQuotes(m[1].trim()) : "";
 }
@@ -27,7 +35,7 @@ export function readField(frontmatter: string, field: string): string {
 // block, preserving the rest of the YAML text. Used by the frontmatter form so a
 // title/description edit does not disturb other keys.
 export function setField(frontmatter: string, field: string, value: string): string {
-  const re = new RegExp(`^(${field}:)\\s*.*$`, "m");
+  const re = new RegExp(`^(${escapeRegExp(field)}:)\\s*.*$`, "m");
   const line = `${field}: ${quoteIfNeeded(value)}`;
   if (re.test(frontmatter)) {
     return frontmatter.replace(re, line);

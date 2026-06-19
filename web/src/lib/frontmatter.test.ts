@@ -86,3 +86,27 @@ describe("setField / readField round-trip is preserved", () => {
     expect(readField(out, "title")).toBe("New Title");
   });
 });
+
+describe("readField/setField escape the field name in RegExp (IN-02)", () => {
+  // A field name containing regex metacharacters must be treated literally, not
+  // compiled into a surprising pattern. These assertions would fail (or match
+  // the wrong line) if the field were interpolated unescaped.
+  it("reads a field whose name has regex metacharacters literally", () => {
+    const fm = "a.b: hit\naxb: miss\n";
+    // "." must match a literal dot, not any char — so "a.b" must not match "axb".
+    expect(readField(fm, "a.b")).toBe("hit");
+  });
+
+  it("does not match an arbitrary line for a metacharacter field name", () => {
+    const fm = "title: present\n";
+    // ".*" as a field name must look for a literal ".*:" key, which is absent.
+    expect(readField(fm, ".*")).toBe("");
+  });
+
+  it("setField updates the literal field, not a regex-matched one", () => {
+    const fm = "a.b: old\naxb: keep\n";
+    const out = setField(fm, "a.b", "new");
+    expect(readField(out, "a.b")).toBe("new");
+    expect(out).toContain("axb: keep");
+  });
+});
