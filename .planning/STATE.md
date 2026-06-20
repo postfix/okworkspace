@@ -37,6 +37,7 @@ Progress: [████████░░] 80%
 | Date | Slug | Summary | Commit |
 |------|------|---------|--------|
 | 2026-06-21 | admin-change-role | Wire admin "change user role" UI to existing `setRole` endpoint (Phase 0 UAT gap) | 436f9d7 |
+| 2026-06-21 | autosave-trailing-write | Fix autosave silently dropping/clobbering a trailing edit (Phase 1 UAT gap); serialized coalescing saver | 7985857 |
 
 ## Performance Metrics
 

@@ -39,7 +39,7 @@ note: |
   - Browser console: 0 errors except a pre-login 401 on /auth/me (expected before sign-in); NO 409 responses.
   - Server log: no 409/stale/conflict lines.
   - The WR-03 caveat from VERIFICATION (false 409 under overlapping timers) did not reproduce.
-  CAVEAT — a SEPARATE, more serious autosave bug was found during this test (silent lost trailing write + false "Saved"); see Gaps "autosave-drops-trailing-edit". The WR-03 no-409 criterion itself passes; the new bug is tracked separately.
+  NOTE — a SEPARATE, more serious autosave bug was found during this test (silent lost trailing write + false "Saved"); the WR-03 no-409 criterion itself passed. That bug has since been FIXED (commit 7985857, quick task autosave-trailing-write) and re-verified live; see Gaps entry (status: resolved).
 
 ### 3. Holistic non-technical-user round trip (phase goal)
 expected: |
@@ -59,7 +59,7 @@ result: [pending]
 
 total: 3
 passed: 2
-issues: 1
+issues: 0
 pending: 1
 skipped: 0
 blocked: 0
@@ -67,7 +67,9 @@ blocked: 0
 ## Gaps
 
 - truth: "Autosave persists every edit (no silent lost write), and the 'Saved' status only shows when content is actually on the server"
-  status: failed
+  status: resolved
+  resolution: |
+    Fixed by quick task autosave-trailing-write (commit 7985857). Root cause: the draft(1s)+idle(6s) two-timer scheme fired overlapping/late saves so a stale snapshot could commit after a newer one and clobber it (git history during UAT showed "...SECOND-B" committed then a stale "...FIRST-A" save overwriting it 3s later). Replaced with a single serialized, single-flight, coalescing saver (loop saves until server == editor, reading fresh content + advanced base_revision each iteration) + seed-editor-state-once. Re-verified LIVE via headless browser on the exact repro: type A → autosave → type B → idle → both persist in HEAD; status "Saved" matches editor; 2 PUTs both 204, no 409; stress bursts also persist exactly. Regression test added; 110/110 frontend tests pass; WR-03 no-409 still holds.
   reason: |
     Found by Claude via headless browser (Playwright) against a live server while running Test 2. Reproduced TWICE: a trailing edit made shortly after a prior autosave cycle is NEVER sent to the server (no PUT) and is silently lost, while the status indicator shows "Saved".
     Exact repro on docs/guide.md in the editor:
