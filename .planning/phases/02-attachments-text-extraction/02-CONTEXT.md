@@ -32,9 +32,16 @@ In scope: ATT-01..ATT-09, SEC-02. Out of scope: search indexing (Phase 3), agent
 - Size limit from **`config.max_upload_mb`** (already in config, default 100).
 - Type validation by **MIME-sniffing magic bytes** (`github.com/gabriel-vasile/mimetype`)
   against the config **allow-list**; reject on mismatch (ATT-09). Don't trust extension.
-- Download safety (SEC-02): **images (png/jpg/svg) preview inline via `<img src>`**
-  (an `<img>`-loaded SVG cannot execute script); **all other types are served with
-  `Content-Disposition: attachment`**.
+- Download safety (SEC-02): **png/jpg preview inline via `<img src>`**; **SVG and all
+  other types are served with `Content-Disposition: attachment`** + a `Content-Security-
+  Policy: default-src 'none'; sandbox` header.
+  - CORRECTION (post-execution security review): the original decision said "svg inline".
+    Serving `image/svg+xml` with `Content-Disposition: inline` on the APP ORIGIN is a
+    stored-XSS vector — direct navigation renders the SVG as a top-level document and any
+    embedded `<script>` runs with the app session. SVG is therefore served as a forced
+    download; the SPA `<img>` thumbnail/preview still works (browsers ignore
+    Content-Disposition for `<img>` and render SVG-as-image without scripts), so ATT-04
+    preview is preserved. Fixed in handlers_attachments.go.
 - Upload and delete **commit to Git via the existing single-writer CommitJob spine**
   (`internal/pages/commitjob.go`, `commitPayload{Writes,Removes}`) — no second write path.
 

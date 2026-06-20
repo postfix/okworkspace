@@ -265,22 +265,26 @@ func TestDownloadDisposition(t *testing.T) {
 	}
 }
 
-// TestInlineImageDisposition (ATT-04): every previewable image type (png/jpg/svg)
-// downloads with Content-Disposition: inline, its REAL image Content-Type, and
-// X-Content-Type-Options: nosniff. The SVG case pins the stored-XSS guard: it is
-// served as a downloadable image resource (consumed via <img src>), with nosniff
-// so the browser never treats it as an HTML document — it cannot execute script.
+// TestInlineImageDisposition (ATT-04 + SEC-02): raster images (png/jpg) are served
+// inline with their real Content-Type so the SPA <img> preview renders them; SVG is
+// deliberately served as a forced DOWNLOAD (application/octet-stream + attachment),
+// because an inline image/svg+xml on the app origin executes embedded <script> on
+// direct navigation (stored XSS). The <img> thumbnail still works for SVG because
+// browsers ignore Content-Disposition for <img> subresource loads. Every branch sets
+// nosniff and a CSP sandbox (defense-in-depth).
 func TestInlineImageDisposition(t *testing.T) {
 	f := newAttachServer(t)
 	cookies := loginEditorAttach(t, f)
 
 	cases := []struct {
-		fixture  string
-		wantMime string
+		fixture    string
+		wantInline bool
+		wantMime   string // expected Content-Type substring
 	}{
-		{"pixel.png", "image/png"},
-		{"pixel.jpg", "image/jpeg"},
-		{"pixel.svg", "image/svg+xml"},
+		{"pixel.png", true, "image/png"},
+		{"pixel.jpg", true, "image/jpeg"},
+		// SVG must NOT be inline — stored-XSS guard.
+		{"pixel.svg", false, "application/octet-stream"},
 	}
 
 	for _, tc := range cases {
@@ -297,8 +301,12 @@ func TestInlineImageDisposition(t *testing.T) {
 			if drec.Code != http.StatusOK {
 				t.Fatalf("download status = %d, want 200; body=%s", drec.Code, drec.Body.String())
 			}
-			if cd := drec.Header().Get("Content-Disposition"); !contains(cd, "inline") {
+			cd := drec.Header().Get("Content-Disposition")
+			if tc.wantInline && !contains(cd, "inline") {
 				t.Fatalf("%s Content-Disposition = %q, want inline", tc.fixture, cd)
+			}
+			if !tc.wantInline && !contains(cd, "attachment") {
+				t.Fatalf("%s Content-Disposition = %q, want attachment (SVG stored-XSS guard)", tc.fixture, cd)
 			}
 			if ct := drec.Header().Get("Content-Type"); !contains(ct, tc.wantMime) {
 				t.Fatalf("%s Content-Type = %q, want %s", tc.fixture, ct, tc.wantMime)
@@ -306,6 +314,9 @@ func TestInlineImageDisposition(t *testing.T) {
 			if drec.Header().Get("X-Content-Type-Options") != "nosniff" {
 				t.Fatalf("%s X-Content-Type-Options = %q, want nosniff",
 					tc.fixture, drec.Header().Get("X-Content-Type-Options"))
+			}
+			if csp := drec.Header().Get("Content-Security-Policy"); !contains(csp, "sandbox") {
+				t.Fatalf("%s Content-Security-Policy = %q, want sandbox", tc.fixture, csp)
 			}
 		})
 	}

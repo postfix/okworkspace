@@ -15,13 +15,19 @@ import (
 )
 
 // inlineImageTypes are the ONLY MIME types served inline (SEC-02). Everything else
-// is forced to download with Content-Disposition: attachment. An <img>-loaded SVG
-// cannot execute script, so it is safe inline; raw SVG is never inlined into the
-// DOM (that guard lives in the frontend).
+// is forced to download with Content-Disposition: attachment.
+//
+// SVG is deliberately NOT inline: although an <img>-loaded SVG cannot execute
+// script (the SPA preview uses <img src> and browsers ignore Content-Disposition
+// for <img>, so inline preview still works), serving image/svg+xml with
+// Content-Disposition: inline lets a user NAVIGATE DIRECTLY to the attachment URL,
+// which renders the SVG as a top-level document on the APP ORIGIN — any embedded
+// <script> then runs with the app's session (stored XSS). So SVG is served as a
+// forced download like any other risky type; the <img> thumbnail/preview is
+// unaffected. (Defense-in-depth CSP sandbox is also set on every response below.)
 var inlineImageTypes = map[string]bool{
-	"image/png":     true,
-	"image/jpeg":    true,
-	"image/svg+xml": true,
+	"image/png":  true,
+	"image/jpeg": true,
 }
 
 // isInlineImage reports whether the stored MIME type may be served inline. The
@@ -127,11 +133,12 @@ func (h *authHandlers) handleListAttachments(w http.ResponseWriter, r *http.Requ
 
 // handleDownloadAttachment streams an attachment's byte-exact original (ATT-02).
 // The disposition is decided by the STORED sniffed type (SEC-02), never the
-// request: png/jpeg/svg are served inline with their real Content-Type; everything
-// else is forced to download as application/octet-stream with the original
-// filename. X-Content-Type-Options: nosniff is ALWAYS set. http.ServeContent
-// streams the bytes unchanged (never transcodes) and handles Range for <img>
-// preview (Pitfall 4).
+// request: png/jpeg are served inline with their real Content-Type; SVG and every
+// other type are forced to download as application/octet-stream with the original
+// filename (SVG inline on the app origin is a stored-XSS vector — see
+// inlineImageTypes). X-Content-Type-Options: nosniff and a CSP sandbox are ALWAYS
+// set. http.ServeContent streams the bytes unchanged (never transcodes) and handles
+// Range for <img> preview (Pitfall 4).
 func (h *authHandlers) handleDownloadAttachment(w http.ResponseWriter, r *http.Request, id string) {
 	if h.attachments == nil {
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
@@ -171,6 +178,10 @@ func (h *authHandlers) handleDownloadAttachment(w http.ResponseWriter, r *http.R
 
 	// Harden against content-type confusion on EVERY branch (SEC-02).
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Defense-in-depth: even if a renderable/active type is ever served, this
+	// sandbox + null default-src neuters scripts, plugins, and same-origin access
+	// for any attachment loaded as a top-level document.
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	if isInlineImage(meta.MimeType) {
 		w.Header().Set("Content-Type", meta.MimeType)
 		w.Header().Set("Content-Disposition", "inline")
