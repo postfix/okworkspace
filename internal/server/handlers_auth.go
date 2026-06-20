@@ -9,6 +9,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/justinas/nosurf"
 
+	"github.com/postfix/okworkspace/internal/attachments"
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
@@ -44,6 +45,10 @@ type authHandlers struct {
 	// Optional: when nil the page/tree handlers return a 500 rather than panic,
 	// following the existing optional-dependency pattern.
 	pages *pages.Service
+	// attachments is the attachment lifecycle service (upload/list/download).
+	// Optional: when nil the attachment handlers return a 500, following the same
+	// optional-dependency pattern as pages.
+	attachments *attachments.Service
 }
 
 type loginRequest struct {

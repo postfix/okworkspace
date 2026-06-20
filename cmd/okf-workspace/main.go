@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/postfix/okworkspace/internal/attachments"
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/gitstore"
@@ -194,6 +195,12 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	// threaded from config so Plan 05 only flips the config value.
 	pagesSvc := pages.NewService(contentRepo, gs, worker, st.DB(), cfg.Git.PushOnCommit)
 
+	// Attachment lifecycle service: upload/list/download, every write flowing
+	// through the SAME single-writer CommitJob registered above (no second commit
+	// kind). The size cap comes from config.Storage.MaxUploadMB; the MIME-sniff
+	// allow-list from config.Attachments.AllowedExtensions.
+	attachSvc := attachments.NewService(contentRepo, worker, st.DB(), cfg.Attachments, cfg.Storage.MaxUploadMB, cfg.Git.PushOnCommit)
+
 	// Reconcile the trash table against the working tree at startup: a prior
 	// Delete/Restore whose async commit failed can leave a SQLite trash row that
 	// points at a trash_path never written to disk (WR-01). Prune those phantom
@@ -210,13 +217,14 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		return fmt.Errorf("build SPA handler: %w", err)
 	}
 	handler, err := server.New(server.Deps{
-		Store:      st,
-		Config:     cfg,
-		UserRepo:   userRepo,
-		SPAHandler: spa,
-		Health:     healthAdapter{gs: gs},
-		Audit:      auditLog,
-		Pages:      pagesSvc,
+		Store:       st,
+		Config:      cfg,
+		UserRepo:    userRepo,
+		SPAHandler:  spa,
+		Health:      healthAdapter{gs: gs},
+		Audit:       auditLog,
+		Pages:       pagesSvc,
+		Attachments: attachSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)

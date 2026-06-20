@@ -17,6 +17,7 @@
     "react": "19.2.7",
     "react-diff-viewer-continued": "^4.2.2",
     "react-dom": "19.2.7",
+    "react-dropzone": "^15.0.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "7.18.0",
     "rehype-sanitize": "^6.0.0",

@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/postfix/okworkspace/internal/attachments"
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
@@ -35,6 +36,9 @@ type Deps struct {
 	// routes. Optional; when nil those routes return a 500 (the SPA is wired with
 	// the real service in main.go).
 	Pages *pages.Service
+	// Attachments is the attachment lifecycle service backing the upload/list/
+	// download routes. Optional; when nil those routes return a 500.
+	Attachments *attachments.Service
 }
 
 // New builds the HTTP handler: chi mux with the middleware stack (recover,
@@ -51,11 +55,12 @@ func New(deps Deps) (http.Handler, error) {
 		rec = nopAudit{}
 	}
 	h := &authHandlers{
-		sessions: sm,
-		users:    deps.UserRepo,
-		config:   deps.Config,
-		audit:    rec,
-		pages:    deps.Pages,
+		sessions:    sm,
+		users:       deps.UserRepo,
+		config:      deps.Config,
+		audit:       rec,
+		pages:       deps.Pages,
+		attachments: deps.Attachments,
 	}
 	health := &healthHandler{checker: deps.Health}
 
@@ -99,6 +104,15 @@ func New(deps Deps) (http.Handler, error) {
 			// surfaces provenance only, never page content or Git vocabulary).
 			authed.Get("/trash", h.handleListTrash)
 
+			// Attachment reads — available to ANY authenticated user. The single
+			// `/attachments/*` catch-all hosts BOTH the per-page list and the
+			// byte-exact download: chi cannot host a `{id}/download` route next to
+			// the slash-bearing `{pagePath}` list wildcard (the sibling-wildcard
+			// conflict the page routes also hit), so both are dispatched on the same
+			// catch-all by handleGetAttachment (download iff the wildcard ends in
+			// "/download", else a page list).
+			authed.Get("/attachments/*", h.handleGetAttachment)
+
 			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin
 			// subgroup). Authorization is read from the session role via
 			// RequireRole, never client input (T-02-02). Admin passes the editor
@@ -116,6 +130,9 @@ func New(deps Deps) (http.Handler, error) {
 				editor.Post("/pages/*", h.handleRenamePage)
 				editor.Delete("/pages/*", h.handleDeletePage)
 				editor.Post("/folders", h.handleCreateFolder)
+				// Attachment upload — editor-gated (RBAC from the session, never
+				// client input — T-02-05/SEC §V4), mirroring the page-mutation gate.
+				editor.Post("/attachments", h.handleUploadAttachment)
 				// Restore a trashed page to its original folder (auto-suffix on a
 				// live-page collision, D-10). {id} is the trash row id, not a path,
 				// so this does not collide with the /pages/* wildcard.

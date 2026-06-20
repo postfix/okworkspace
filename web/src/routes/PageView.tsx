@@ -7,6 +7,7 @@ import { getPage, me, type Me, type Page } from "../api/client";
 import { okfTitle } from "../lib/frontmatter";
 import { useRecent } from "../stores/recent";
 import MarkdownProse from "../components/MarkdownProse";
+import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PageActionMenu from "../components/PageActionMenu";
 import RenameModal from "../components/RenameModal";
 import MoveDialog from "../components/MoveDialog";
@@ -102,6 +103,12 @@ export default function PageView() {
       ) : (
         <MarkdownProse body={body} currentPath={path} />
       )}
+      <AttachmentsSection
+        pagePath={path}
+        canEdit={canEdit}
+        maxUploadMB={100}
+        allowedTypes={["pdf", "docx", "txt", "png", "jpg", "svg"]}
+      />
       <RenameModal
         open={renameOpen}
         path={path}

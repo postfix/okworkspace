@@ -369,6 +369,73 @@ export async function restoreVersion(
   return mutate<{ path: string }>(`/api/v1/pages/${path}/restore`, { version });
 }
 
+// --- Attachments (ATT-01/02/03/09, SEC-02) ---
+
+// AttachmentMeta mirrors the backend upload/list response. The original filename
+// lives here (never in the on-disk path — SEC-02). extraction_status drives the
+// card chip (slice 02-03); in slice 02-01 every fresh upload is "pending".
+export interface AttachmentMeta {
+  id: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploader_name: string;
+  uploaded_at: string;
+  page_path: string;
+  extraction_status?: "pending" | "done" | "empty" | "failed";
+}
+
+// downloadAttachmentUrl is the canonical byte-exact download endpoint for an
+// attachment id. Used as an <a href> / <img src> — a GET, no CSRF needed.
+export function downloadAttachmentUrl(id: string): string {
+  return `/api/v1/attachments/${id}/download`;
+}
+
+// listAttachments fetches a page's attachments (a GET, newest-first).
+export async function listAttachments(
+  pagePath: string,
+): Promise<AttachmentMeta[]> {
+  const res = await fetch(`/api/v1/attachments/${pagePath}`, {
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    throw new Error("Couldn't load attachments — try again.");
+  }
+  return (await res.json()) as AttachmentMeta[];
+}
+
+// uploadAttachment uploads a file to a page via multipart. It uses a raw fetch
+// (NOT mutate(), which forces a JSON Content-Type) so the browser sets the
+// multipart boundary itself; the CSRF token is echoed in the header (SEC-04).
+export async function uploadAttachment(
+  pagePath: string,
+  file: File,
+): Promise<AttachmentMeta> {
+  const token = await ensureCSRF();
+  const form = new FormData();
+  form.append("page_path", pagePath);
+  form.append("file", file);
+  const res = await fetch("/api/v1/attachments", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { [CSRF_HEADER]: token },
+    body: form,
+  });
+  if (!res.ok) {
+    let message = "Upload didn't finish. Check your connection and try again.";
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      // keep the generic message
+    }
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+  return (await res.json()) as AttachmentMeta;
+}
+
 // relativeMdLink computes a relative `.md` link destination from the page at
 // fromPath to the page at toPath (both repo-relative slash paths), matching the
 // canonical on-disk link format (D-05). Used by the LinkPicker so an inserted
