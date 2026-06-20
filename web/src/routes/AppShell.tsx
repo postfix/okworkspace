@@ -1,14 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FilePlus, FolderPlus, Shield, Trash2 } from "lucide-react";
 
 import { health, logout, me, type Me, type RepoHealth } from "../api/client";
 import UserMenu from "../components/UserMenu";
-import LeftTree from "../components/LeftTree";
+import LeftTree, { type LeftTreeHandle } from "../components/LeftTree";
 import RecentList from "../components/RecentList";
-import CreatePageModal from "../components/CreatePageModal";
-import CreateFolderModal from "../components/CreateFolderModal";
 import "./AppShell.css";
 
 // AppShell is the authenticated chrome (top bar + nav rail + main pane). When
@@ -28,8 +26,10 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   // Editors (and admins) can create pages/folders; readers cannot (RBAC mirror
   // of the server gate — the create affordances are hidden for readers).
   const canEdit = data?.role === "editor" || data?.role === "admin";
-  const [createPageOpen, setCreatePageOpen] = useState(false);
-  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  // The tree owns the create modals (it needs folder-scoped create from its
+  // right-click menu); the top buttons drive root-scoped create through this
+  // imperative handle.
+  const treeRef = useRef<LeftTreeHandle>(null);
 
   async function handleLogout() {
     await logout();
@@ -69,7 +69,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
               <button
                 type="button"
                 className="navrow navrow-action"
-                onClick={() => setCreatePageOpen(true)}
+                onClick={() => treeRef.current?.openCreatePage()}
               >
                 <FilePlus size={16} aria-hidden="true" />
                 <span>New page</span>
@@ -77,7 +77,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
               <button
                 type="button"
                 className="navrow navrow-action"
-                onClick={() => setCreateFolderOpen(true)}
+                onClick={() => treeRef.current?.openCreateFolder()}
               >
                 <FolderPlus size={16} aria-hidden="true" />
                 <span>New folder</span>
@@ -85,7 +85,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             </div>
           )}
 
-          <LeftTree />
+          <LeftTree ref={treeRef} />
           <RecentList />
 
           <div className="navrail-trash">
@@ -144,18 +144,6 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           )}
         </main>
       </div>
-
-      <CreatePageModal
-        open={createPageOpen}
-        folder=""
-        folderName="your workspace"
-        onClose={() => setCreatePageOpen(false)}
-      />
-      <CreateFolderModal
-        open={createFolderOpen}
-        parent=""
-        onClose={() => setCreateFolderOpen(false)}
-      />
     </div>
   );
 }

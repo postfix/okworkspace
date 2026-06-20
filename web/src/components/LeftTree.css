@@ -1,7 +1,31 @@
+.lefttree {
+  display: flex;
+  flex-direction: column;
+}
+
 .lefttree-status {
   padding: var(--space-sm);
   color: var(--color-text-muted);
   font-size: var(--font-size-label);
+}
+
+/* Blank nav space below the tree: a drop target for "move to root" and a
+   right-click surface for root-scoped create. Min-height gives a usable hit
+   area even when the tree is short. */
+.lefttree-root-drop {
+  min-height: var(--space-xl);
+  flex: 1 0 auto;
+  border-radius: var(--radius-sm);
+}
+
+/* Drag-over highlight, shared by folder rows and the root drop zone. */
+.lefttree-droptarget {
+  background: var(--color-tree-active-bg);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.navrow-page[draggable="true"] {
+  cursor: pointer;
 }
 
 .navrow-folder {
