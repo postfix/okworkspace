@@ -38,8 +38,24 @@
   color: var(--color-text);
 }
 
+/* A standard modal footer: a full-width, right-aligned button row separated
+   from the body by a hairline rule and top spacing. Works for both the Dialog's
+   built-in footer (which sits below .dialog-body, separated by the dialog's own
+   gap) and the form-rendered footers in CreatePageModal/CreateFolderModal
+   (which sit flush inside a <form> in .dialog-body and rely on this border +
+   padding for separation). align-items:center keeps 1- and 2-button rows tidy. */
 .dialog-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
   gap: var(--space-sm);
+  width: 100%;
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.dialog-footer .btn {
+  min-height: var(--hit-min-height);
 }
