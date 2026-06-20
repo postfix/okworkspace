@@ -10,6 +10,7 @@ package pages
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -107,14 +108,35 @@ func CommitHandler(r *repo.Repo, g *gitstore.GitStore) jobs.Handler {
 	}
 }
 
-// EnqueueCommit marshals p and enqueues a commit job on the worker. HTTP
-// handlers call this (never git/os directly) so every mutation serializes
-// through the single drain goroutine. It accepts the minimal enqueuer interface
-// (*jobs.Worker satisfies it) so a test can inject a fake worker.
+// EnqueueCommit marshals p and enqueues a commit job on the worker, then BLOCKS
+// until that specific commit lands on disk (the single-writer worker runs the
+// write+commit). HTTP handlers call this (never git/os directly) so every
+// mutation serializes through the single drain goroutine — and, with the wait,
+// returns only after the .md is written, so an immediate tree refetch sees the
+// new state instead of racing the worker's poll tick (the "needs a refresh"
+// bug).
+//
+// Timeout fallback (VER-04): a wait that times out (e.g. a slow/hung remote push
+// when push_on_commit is enabled) does NOT fail the mutation — the local commit
+// already succeeds before push, and push is best-effort/alert-only. We log a
+// warning and return success, preserving the original async semantics (the job
+// stays queued and completes later). Only a job that actually reports failed
+// surfaces as an error.
+//
+// It accepts the minimal enqueuer interface (*jobs.Worker satisfies it) so a
+// test can inject a fake worker that runs the handler synchronously.
 func EnqueueCommit(ctx context.Context, w enqueuer, p commitPayload) error {
 	raw, err := json.Marshal(p)
 	if err != nil {
 		return fmt.Errorf("pages: marshal commit payload: %w", err)
 	}
-	return w.Enqueue(ctx, KindCommit, string(raw))
+	err = w.EnqueueAndWait(ctx, KindCommit, string(raw), commitWaitTimeout)
+	if errors.Is(err, jobs.ErrJobTimeout) {
+		// The commit is queued and will still complete; do not fail the save over
+		// a slow push/drain. Async semantics are preserved.
+		slog.WarnContext(ctx, "pages: commit wait timed out; returning success, job stays queued",
+			slog.Duration("timeout", commitWaitTimeout))
+		return nil
+	}
+	return err
 }

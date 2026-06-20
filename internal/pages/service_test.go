@@ -213,10 +213,57 @@ func TestPushFlagThreaded(t *testing.T) {
 	}
 }
 
-// capturingWorker is a fake enqueuer that records the last payload.
+// TestMutationsWaitForCommitOnDisk proves user-facing mutations return only
+// AFTER their commit job has landed on disk: immediately after Create (and
+// Rename/Delete) returns, the target file exists with NO polling or sleep. This
+// is the fix for the "tree needs a manual refresh" race — the handler no longer
+// returns before the worker writes the file.
+func TestMutationsWaitForCommitOnDisk(t *testing.T) {
+	svc, r, _ := newServiceFixture(t, false)
+	ctx := context.Background()
+
+	// Create: file present the instant Create returns.
+	path, err := svc.Create(ctx, "", "Wait Test", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if ok, err := r.Exists(path); err != nil || !ok {
+		t.Fatalf("after Create returned, %q exists=%v err=%v; want it on disk with no poll", path, ok, err)
+	}
+
+	// Rename: new path present, old path gone, the instant Rename returns.
+	newPath, err := svc.Rename(ctx, path, "Renamed Wait Test", "alice")
+	if err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if ok, _ := r.Exists(newPath); !ok {
+		t.Fatalf("after Rename returned, new path %q is not on disk", newPath)
+	}
+	if ok, _ := r.Exists(path); ok {
+		t.Fatalf("after Rename returned, old path %q still on disk", path)
+	}
+
+	// Delete: source gone the instant Delete returns (it was moved to trash).
+	if err := svc.Delete(ctx, newPath, "alice"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if ok, _ := r.Exists(newPath); ok {
+		t.Fatalf("after Delete returned, %q still on disk; want moved to trash synchronously", newPath)
+	}
+}
+
+// capturingWorker is a fake enqueuer that records the last payload. Both the
+// fire-and-forget Enqueue and the synchronous EnqueueAndWait capture the payload
+// and return nil — modeling a job that reaches "done" immediately, so the
+// service's wait-for-commit path returns without a real drain goroutine.
 type capturingWorker struct{ last *string }
 
 func (c *capturingWorker) Enqueue(_ context.Context, _ string, payload string) error {
+	c.last = &payload
+	return nil
+}
+
+func (c *capturingWorker) EnqueueAndWait(_ context.Context, _ string, payload string, _ time.Duration) error {
 	c.last = &payload
 	return nil
 }

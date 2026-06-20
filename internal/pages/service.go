@@ -28,11 +28,25 @@ var (
 	ErrTitleRequired = errors.New("title required")
 )
 
+// commitWaitTimeout bounds how long a user-facing mutation blocks waiting for
+// its commit job to land on disk before falling back to async semantics. The
+// commit itself completes well before the (optional, best-effort) remote push,
+// so a hung push must not exceed this and break the save (VER-04): on timeout we
+// log and return success, leaving the queued job to finish.
+const commitWaitTimeout = 5 * time.Second
+
 // enqueuer is the subset of *jobs.Worker the service needs. Defined as an
 // interface so a test can inject a fake worker that captures the enqueued
 // payload (TestPushFlagThreaded) without standing up the real drain goroutine.
+//
+// EnqueueAndWait enqueues a job and blocks until it is terminal: nil on done, a
+// non-nil error on a job that reports failed, and jobs.ErrJobTimeout when the
+// job neither completes nor fails within timeout. User-facing mutations route
+// through this so the HTTP handler returns only after the commit is on disk (the
+// file-tree refetch then sees the change instead of racing the worker).
 type enqueuer interface {
 	Enqueue(ctx context.Context, kind, payload string) error
+	EnqueueAndWait(ctx context.Context, kind, payload string, timeout time.Duration) error
 }
 
 // reviser reads the committed blob revision of a path (the optimistic-

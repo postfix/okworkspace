@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/gitstore"
@@ -17,6 +18,14 @@ import (
 type capturingAllWorker struct{ payloads []string }
 
 func (c *capturingAllWorker) Enqueue(_ context.Context, _ string, payload string) error {
+	c.payloads = append(c.payloads, payload)
+	return nil
+}
+
+// EnqueueAndWait models the synchronous wait-for-commit path: capture the
+// payload and return nil (the modeled job is immediately "done") so the service
+// returns without standing up a real drain goroutine.
+func (c *capturingAllWorker) EnqueueAndWait(_ context.Context, _ string, payload string, _ time.Duration) error {
 	c.payloads = append(c.payloads, payload)
 	return nil
 }
