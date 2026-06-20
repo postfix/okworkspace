@@ -66,6 +66,7 @@ Progress: [████████░░] 80%
 ### Roadmap Evolution
 
 - Phase 6 added (2026-06-20): Live-Preview Editor (Obsidian-style) — replace the MVP split-pane editor with a CodeMirror 6 live-preview surface; depends on Phase 1; storage/Git unchanged. Part of the broader "stay web but mimic Obsidian" UI direction (team are ex-Obsidian users). CouchDB-as-Git-replacement was considered and rejected (breaks files-as-truth + hidden-Git history); live co-editing stays Phase 5 via CRDT→Git.
+- Phase 7 added (2026-06-21): Obsidian-style File Tree (folder operations & tree UX) — depends on Phase 1. Page-level tree UX (right-click menu, page drag-drop, folder-scoped create, TreeContextMenu, dialog-footer fix) and the commit-wait fix were already shipped ad-hoc on main during Phase 1 UAT (commits 69e4fb6/ee5192c/a1486bd/7e0b098/717cfe7); this phase formalizes them and adds the REMAINING net-new backend folder operations (rename/move/delete-to-trash a folder as a unit + folder drag-drop). Chosen "plan as a phase" over "build now" to stop unplanned scope drift on main while Phase 1 UAT is still unsigned.
 
 ### Decisions
 

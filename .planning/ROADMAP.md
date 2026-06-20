@@ -20,6 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Eino Agent** - Users get approval-gated AI help over pages, selections, attachments, and the workspace
 - [ ] **Phase 5: Collaboration** - Users see presence, soft locks, and conflict resolution so concurrent edits never silently lose work
 - [ ] **Phase 6: Live-Preview Editor (Obsidian-style)** - Editors get an Obsidian-style live-preview Markdown editor (inline rendering as you type, source toggle) while keeping the byte-stable Markdown round-trip
+- [ ] **Phase 7: Obsidian-style File Tree (folder operations & tree UX)** - Users manage folders and files directly in the tree (right-click menus, drag-and-drop, folder rename/move/delete) the way they would in Obsidian
 
 ## Phase Details
 
@@ -183,10 +184,27 @@ Decimal phases appear between their surrounding integers in numeric order.
 **UI hint**: yes
 **Notes**: Part of the Obsidian-alignment UI direction (team are ex-Obsidian users; the web app stays the client). Replace the MVP `@uiw/react-md-editor` split-pane with a CodeMirror 6 live-preview surface (inline-rendered Markdown decorations — the same engine family Obsidian uses). Storage/sync are OUT of scope and unchanged: Git remains the system of record; live multi-user co-editing stays in Phase 5 (CRDT→Git), NOT a store swap. Must preserve the okf byte-stable round-trip (raw Markdown in/out) and keep rehype-sanitize / raw-HTML-off. Sibling Obsidian-feel items (quick switcher Ctrl-O, command palette Ctrl-P, `[[wikilink]]` autocomplete, backlinks panel, denser file tree, dark theme) are related but tracked separately. Depends on Phase 1's editor; position can be moved earlier than 2–5 (via `/gsd-phase --edit`/`--insert`) if the team wants the editor first.
 
+### Phase 7: Obsidian-style File Tree (folder operations & tree UX)
+
+**Goal**: As an editor used to Obsidian, I want to manage folders and files directly in the file tree — right-click context menus, drag-and-drop, and folder rename/move/delete — so that organizing the workspace feels like Obsidian instead of needing per-page actions.
+**Mode:** mvp
+**Depends on**: Phase 1
+**Requirements**: TREE-01..TREE-06 (new — to be formalized in REQUIREMENTS.md at spec/plan time)
+**Success Criteria** (what must be TRUE):
+
+  1. Right-clicking a folder or page in the tree opens a context menu with the relevant actions (folder: New page here, New folder here, Rename, Move, Delete; page: Rename, Move, Delete, Version history)
+  2. A folder can be renamed, moved into another folder, and deleted as a unit — every page inside it relocates, all inbound links are rewritten in the SAME commit, and nothing is corrupted (the okf byte-stable round-trip still holds)
+  3. Folders and pages can be reorganized by drag-and-drop (drop onto a folder or root to move), and the tree updates immediately with no manual refresh
+  4. Deleting a folder is recoverable — its pages go to trash and can be restored; there is no permanent delete in this phase
+
+**Plans**: TBD
+**UI hint**: yes
+**Notes**: Formalizes the Obsidian-file-tree direction. ALREADY SHIPPED ad-hoc on `main` during Phase 1 UAT (fold in / do NOT re-do): the page-level right-click context menu, page drag-and-drop move, folder-scoped create ("New page/folder here"), the reusable `TreeContextMenu` component, the dialog-footer fix, and the commit-wait fix that makes tree updates appear on the fly — commits `69e4fb6`, `ee5192c`, `a1486bd`, `7e0b098`, `717cfe7`. REMAINING net-new work this phase covers: **backend folder operations** — rename/move/delete-to-trash a folder as a unit, recursively relocating all contained pages and rewriting inbound links in one commit via the okf round-trip-safe path (reuse Phase 1's `relocate` + trash machinery) — plus making folders draggable/droppable and wiring the folder context menu to those ops. Folder delete trashes the contained pages (restorable); folder-restore semantics (per-page vs grouped) to be decided at planning. Excluded (Obsidian-only / other phases): canvas/base doc types, search-in-folder (Phase 3), bookmarks, copy-path / show-in-system-explorer (paths are hidden by design). Depends on Phase 1; independent of Phases 2–6 — can be reprioritized earlier via `/gsd-phase --edit`/`--insert`.
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -197,3 +215,4 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6
 | 4. Eino Agent | 0/TBD | Not started | - |
 | 5. Collaboration | 0/TBD | Not started | - |
 | 6. Live-Preview Editor (Obsidian-style) | 0/TBD | Not started | - |
+| 7. Obsidian-style File Tree (folder operations & tree UX) | 0/TBD | Not started | - |
