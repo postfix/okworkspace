@@ -9,12 +9,12 @@ import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
 import LinkPicker from "../components/LinkPicker";
 import "./PageEditor.css";
 
-// Debounce intervals (RESEARCH Open Q2: client-driven idle save). A keystroke
-// schedules a draft autosave ~1s later; ~6s of idle escalates to a version save.
-// Both go through the same PUT (the backend cuts a hidden version on every write
-// in Phase 1; the draft/version distinction is reflected in the status copy).
+// Debounce interval (RESEARCH Open Q2: client-driven idle save). A keystroke
+// schedules an autosave ~1s after typing stops. Every write goes through the same
+// PUT (the backend cuts a hidden version on each write in Phase 1). A single
+// serialized coalescing saver replaces the earlier draft+idle two-timer scheme,
+// which could fire overlapping saves and let a stale snapshot clobber a newer one.
 const DRAFT_DEBOUNCE_MS = 1000;
-const IDLE_COMMIT_MS = 6000;
 
 // PageEditor is Edit mode. The body is edited as a raw Markdown string (never a
 // block model — protects the byte-stable round-trip); a small frontmatter form
@@ -43,7 +43,6 @@ export default function PageEditor() {
   // advances after each successful save so subsequent saves are not self-409s.
   const baseRevision = useRef("");
   const draftTimer = useRef<number | null>(null);
-  const idleTimer = useRef<number | null>(null);
 
   // saving is the in-flight guard (WR-03): it drops any overlapping save so two
   // PUTs never race on the same base revision and self-409. bodyRef/frontmatterRef
@@ -52,64 +51,85 @@ export default function PageEditor() {
   const saving = useRef(false);
   const bodyRef = useRef("");
   const frontmatterRef = useRef("");
+  // The exact content the last successful save SENT to the server. After a save
+  // settles we compare the live refs against this to detect a trailing edit typed
+  // while the save was in flight, so it is flushed instead of silently lost.
+  const lastSavedBody = useRef("");
+  const lastSavedFrontmatter = useRef("");
 
-  // Seed local state once the page loads.
+  // Seed local state ONCE, on first load. It must NOT re-run on later `data`
+  // changes (e.g. the post-save invalidate refetch) — doing so would overwrite
+  // edits the user typed while a save was in flight (silent lost write).
+  const seeded = useRef(false);
   useEffect(() => {
-    if (data) {
+    if (data && !seeded.current) {
+      seeded.current = true;
       setBody(data.body);
       setFrontmatter(data.frontmatter);
       bodyRef.current = data.body;
       frontmatterRef.current = data.frontmatter;
       baseRevision.current = data.revision;
+      lastSavedBody.current = data.body;
+      lastSavedFrontmatter.current = data.frontmatter;
     }
   }, [data]);
 
-  const doSave = useCallback(
-    async (cutVersion: boolean) => {
-      // Drop overlapping saves: if a save is already in flight, skip this one so a
-      // second PUT cannot carry a stale base revision and self-409 (WR-03).
-      if (saving.current) return;
+  // runSaver is a single-flight, serialized, coalescing saver. Only one loop runs
+  // at a time (the `saving` guard → WR-03: two PUTs never race on a base revision).
+  // The loop keeps saving until the on-disk content matches the live editor, so a
+  // trailing edit made while a save was in flight is ALWAYS persisted (never a
+  // silent lost write) and a stale snapshot can never clobber a newer one. Each
+  // iteration reads the freshest content from the refs and re-reads the advanced
+  // base revision, so there is no stale-closure or stale-revision window.
+  const runSaver = useCallback(
+    async (force: boolean) => {
+      if (saving.current) return; // a saver loop is already running
       saving.current = true;
-      // Cancel any pending escalation; we re-arm it only after a draft settles.
-      if (idleTimer.current) {
-        window.clearTimeout(idleTimer.current);
-        idleTimer.current = null;
-      }
-      setSaveState("saving");
       setSaveError(null);
       try {
-        await savePage(path, {
-          // Read from refs so the most recent edit is saved even if a timer was
-          // scheduled before the last state update (stale-closure fix).
-          body: bodyRef.current,
-          frontmatter: frontmatterRef.current,
-          base_revision: baseRevision.current,
-        });
-        // Refetch to pick up the new revision (and any frontmatter repair).
-        const fresh = await getPage(path);
-        baseRevision.current = fresh.revision;
-        queryClient.invalidateQueries({ queryKey: ["page", path] });
-        queryClient.invalidateQueries({ queryKey: ["tree"] });
-        setSaveState(cutVersion ? "saved" : "draft-saved");
-        // After a settled DRAFT save, escalate to a single idle version save —
-        // armed only now (not always-on) so the two PUTs never race (WR-03).
-        if (!cutVersion) {
-          idleTimer.current = window.setTimeout(
-            () => void doSave(true),
-            IDLE_COMMIT_MS,
-          );
+        // `force` guarantees at least one PUT for an explicit Save click even when
+        // content is unchanged (e.g. to record a deliberate version).
+        let mustSave = force;
+        while (
+          mustSave ||
+          bodyRef.current !== lastSavedBody.current ||
+          frontmatterRef.current !== lastSavedFrontmatter.current
+        ) {
+          mustSave = false;
+          const sentBody = bodyRef.current;
+          const sentFrontmatter = frontmatterRef.current;
+          setSaveState("saving");
+          try {
+            await savePage(path, {
+              body: sentBody,
+              frontmatter: sentFrontmatter,
+              base_revision: baseRevision.current,
+            });
+          } catch (err) {
+            const status = (err as Error & { status?: number }).status;
+            if (status === 409) {
+              setConflict(true);
+              setSaveState("idle");
+              return;
+            }
+            setSaveError(
+              "We couldn't save your page just now. Your changes are kept here — check your connection and try Save again.",
+            );
+            setSaveState("idle");
+            return;
+          }
+          // Read back the advanced revision (and any frontmatter repair) so the
+          // next loop iteration saves against fresh state — never a stale 409.
+          const fresh = await getPage(path);
+          baseRevision.current = fresh.revision;
+          lastSavedBody.current = sentBody;
+          lastSavedFrontmatter.current = sentFrontmatter;
+          queryClient.invalidateQueries({ queryKey: ["page", path] });
+          queryClient.invalidateQueries({ queryKey: ["tree"] });
+          // Loop re-checks: if the user typed during the awaits above, save again.
         }
-      } catch (err) {
-        const status = (err as Error & { status?: number }).status;
-        if (status === 409) {
-          setConflict(true);
-          setSaveState("idle");
-          return;
-        }
-        setSaveError(
-          "We couldn't save your page just now. Your changes are kept here — check your connection and try Save again.",
-        );
-        setSaveState("idle");
+        // Caught up: the server now holds exactly what the editor shows.
+        setSaveState("saved");
       } finally {
         saving.current = false;
       }
@@ -117,23 +137,18 @@ export default function PageEditor() {
     [path, queryClient],
   );
 
-  // Schedule a draft autosave on each edit. A single draft timer is armed; the
-  // idle version-save is escalated from inside doSave's success path so two PUTs
-  // never race on the same base revision (WR-03). Rescheduled on every change so
-  // typing never triggers a mid-keystroke save.
+  // Schedule an autosave on each edit. A single debounce timer is armed and
+  // rescheduled on every change so typing never triggers a mid-keystroke save.
+  // The saver itself coalesces (and never drops) trailing edits, so one timer is
+  // enough — no separate idle-escalation timer that could race and clobber.
   const scheduleAutosave = useCallback(() => {
     if (draftTimer.current) window.clearTimeout(draftTimer.current);
-    if (idleTimer.current) {
-      window.clearTimeout(idleTimer.current);
-      idleTimer.current = null;
-    }
-    draftTimer.current = window.setTimeout(() => void doSave(false), DRAFT_DEBOUNCE_MS);
-  }, [doSave]);
+    draftTimer.current = window.setTimeout(() => void runSaver(false), DRAFT_DEBOUNCE_MS);
+  }, [runSaver]);
 
   useEffect(
     () => () => {
       if (draftTimer.current) window.clearTimeout(draftTimer.current);
-      if (idleTimer.current) window.clearTimeout(idleTimer.current);
     },
     [],
   );
@@ -170,8 +185,7 @@ export default function PageEditor() {
 
   function onSaveClick() {
     if (draftTimer.current) window.clearTimeout(draftTimer.current);
-    if (idleTimer.current) window.clearTimeout(idleTimer.current);
-    void doSave(true);
+    void runSaver(true);
   }
 
   if (isLoading) {

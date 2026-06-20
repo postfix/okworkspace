@@ -2,7 +2,7 @@
  * PAGE-02 — PageEditor saves on click and surfaces the 409 conflict banner.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -113,6 +113,73 @@ describe("PageEditor", () => {
     // A fresh save after the in-flight one settled is allowed again.
     fireEvent.click(saveBtn);
     await waitFor(() => expect(client.savePage).toHaveBeenCalledTimes(2));
+  });
+
+  it("flushes a trailing edit typed during an in-flight save (no lost write)", async () => {
+    vi.useFakeTimers();
+    // Drain timers + microtasks repeatedly so a chain of awaited promises settles.
+    const flush = async () => {
+      for (let i = 0; i < 8; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+    };
+    try {
+      // The first autosave is held in flight; later saves resolve immediately.
+      let release: () => void = () => {};
+      const held = new Promise<undefined>((resolve) => {
+        release = () => resolve(undefined);
+      });
+      vi.mocked(client.savePage)
+        .mockImplementationOnce(() => held)
+        .mockResolvedValue(undefined);
+      // Initial load returns rev-1; every post-save refetch returns a fresh rev.
+      vi.mocked(client.getPage)
+        .mockResolvedValueOnce({
+          frontmatter: "type: Page\ntitle: Notes\n",
+          body: "original",
+          revision: "rev-1",
+        })
+        .mockResolvedValue({
+          frontmatter: "type: Page\ntitle: Notes\n",
+          body: "original",
+          revision: "rev-2",
+        });
+
+      renderEditor("notes.md");
+      await flush();
+      const body = screen.getByLabelText("body");
+
+      // First edit "A": the 1s draft timer fires the first save (held in flight).
+      fireEvent.change(body, { target: { value: "A" } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(client.savePage).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(client.savePage).mock.calls[0][1]).toEqual(
+        expect.objectContaining({ body: "A" }),
+      );
+
+      // Trailing edit "AB" typed WHILE the first save is in flight. Its draft
+      // timer fires but is dropped by the in-flight guard — it must not be lost.
+      fireEvent.change(body, { target: { value: "AB" } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(client.savePage).toHaveBeenCalledTimes(1); // dropped while in flight
+
+      // Release the in-flight save; the success path must flush the trailing edit.
+      release();
+      await flush();
+
+      expect(client.savePage).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(client.savePage).mock.calls[1][1]).toEqual(
+        expect.objectContaining({ body: "AB" }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("surfaces the conflict banner on a 409", async () => {
