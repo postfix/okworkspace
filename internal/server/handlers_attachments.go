@@ -106,6 +106,13 @@ func (h *authHandlers) handleGetAttachment(w http.ResponseWriter, r *http.Reques
 		h.handleDownloadAttachment(w, r, id)
 		return
 	}
+	// SSE extraction-status stream is dispatched on the SAME catch-all (a sibling
+	// {id}/status route would hit the chi sibling-wildcard conflict the list
+	// wildcard already triggers — see the router comment).
+	if id, ok := strings.CutSuffix(wild, "/status"); ok {
+		h.handleExtractionStatus(w, r, id)
+		return
+	}
 	h.handleListAttachments(w, r, wild)
 }
 

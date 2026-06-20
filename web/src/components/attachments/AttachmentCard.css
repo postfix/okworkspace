@@ -82,6 +82,11 @@
   white-space: nowrap;
 }
 
+.attachment-card-extract {
+  display: inline-flex;
+  min-width: 0;
+}
+
 .attachment-card-download {
   flex-shrink: 0;
 }

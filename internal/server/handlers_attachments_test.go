@@ -3,6 +3,7 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -33,6 +34,8 @@ type attachFixture struct {
 	handler http.Handler
 	repo    *repo.Repo
 	repoo   *users.Repository
+	attach  *attachments.Service
+	db      *sql.DB
 }
 
 func newAttachServer(t *testing.T) *attachFixture {
@@ -62,6 +65,7 @@ func newAttachServer(t *testing.T) *attachFixture {
 
 	w := jobs.New(st.DB(), jobs.Config{PollInterval: 5 * time.Millisecond})
 	w.Register(pages.KindCommit, pages.CommitHandler(contentRepo, gs))
+	w.Register(attachments.KindExtract, attachments.ExtractHandler(contentRepo, w, st.DB(), false))
 	ctx, cancel := context.WithCancel(context.Background())
 	w.Start(ctx)
 	t.Cleanup(func() { w.Stop(); cancel() })
@@ -92,7 +96,7 @@ func newAttachServer(t *testing.T) *attachFixture {
 	if err != nil {
 		t.Fatalf("server.New: %v", err)
 	}
-	return &attachFixture{handler: h, repo: contentRepo, repoo: userRepo}
+	return &attachFixture{handler: h, repo: contentRepo, repoo: userRepo, attach: attachSvc, db: st.DB()}
 }
 
 func lookGit() (string, error) { return exec.LookPath("git") }

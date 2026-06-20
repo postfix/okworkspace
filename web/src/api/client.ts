@@ -391,6 +391,42 @@ export function downloadAttachmentUrl(id: string): string {
   return `/api/v1/attachments/${id}/download`;
 }
 
+// ExtractionStatusValue is the live text-extraction state streamed over SSE. It
+// drives the ExtractionStatus chip. "extracting" is the in-flight state (the
+// server maps its pending row to this); done/empty/failed are terminal.
+export type ExtractionStatusValue =
+  | "extracting"
+  | "done"
+  | "empty"
+  | "failed";
+
+// subscribeExtractionStatus opens an SSE subscription to an attachment's live
+// extraction status and invokes onStatus for each event. It returns an unsubscribe
+// function that closes the EventSource. On a dropped stream the caller keeps its
+// last-known state (no error flash), so onError simply closes — the chip degrades
+// gracefully (UI-SPEC). A GET stream needs no CSRF.
+export function subscribeExtractionStatus(
+  id: string,
+  onStatus: (status: ExtractionStatusValue) => void,
+): () => void {
+  const es = new EventSource(`/api/v1/attachments/${id}/status`);
+  es.onmessage = (e: MessageEvent) => {
+    try {
+      const parsed = JSON.parse(e.data) as { status?: ExtractionStatusValue };
+      if (parsed.status) onStatus(parsed.status);
+    } catch {
+      // Ignore a malformed event; keep the last-known state.
+    }
+  };
+  es.onerror = () => {
+    // The stream closed (server finished + closed, or the connection dropped).
+    // Close our side so the browser does not auto-reconnect to a finished stream;
+    // the chip keeps its last-known state.
+    es.close();
+  };
+  return () => es.close();
+}
+
 // humanFileSize formats a byte count as a short, human-friendly string using the
 // DECIMAL (SI, 1000-based) convention so "1.4 MB" reads the way the UI-SPEC shows
 // it (matches what most users and OS file managers display). Sub-KB values are

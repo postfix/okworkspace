@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, FileText, File as FileIcon } from "lucide-react";
 
 import {
@@ -6,10 +6,39 @@ import {
   humanDate,
   humanFileSize,
   isPreviewableImage,
+  subscribeExtractionStatus,
   type AttachmentMeta,
+  type ExtractionStatusValue,
 } from "../../api/client";
+import ExtractionStatus from "./ExtractionStatus";
 import ImagePreviewDialog from "./ImagePreviewDialog";
 import "./AttachmentCard.css";
+
+// extractableMediaTypes are the MIME types whose text the backend extracts (pdf /
+// docx / txt). Only these show an extraction-status chip; images and other types
+// show none (UI-SPEC). Mirrors the server's extractable set.
+const extractableMediaTypes = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+]);
+
+// isExtractable reports whether an attachment's stored MIME type is one the chip
+// applies to. The stored mime_type may carry parameters (e.g. "text/plain;
+// charset=utf-8"), so only the media type before the first ";" is compared.
+function isExtractable(mimeType: string): boolean {
+  return extractableMediaTypes.has(mimeType.split(";", 1)[0].trim().toLowerCase());
+}
+
+// seedExtractionStatus maps the list item's stored extraction_status to the live
+// chip value so the chip renders a sensible last-known state before (and if) the
+// SSE stream connects. A pending/undefined row is shown as "extracting".
+function seedExtractionStatus(
+  raw: AttachmentMeta["extraction_status"],
+): ExtractionStatusValue {
+  if (raw === "done" || raw === "empty" || raw === "failed") return raw;
+  return "extracting";
+}
 
 // typeIconFor picks the lucide icon for a non-image attachment: FileText for the
 // document/text family (pdf/docx/txt), a generic file icon otherwise. Images use
@@ -34,6 +63,23 @@ export default function AttachmentCard({ meta }: { meta: AttachmentMeta }) {
   const previewable = isPreviewableImage(meta.mime_type);
   const Icon = typeIconFor(meta);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Extraction status: only extractable types (pdf/docx/txt) show a chip. Seed
+  // from the list item's stored status so a dropped/late stream still renders the
+  // last-known state (no error flash, UI-SPEC), then track live over SSE. The
+  // subscription is torn down on unmount / id change.
+  const extractable = isExtractable(meta.mime_type);
+  const [extractStatus, setExtractStatus] = useState<ExtractionStatusValue>(() =>
+    seedExtractionStatus(meta.extraction_status),
+  );
+  useEffect(() => {
+    if (!extractable) return;
+    // If the stored status is already terminal, the chip is correct and a stream
+    // would only emit the same terminal value once before closing — still cheap,
+    // and it keeps a just-uploaded "pending" card live, so always subscribe.
+    const unsubscribe = subscribeExtractionStatus(meta.id, setExtractStatus);
+    return unsubscribe;
+  }, [extractable, meta.id]);
 
   return (
     <div className="attachment-card">
@@ -66,6 +112,11 @@ export default function AttachmentCard({ meta }: { meta: AttachmentMeta }) {
           {humanFileSize(meta.size_bytes)} · {meta.uploader_name} ·{" "}
           {humanDate(meta.uploaded_at)}
         </span>
+        {extractable && (
+          <span className="attachment-card-extract">
+            <ExtractionStatus status={extractStatus} />
+          </span>
+        )}
       </div>
 
       <a

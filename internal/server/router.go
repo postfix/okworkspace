@@ -110,7 +110,10 @@ func New(deps Deps) (http.Handler, error) {
 			// the slash-bearing `{pagePath}` list wildcard (the sibling-wildcard
 			// conflict the page routes also hit), so both are dispatched on the same
 			// catch-all by handleGetAttachment (download iff the wildcard ends in
-			// "/download", else a page list).
+			// "/download", the SSE extraction-status stream iff it ends in
+			// "/status", else a page list). The SSE stream is dispatched here for
+			// the same reason: a sibling {id}/status route cannot coexist with the
+			// slash-bearing list wildcard.
 			authed.Get("/attachments/*", h.handleGetAttachment)
 
 			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin

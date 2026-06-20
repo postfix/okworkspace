@@ -268,6 +268,14 @@ func (s *Service) List(ctx context.Context, pagePath string) ([]AttachmentListIt
 	return items, nil
 }
 
+// ExtractionStatus returns an attachment's current text-extraction status from the
+// operational mirror (the SSE endpoint streams this to the card chip). It is the
+// service-level wrapper over ExtractionStatusFor so callers never touch the DB
+// directly. ErrAttachmentNotFound when no row exists.
+func (s *Service) ExtractionStatus(ctx context.Context, id string) (ExtractionStatus, error) {
+	return ExtractionStatusFor(ctx, s.db, id)
+}
+
 // Meta reads an attachment's meta sidecar (the source of truth for the original
 // filename + sniffed type used by the download handler). ErrAttachmentNotFound
 // when the sidecar does not exist.
