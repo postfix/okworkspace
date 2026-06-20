@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: Search** - Users find pages, headings, and attachments across titles, body, tags, filenames, and extracted text
 - [ ] **Phase 4: Eino Agent** - Users get approval-gated AI help over pages, selections, attachments, and the workspace
 - [ ] **Phase 5: Collaboration** - Users see presence, soft locks, and conflict resolution so concurrent edits never silently lose work
+- [ ] **Phase 6: Live-Preview Editor (Obsidian-style)** - Editors get an Obsidian-style live-preview Markdown editor (inline rendering as you type, source toggle) while keeping the byte-stable Markdown round-trip
 
 ## Phase Details
 
@@ -165,10 +166,27 @@ Decimal phases appear between their surrounding integers in numeric order.
 **UI hint**: yes
 **Notes**: No phase research needed — conflict UX is well-specified (SPEC §13.1) and the soft-lock file format with TTL/heartbeat is straightforward. This phase hardens and completes the optimistic-concurrency floor scaffolded in Phase 1: the revision check must still run when a user force-edits past a soft lock, and stale locks (session end/crash) must never cause silent data loss. The conflict-resolution UI reuses the DiffReviewDialog built in Phase 4. Soft lock files live in `.okf-workspace/locks/` with user + heartbeat TTL; presence is delivered over SSE.
 
+### Phase 6: Live-Preview Editor (Obsidian-style)
+
+**Goal**: As an editor accustomed to Obsidian, I want a live-preview Markdown editor that renders formatting inline as I type (with a source/raw toggle), so that editing in the web app feels like Obsidian rather than a split source+preview pane.
+**Mode:** mvp
+**Depends on**: Phase 1
+**Requirements**: EDIT-01..EDIT-04 (new — to be formalized in REQUIREMENTS.md at spec/plan time)
+**Success Criteria** (what must be TRUE):
+
+  1. While editing, Markdown formatting (headings, bold/italic, lists, links, inline code, code blocks) renders inline in the editor as the user types — not only in a separate preview pane
+  2. The user can toggle between live-preview and raw-source modes, and switching modes never alters the underlying Markdown bytes
+  3. Saving from the live-preview editor produces byte-identical Markdown to the source-mode round-trip — the okf golden-corpus exit gate still holds (no lossy block model)
+  4. Existing editor guarantees are preserved: autosave drafts, optimistic-concurrency save, and sanitized rendering (rehype-sanitize on / raw HTML off)
+
+**Plans**: TBD
+**UI hint**: yes
+**Notes**: Part of the Obsidian-alignment UI direction (team are ex-Obsidian users; the web app stays the client). Replace the MVP `@uiw/react-md-editor` split-pane with a CodeMirror 6 live-preview surface (inline-rendered Markdown decorations — the same engine family Obsidian uses). Storage/sync are OUT of scope and unchanged: Git remains the system of record; live multi-user co-editing stays in Phase 5 (CRDT→Git), NOT a store swap. Must preserve the okf byte-stable round-trip (raw Markdown in/out) and keep rehype-sanitize / raw-HTML-off. Sibling Obsidian-feel items (quick switcher Ctrl-O, command palette Ctrl-P, `[[wikilink]]` autocomplete, backlinks panel, denser file tree, dark theme) are related but tracked separately. Depends on Phase 1's editor; position can be moved earlier than 2–5 (via `/gsd-phase --edit`/`--insert`) if the team wants the editor first.
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -178,3 +196,4 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 0/TBD | Not started | - |
 | 5. Collaboration | 0/TBD | Not started | - |
+| 6. Live-Preview Editor (Obsidian-style) | 0/TBD | Not started | - |

@@ -63,6 +63,10 @@ Progress: [████████░░] 80%
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 6 added (2026-06-20): Live-Preview Editor (Obsidian-style) — replace the MVP split-pane editor with a CodeMirror 6 live-preview surface; depends on Phase 1; storage/Git unchanged. Part of the broader "stay web but mimic Obsidian" UI direction (team are ex-Obsidian users). CouchDB-as-Git-replacement was considered and rejected (breaks files-as-truth + hidden-Git history); live co-editing stays Phase 5 via CRDT→Git.
+
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
