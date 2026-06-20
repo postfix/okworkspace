@@ -43,6 +43,9 @@ const (
 	ActionPageTrash         = "trash"
 	ActionPageRestore       = "restore"
 	ActionFolderCreate      = "folder_create"
+	ActionAttachUpload      = "attach_upload"
+	ActionAttachReplace     = "attach_replace"
+	ActionAttachDelete      = "attach_delete"
 )
 
 // Event is one audit record. It carries only non-secret provenance — there is
