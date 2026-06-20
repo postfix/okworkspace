@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Download, FileText, File as FileIcon } from "lucide-react";
 
 import {
@@ -7,6 +8,7 @@ import {
   isPreviewableImage,
   type AttachmentMeta,
 } from "../../api/client";
+import ImagePreviewDialog from "./ImagePreviewDialog";
 import "./AttachmentCard.css";
 
 // typeIconFor picks the lucide icon for a non-image attachment: FileText for the
@@ -31,18 +33,26 @@ function typeIconFor(meta: AttachmentMeta) {
 export default function AttachmentCard({ meta }: { meta: AttachmentMeta }) {
   const previewable = isPreviewableImage(meta.mime_type);
   const Icon = typeIconFor(meta);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
     <div className="attachment-card">
-      <div className="attachment-card-media" aria-hidden="true">
+      <div className="attachment-card-media">
         {previewable ? (
-          <img
-            className="attachment-card-thumb"
-            src={downloadAttachmentUrl(meta.id)}
-            alt=""
-          />
+          <button
+            type="button"
+            className="attachment-card-thumb-button"
+            onClick={() => setPreviewOpen(true)}
+            aria-label={`Preview ${meta.original_name}`}
+          >
+            <img
+              className="attachment-card-thumb"
+              src={downloadAttachmentUrl(meta.id)}
+              alt=""
+            />
+          </button>
         ) : (
-          <span className="attachment-card-icon">
+          <span className="attachment-card-icon" aria-hidden="true">
             <Icon size={24} aria-hidden="true" />
           </span>
         )}
@@ -66,6 +76,14 @@ export default function AttachmentCard({ meta }: { meta: AttachmentMeta }) {
         <Download size={16} aria-hidden="true" />
         <span>Download</span>
       </a>
+
+      {previewable && (
+        <ImagePreviewDialog
+          open={previewOpen}
+          meta={meta}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
     </div>
   );
 }

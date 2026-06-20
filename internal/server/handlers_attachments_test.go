@@ -265,6 +265,52 @@ func TestDownloadDisposition(t *testing.T) {
 	}
 }
 
+// TestInlineImageDisposition (ATT-04): every previewable image type (png/jpg/svg)
+// downloads with Content-Disposition: inline, its REAL image Content-Type, and
+// X-Content-Type-Options: nosniff. The SVG case pins the stored-XSS guard: it is
+// served as a downloadable image resource (consumed via <img src>), with nosniff
+// so the browser never treats it as an HTML document — it cannot execute script.
+func TestInlineImageDisposition(t *testing.T) {
+	f := newAttachServer(t)
+	cookies := loginEditorAttach(t, f)
+
+	cases := []struct {
+		fixture  string
+		wantMime string
+	}{
+		{"pixel.png", "image/png"},
+		{"pixel.jpg", "image/jpeg"},
+		{"pixel.svg", "image/svg+xml"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.fixture, func(t *testing.T) {
+			data := readFixture(t, tc.fixture)
+			rec := uploadFile(t, f, cookies, "runbooks/deploy.md", tc.fixture, data)
+			if rec.Code != http.StatusCreated {
+				t.Fatalf("upload status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+			}
+			var meta uploadedMeta
+			decodeJSON(t, rec, &meta)
+
+			drec := download(t, f, cookies, meta.ID)
+			if drec.Code != http.StatusOK {
+				t.Fatalf("download status = %d, want 200; body=%s", drec.Code, drec.Body.String())
+			}
+			if cd := drec.Header().Get("Content-Disposition"); !contains(cd, "inline") {
+				t.Fatalf("%s Content-Disposition = %q, want inline", tc.fixture, cd)
+			}
+			if ct := drec.Header().Get("Content-Type"); !contains(ct, tc.wantMime) {
+				t.Fatalf("%s Content-Type = %q, want %s", tc.fixture, ct, tc.wantMime)
+			}
+			if drec.Header().Get("X-Content-Type-Options") != "nosniff" {
+				t.Fatalf("%s X-Content-Type-Options = %q, want nosniff",
+					tc.fixture, drec.Header().Get("X-Content-Type-Options"))
+			}
+		})
+	}
+}
+
 // TestListAttachments: GET returns the page's uploaded attachment meta as JSON.
 func TestListAttachments(t *testing.T) {
 	f := newAttachServer(t)
