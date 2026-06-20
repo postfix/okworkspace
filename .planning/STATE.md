@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 01-03-PLAN.md
+status: phase_1_verified
+stopped_at: Phase 1 UAT complete (3/3 pass)
 last_updated: "2026-06-21T00:00:00.000Z"
-last_activity: 2026-06-21 -- Phase 0 UAT signed off (5/5 pass); quick task admin-change-role fixed the one gap (wire change-user-role UI to existing setRole endpoint)
+last_activity: 2026-06-21 -- Phase 0 + Phase 1 UAT both signed off. Phase 1 UAT 3/3 pass (link nav, autosave no-conflict, holistic round trip). Two quick fixes landed (admin-change-role, autosave-trailing-write). One minor open gap: history API leaks raw Git SHA (UI clean). Next: autonomous phases 2,3 then 6,7.
 progress:
   total_phases: 6
   completed_phases: 2

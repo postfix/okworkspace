@@ -1,5 +1,5 @@
 ---
-status: testing
+status: complete
 phase: 01-okf-pages-navigation-hidden-git
 source: [01-VERIFICATION.md]
 started: 2026-06-19T00:30:00Z
@@ -8,14 +8,7 @@ updated: 2026-06-21T00:00:00Z
 
 ## Current Test
 
-number: 3
-name: Holistic non-technical-user round trip (phase goal)
-expected: |
-  Full UI loop with Git never visible. PARTIALLY verified by Claude (create/edit/save/
-  render/link-navigation done via Playwright). Remaining: rename/move keeps inbound links,
-  delete-to-trash + restore, version history reads with no Git vocabulary. PAUSED pending
-  user decision on the autosave lost-write gap found in Test 2.
-awaiting: user decision (fix autosave gap now, or continue Test 3)
+[testing complete]
 
 ## Tests
 
@@ -53,18 +46,49 @@ expected: |
   - Delete the page to Trash, then Restore it (no live page is clobbered).
   - Open version history: rows read like "Edited by <name> · 2 hours ago" with NO commit
     hashes or Git vocabulary; restoring an old version creates a new entry (nothing disappears).
-result: [pending]
+result: pass
+note: |
+  Verified by Claude end-to-end via headless browser (Playwright) + API against a live server:
+  - Create by title → appears in left tree by title (no path shown). [Tests 1 setup + tree snapshot]
+  - Edit + autosave → cycles Saving…→Saved, persists; lost-write bug fixed (Test 2). [Test 2]
+  - Rendered Markdown in Read mode; raw-HTML off (react-markdown + rehype-sanitize per VERIFICATION).
+  - Link picker present; in-app link navigation works. [Test 1]
+  - RENAME keeps inbound links: renamed Beta→Bravo (beta.md→bravo.md); Alpha's body link auto-rewrote
+    to bravo.md and resolves to /app/page/bravo.md in Read mode. [verified live]
+  - DELETE to Trash + RESTORE: deleted note.md → appeared in Trash with provenance (title/original_path/
+    deleted_by/deleted_at) → restored → note.md back (200), no live page clobbered. [verified live]
+  - VERSION HISTORY UI is clean: rows read "Renamed by admin · 1 minute ago" / "Edited by admin · …"
+    with View/Restore actions; NO SHA, NO git vocabulary visible in the UI (grep over rendered text). [verified live]
+  - Restore-version = forward commit (VER-03) accepted from code (TestRestoreForwardCommit) + the working
+    trash-restore above; not re-clicked in browser.
+  Minor gap logged separately: the history API's `version` field leaks the raw 40-char Git SHA over the
+  wire (UI hides it) — see Gaps "history-api-leaks-raw-sha".
 
 ## Summary
 
 total: 3
-passed: 2
-issues: 0
-pending: 1
+passed: 3
+issues: 1
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+- truth: "Version history exposes NO Git commit SHAs to the client (VER-02), including over the API"
+  status: open
+  reason: |
+    Found by Claude during Test 3. The history UI is clean (no SHA/git vocab shown — confirmed live), BUT the
+    GET /api/v1/pages/{path}/history JSON response serializes the raw 40-char Git commit SHA as the `version`
+    field (e.g. "version":"03504223a50a7c5100e0ed64893d953a2de3f435"). VERIFICATION.md (truth #6) claimed
+    "gitstore.Commit.Token (the SHA) is never serialized to HistoryEntry" and described `version` as an
+    "opaque version token" — that is inaccurate: the token IS the SHA in the clear, visible in DevTools/network.
+    User-facing impact is low (UI never displays it), but it contradicts the hidden-Git principle and the
+    explicit VER-02 verification claim; the version token used by view/restore-version is not actually opaque.
+  severity: minor
+  test: 3
+  artifacts: ["internal/pages/history.go (HistoryEntry.Version = commit SHA)", "internal/gitstore/history.go"]
+  missing: ["encode the version token (e.g. opaque/HMAC or short opaque id) so the raw 40-hex SHA is not exposed over the API, OR consciously accept it and correct the VERIFICATION/decision wording to 'SHA used as version token, hidden in UI only'"]
 
 - truth: "Autosave persists every edit (no silent lost write), and the 'Saved' status only shows when content is actually on the server"
   status: resolved
