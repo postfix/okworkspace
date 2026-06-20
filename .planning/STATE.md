@@ -4,8 +4,8 @@ milestone: v0.9.9
 milestone_name: milestone
 status: verifying
 stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-06-18T20:59:39.397Z"
-last_activity: 2026-06-18 -- Completed 01-04-PLAN.md (delete-to-trash via recoverable git mv with provenance; restore with collision auto-suffix; DeleteConfirmDialog + TrashView)
+last_updated: "2026-06-21T00:00:00.000Z"
+last_activity: 2026-06-21 -- Phase 0 UAT signed off (5/5 pass); quick task admin-change-role fixed the one gap (wire change-user-role UI to existing setRole endpoint)
 progress:
   total_phases: 6
   completed_phases: 2
@@ -31,6 +31,12 @@ Status: Phase complete — ready for verification
 Last activity: 2026-06-18 -- Completed 01-04-PLAN.md (delete-to-trash via recoverable git mv with provenance; restore with collision auto-suffix; DeleteConfirmDialog + TrashView)
 
 Progress: [████████░░] 80%
+
+## Quick Tasks Completed
+
+| Date | Slug | Summary | Commit |
+|------|------|---------|--------|
+| 2026-06-21 | admin-change-role | Wire admin "change user role" UI to existing `setRole` endpoint (Phase 0 UAT gap) | 436f9d7 |
 
 ## Performance Metrics
 

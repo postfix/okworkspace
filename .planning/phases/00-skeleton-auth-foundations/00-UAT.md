@@ -65,7 +65,8 @@ blocked: 0
 ## Gaps
 
 - truth: "An admin can change an existing user's role from the /admin user-management UI"
-  status: failed
+  status: resolved
+  resolution: "Fixed by quick task admin-change-role (commit 436f9d7): added setUserRole() to the API client and a per-row 'Change role' dialog in Admin.tsx with the last-admin guard + users-query invalidation. Build + 109 frontend tests + backend role tests green."
   reason: "User reported: it's impossible to edit a user's rights as admin after creating them. Backend PUT /api/v1/admin/users/{id}/role (handleSetRole) exists and is tested, but web/src/routes/Admin.tsx has no setRole control — the API client exports no setRole, and the Role column is a read-only RoleBadge. Role can only be set at creation time (add-role dropdown)."
   severity: major
   test: 3
