@@ -9,6 +9,7 @@ import {
   listUsers,
   me,
   resetUserPassword,
+  setUserRole,
   type AdminUser,
   type Me,
   type UserRole,
@@ -46,6 +47,13 @@ export default function Admin() {
     return true;
   }
 
+  // isLastActiveAdmin mirrors the server invariant (ErrLastAdmin): demoting the
+  // only active admin would lock the instance out, so the dialog disables the
+  // non-admin role options for that user.
+  function isLastActiveAdmin(u: AdminUser): boolean {
+    return u.role === "admin" && u.active && activeAdminCount <= 1;
+  }
+
   // Add-user dialog state.
   const [addOpen, setAddOpen] = useState(false);
   const [newUsername, setNewUsername] = useState("");
@@ -61,6 +69,11 @@ export default function Admin() {
   // Confirmation dialogs.
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<AdminUser | null>(null);
+
+  // Change-role dialog state.
+  const [roleTarget, setRoleTarget] = useState<AdminUser | null>(null);
+  const [roleValue, setRoleValue] = useState<UserRole>("reader");
+  const [roleError, setRoleError] = useState<string | null>(null);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: USERS_KEY });
@@ -101,6 +114,25 @@ export default function Admin() {
       refresh();
     },
   });
+
+  const roleMut = useMutation({
+    mutationFn: ({ id, role }: { id: number; role: UserRole }) =>
+      setUserRole(id, role),
+    onSuccess: () => {
+      setRoleTarget(null);
+      setRoleError(null);
+      refresh();
+    },
+    onError: (err: Error) => {
+      setRoleError(err.message);
+    },
+  });
+
+  function openRoleDialog(u: AdminUser) {
+    setRoleTarget(u);
+    setRoleValue(u.role as UserRole);
+    setRoleError(null);
+  }
 
   function handleAddSubmit(e: FormEvent) {
     e.preventDefault();
@@ -180,6 +212,13 @@ export default function Admin() {
           rowKey={(u) => u.id}
           actions={(u) => (
             <>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => openRoleDialog(u)}
+              >
+                Change role
+              </button>
               <button
                 type="button"
                 className="btn btn-ghost"
@@ -276,6 +315,67 @@ export default function Admin() {
             </button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Change-role dialog (custom footer so confirm can disable on invalid). */}
+      <Dialog
+        open={roleTarget !== null}
+        title={`Change role for ${roleTarget?.display_name ?? ""}`}
+        onCancel={() => setRoleTarget(null)}
+        hideFooter
+      >
+        <div className="field">
+          <label className="field-label" htmlFor="change-role">
+            Role
+          </label>
+          <select
+            id="change-role"
+            className="select"
+            value={roleValue}
+            onChange={(e) => setRoleValue(e.target.value as UserRole)}
+            disabled={roleMut.isPending}
+          >
+            <option value="reader">Reader</option>
+            <option value="editor">Editor</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        {roleTarget && isLastActiveAdmin(roleTarget) && (
+          <p className="admin-muted">
+            This is the last admin — promote another admin before changing this
+            role.
+          </p>
+        )}
+        {roleError && (
+          <div className="field-error" role="alert">
+            {roleError}
+          </div>
+        )}
+        <div className="dialog-footer">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setRoleTarget(null)}
+            disabled={roleMut.isPending}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={
+              roleMut.isPending ||
+              !roleTarget ||
+              roleValue === roleTarget.role ||
+              (isLastActiveAdmin(roleTarget) && roleValue !== "admin")
+            }
+            onClick={() =>
+              roleTarget && roleMut.mutate({ id: roleTarget.id, role: roleValue })
+            }
+          >
+            {roleMut.isPending ? "Working…" : "Save role"}
+          </button>
+        </div>
       </Dialog>
 
       {/* Reset-password confirmation. */}

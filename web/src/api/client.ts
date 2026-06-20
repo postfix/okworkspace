@@ -170,6 +170,12 @@ export async function createUser(
   });
 }
 
+// setUserRole changes a user's role. The server enforces RBAC (admin-only) and
+// rejects demoting the last active admin with 409 (surfaced via the thrown error).
+export async function setUserRole(id: number, role: UserRole): Promise<void> {
+  await mutate<void>(`/api/v1/admin/users/${id}/role`, { role }, "PUT");
+}
+
 export async function resetUserPassword(
   id: number,
 ): Promise<{ one_time_password: string }> {
