@@ -1,0 +1,2 @@
+﻿First line sentinel TXTSENTINEL
+Second line
