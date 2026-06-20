@@ -59,3 +59,12 @@ blocked: 0
   resolution: "Fixed in commit d0329fa — backend `Tree()` returns `[]Node{}` (never nil); `LeftTree` coalesces null→`[]`. Regression tests added both layers (TestTreeEmptyRepoSerializesToArray; LeftTree null-data test). All gates green."
   artifacts: [internal/pages/tree.go, web/src/components/LeftTree.tsx]
   missing: []
+
+- truth: "Creating a folder (and saving/deleting pages) succeeds without a client error"
+  status: resolved
+  reason: "UAT blocker: 'New folder' showed `Unexpected end of JSON input`. The server created the folder (201 + audit) but the client's `mutate()` helper called `res.json()` on any non-204 success, throwing on the empty 201 body. Same path backs savePage/deletePage/rename — would have failed Test 1's Save step too."
+  severity: blocker
+  test: 0
+  resolution: "Fixed in commit aea21b1 — `mutate()` reads the body as text and only JSON.parse's when non-empty (empty 2xx → undefined); `handleCreateFolder` also returns a `{path}` JSON body for parity. Regression tests added (web/src/api/client.test.ts: 201-empty, 200-empty, 204, JSON-body, error-body). All gates green (vitest 97)."
+  artifacts: [web/src/api/client.ts, web/src/api/client.test.ts, internal/server/handlers_pages.go]
+  missing: []
