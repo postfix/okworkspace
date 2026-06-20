@@ -46,6 +46,13 @@ type createFolderRequest struct {
 	Name   string `json:"name"`
 }
 
+// createFolderResponse returns the created folder's repo-relative path, for
+// parity with createPageResponse (so the client receives a non-empty JSON body
+// on success instead of a bare 201).
+type createFolderResponse struct {
+	Path string `json:"path"`
+}
+
 // renamePageRequest is the POST /pages/{path}/rename body. Exactly ONE of the
 // two fields must be non-empty: NewTitle dispatches to Rename (slug a new
 // filename in the same folder), NewParent dispatches to Move (relocate to
@@ -324,13 +331,14 @@ func (h *authHandlers) handleCreateFolder(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
 		return
 	}
+	// Trim so a root-level folder (empty Parent) does not produce a
+	// leading-slash target like "/myfolder" (IN-01).
+	folderPath := strings.Trim(req.Parent+"/"+req.Name, "/")
 	_ = h.audit.Record(r.Context(), audit.Event{
 		Action: audit.ActionFolderCreate,
 		Actor:  h.actorUsername(r.Context()),
-		// Trim so a root-level folder (empty Parent) does not produce a
-		// leading-slash target like "/myfolder" (IN-01).
-		Target: strings.Trim(req.Parent+"/"+req.Name, "/"),
+		Target: folderPath,
 		Source: auditSourceWeb,
 	})
-	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, http.StatusCreated, createFolderResponse{Path: folderPath})
 }

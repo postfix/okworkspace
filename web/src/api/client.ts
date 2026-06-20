@@ -75,9 +75,13 @@ async function mutate<T>(
     err.status = res.status;
     throw err;
   }
-  // logout returns 204 No Content.
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  // Some success handlers return an empty body on a non-204 status (e.g.
+  // createFolder → 201, savePage/deletePage → 204), while others return JSON
+  // (login → Me, createPage → {path}). Read the body as text first and only
+  // JSON.parse when it is non-empty, so an empty 2xx body resolves to undefined
+  // instead of throwing "Unexpected end of JSON input" (UAT blocker).
+  const text = await res.text();
+  return text ? (JSON.parse(text) as T) : (undefined as T);
 }
 
 export async function login(username: string, password: string): Promise<Me> {
