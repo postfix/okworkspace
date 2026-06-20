@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -155,6 +156,85 @@ func TestSerializedExecution(t *testing.T) {
 	}
 	if maxSeen.Load() != 1 {
 		t.Fatalf("max concurrent handler executions = %d, want 1 (single-writer)", maxSeen.Load())
+	}
+}
+
+func TestWaitForJobDone(t *testing.T) {
+	st := newTestStore(t)
+	w := jobs.New(st.DB(), fastConfig())
+	w.Register("ok", func(_ context.Context, _ string) error { return nil })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+	defer w.Stop()
+
+	id, err := w.EnqueueJob(ctx, "ok", "")
+	if err != nil {
+		t.Fatalf("EnqueueJob: %v", err)
+	}
+	if id <= 0 {
+		t.Fatalf("EnqueueJob returned id %d, want > 0", id)
+	}
+	if err := w.WaitForJob(ctx, id, 2*time.Second); err != nil {
+		t.Fatalf("WaitForJob: %v", err)
+	}
+	// The job must actually be done now.
+	var status string
+	if err := st.DB().QueryRow(`SELECT status FROM jobs WHERE id=?`, id).Scan(&status); err != nil {
+		t.Fatalf("read status: %v", err)
+	}
+	if status != "done" {
+		t.Fatalf("status = %q, want done", status)
+	}
+}
+
+func TestWaitForJobFailed(t *testing.T) {
+	st := newTestStore(t)
+	w := jobs.New(st.DB(), fastConfig())
+	w.Register("boom", func(_ context.Context, _ string) error {
+		return errors.New("kaboom")
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+	defer w.Stop()
+
+	id, err := w.EnqueueJob(ctx, "boom", "")
+	if err != nil {
+		t.Fatalf("EnqueueJob: %v", err)
+	}
+	// MaxAttempts retries take a few backoff cycles before the job is terminally
+	// failed; give WaitForJob room to observe that terminal state.
+	err = w.WaitForJob(ctx, id, 3*time.Second)
+	if err == nil {
+		t.Fatal("WaitForJob returned nil, want a failure error")
+	}
+	if errors.Is(err, jobs.ErrJobTimeout) {
+		t.Fatalf("WaitForJob returned timeout, want failure: %v", err)
+	}
+	if !strings.Contains(err.Error(), "kaboom") {
+		t.Fatalf("WaitForJob error = %q, want it to include the stored last error", err)
+	}
+}
+
+func TestWaitForJobTimeout(t *testing.T) {
+	st := newTestStore(t)
+	// No worker started: the job stays pending forever, so WaitForJob must time
+	// out rather than block indefinitely.
+	w := jobs.New(st.DB(), fastConfig())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	id, err := w.EnqueueJob(ctx, "never-drained", "")
+	if err != nil {
+		t.Fatalf("EnqueueJob: %v", err)
+	}
+	err = w.WaitForJob(ctx, id, 80*time.Millisecond)
+	if !errors.Is(err, jobs.ErrJobTimeout) {
+		t.Fatalf("WaitForJob error = %v, want ErrJobTimeout", err)
 	}
 }
 
