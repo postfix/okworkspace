@@ -391,6 +391,53 @@ export function downloadAttachmentUrl(id: string): string {
   return `/api/v1/attachments/${id}/download`;
 }
 
+// humanFileSize formats a byte count as a short, human-friendly string using the
+// DECIMAL (SI, 1000-based) convention so "1.4 MB" reads the way the UI-SPEC shows
+// it (matches what most users and OS file managers display). Sub-KB values are
+// shown as whole bytes; KB and up carry one decimal place (trailing ".0" trimmed).
+// This is presentation only — the opaque on-disk id is never derived from it.
+export function humanFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
+  if (bytes < 1000) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1000;
+  let i = 0;
+  while (value >= 1000 && i < units.length - 1) {
+    value /= 1000;
+    i++;
+  }
+  const rounded = value.toFixed(1).replace(/\.0$/, "");
+  return `${rounded} ${units[i]}`;
+}
+
+// humanDate formats an RFC 3339 timestamp as a human-friendly day ("21 Jun 2026")
+// via toLocaleDateString. It NEVER surfaces a raw timestamp, opaque id, or any
+// Git/SHA vocabulary (hidden-Git rule). An unparseable input falls back to the
+// raw string so the card still renders something rather than "Invalid Date".
+export function humanDate(rfc3339: string): string {
+  const d = new Date(rfc3339);
+  if (Number.isNaN(d.getTime())) return rfc3339;
+  return d.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// isPreviewableImage reports whether an attachment's stored MIME type is one of
+// the inline-previewable image types (png/jpg/svg). The stored mime_type may
+// carry parameters (e.g. "image/svg+xml; charset=utf-8"), so only the media type
+// before the first ";" is compared. Mirrors the server's isInlineImage allow-list
+// (SEC-02): an <img>-loaded SVG cannot execute script.
+export function isPreviewableImage(mimeType: string): boolean {
+  const media = mimeType.split(";", 1)[0].trim().toLowerCase();
+  return (
+    media === "image/png" ||
+    media === "image/jpeg" ||
+    media === "image/svg+xml"
+  );
+}
+
 // listAttachments fetches a page's attachments (a GET, newest-first).
 export async function listAttachments(
   pagePath: string,
