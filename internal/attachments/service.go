@@ -43,6 +43,15 @@ type enqueuer interface {
 	EnqueueAndWait(ctx context.Context, kind, payload string, timeout time.Duration) error
 }
 
+// extractableExts is the set of extensions the ExtractJob can read text from. A
+// type not in this set gets NO ExtractJob enqueued (and so no <id>.txt and no
+// extraction chip on the card). Mirrors the dispatch in Extract.
+var extractableExts = map[string]bool{"pdf": true, "docx": true, "txt": true}
+
+// isExtractable reports whether an upload's sniffed extension is one the ExtractJob
+// can process.
+func isExtractable(ext string) bool { return extractableExts[strings.ToLower(ext)] }
+
 // fileWrite mirrors internal/pages.fileWrite EXACTLY (same JSON tags) so the
 // payload this service marshals is byte-identical to what the registered
 // KindCommit handler unmarshals.
@@ -73,6 +82,7 @@ type Service struct {
 	allowedExtensions []string
 	maxUploadMB       int
 	pushOnCommit      bool
+	extractText       bool
 	now               func() time.Time
 }
 
@@ -83,11 +93,14 @@ type Service struct {
 // onto every commit payload (mirrors pages.NewService). worker is held as the
 // enqueuer interface so tests can inject a fake.
 func NewService(r *repo.Repo, w *jobs.Worker, db *sql.DB, cfg config.AttachmentsConfig, maxUploadMB int, pushOnCommit bool) *Service {
-	return newService(r, w, db, cfg.AllowedExtensions, maxUploadMB, pushOnCommit)
+	s := newService(r, w, db, cfg.AllowedExtensions, maxUploadMB, pushOnCommit)
+	s.extractText = cfg.ExtractText
+	return s
 }
 
 // newService is the concrete constructor used by NewService and by tests that
-// inject a fake enqueuer.
+// inject a fake enqueuer. extractText defaults to true so tests exercise the
+// ExtractJob enqueue path by default (NewService threads the real config flag).
 func newService(r *repo.Repo, w enqueuer, db *sql.DB, allowed []string, maxUploadMB int, pushOnCommit bool) *Service {
 	return &Service{
 		repo:              r,
@@ -96,6 +109,7 @@ func newService(r *repo.Repo, w enqueuer, db *sql.DB, allowed []string, maxUploa
 		allowedExtensions: allowed,
 		maxUploadMB:       maxUploadMB,
 		pushOnCommit:      pushOnCommit,
+		extractText:       true,
 		now:               time.Now,
 	}
 }
@@ -177,7 +191,40 @@ func (s *Service) Upload(ctx context.Context, pagePath, filename string, data []
 	if err := s.insertRow(ctx, meta); err != nil {
 		return AttachmentMeta{}, err
 	}
+
+	// Fire-and-forget text extraction (ATT-08): for an extractable type, enqueue a
+	// KindExtract job that reads the just-committed binary, extracts text, and
+	// commits the <id>.txt sidecar. This is Enqueue (NOT EnqueueAndWait) so the
+	// upload returns immediately — the card's chip then tracks the lifecycle live
+	// over SSE. A non-extractable type (image/other) enqueues NOTHING, so no .txt
+	// is written and the card shows no extraction chip. An enqueue error is logged
+	// but never fails the upload (the binary is already durably committed).
+	if s.extractText && isExtractable(ext) {
+		if err := s.enqueueExtract(ctx, meta); err != nil {
+			slog.WarnContext(ctx, "attachments: failed to enqueue text extraction (upload still succeeded)",
+				slog.String("attachment_id", meta.ID), slog.String("error", err.Error()))
+		}
+	}
 	return meta, nil
+}
+
+// enqueueExtract marshals and fire-and-forget enqueues a KindExtract job for an
+// uploaded attachment. The payload carries the binary path to READ and the .txt
+// path to WRITE (the only path extraction ever writes — T-02-11).
+func (s *Service) enqueueExtract(ctx context.Context, m AttachmentMeta) error {
+	p := extractPayload{
+		AttachmentID: m.ID,
+		BinPath:      BinPath(m.ID, m.Ext),
+		TxtPath:      TxtPath(m.ID),
+		Ext:          m.Ext,
+		PagePath:     m.PagePath,
+		User:         m.UploaderName,
+	}
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return fmt.Errorf("attachments: marshal extract payload: %w", err)
+	}
+	return s.worker.Enqueue(ctx, KindExtract, string(raw))
 }
 
 // List returns the attachments recorded for a page, newest first, each with its

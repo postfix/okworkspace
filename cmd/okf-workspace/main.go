@@ -186,6 +186,12 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	// Single-writer commit spine (D-04): a page write becomes one hidden Git
 	// commit through this handler. Replaces the Phase-0 no-op stub.
 	worker.Register(pages.KindCommit, pages.CommitHandler(contentRepo, gs))
+	// Text-extraction spine (ATT-08): a separate KindExtract handler on the SAME
+	// single drain goroutine reads a committed attachment binary, extracts text via
+	// the pure-Go extractors, and commits the <id>.txt sidecar through the ONE
+	// KindCommit handler above (no second commit kind). A parser panic on an
+	// adversarial file is recovered inside the handler so the drain survives.
+	worker.Register(attachments.KindExtract, attachments.ExtractHandler(contentRepo, worker, st.DB(), cfg.Git.PushOnCommit))
 	worker.Start(ctx)
 	defer worker.Stop()
 	logger.Info("job worker started")

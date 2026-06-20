@@ -21,14 +21,34 @@ type fakeEnqueuer struct {
 	r        *repo.Repo
 	payloads []commitPayload
 	rawJSON  []string
+	kinds    []string
 }
 
 func (f *fakeEnqueuer) Enqueue(ctx context.Context, kind, payload string) error {
+	f.kinds = append(f.kinds, kind)
+	// Only commit-kind payloads carry a commitPayload to apply to the repo; other
+	// kinds (e.g. KindExtract) are fire-and-forget — just record the kind so a test
+	// can assert what was enqueued WITHOUT running the real drain goroutine.
+	if kind != kindCommit {
+		return nil
+	}
 	return f.apply(payload)
 }
 
 func (f *fakeEnqueuer) EnqueueAndWait(ctx context.Context, kind, payload string, _ time.Duration) error {
+	f.kinds = append(f.kinds, kind)
 	return f.apply(payload)
+}
+
+// countKind reports how many jobs of the given kind were enqueued on the fake.
+func countKind(f *fakeEnqueuer, kind string) int {
+	n := 0
+	for _, k := range f.kinds {
+		if k == kind {
+			n++
+		}
+	}
+	return n
 }
 
 func (f *fakeEnqueuer) apply(payload string) error {
