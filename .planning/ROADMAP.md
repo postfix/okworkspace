@@ -111,9 +111,26 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Uploading or deleting an attachment automatically commits to Git, and risky download types are served with `Content-Disposition: attachment`
   5. The system extracts text from PDF/DOCX/TXT attachments (with a clear "no text extracted" state when extraction yields nothing)
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Upload + byte-exact download slice + `internal/attachments` foundation (deps, fixtures, config, migration, types/id/meta/refs) (ATT-01/02/09/10, SEC-02) (wave 1)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 02-02-PLAN.md — Full attachment card (thumbnail/icon, name·size·uploader·date) + inline image preview dialog (ATT-03/04) (wave 2)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 02-03-PLAN.md — Text extraction ExtractJob (pure-Go PDF/DOCX/TXT) + SSE status + ExtractionStatus chip, with the empty-but-succeeded "No text extracted" path (ATT-08) (wave 3)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 02-04-PLAN.md — Lifecycle: replace (reuse id, re-extract) + remove link + orphan delete in one commit (ATT-05/06/07) (wave 4)
+
 **UI hint**: yes
-**Notes**: NEEDS PHASE RESEARCH — two open decisions must be spiked before any upload ships: (1) large-binary-in-Git policy (versioned binaries in Git vs. originals outside Git referenced from metadata; history rewrite is expensive after the fact) and (2) PDF/DOCX extraction fidelity spike against representative sample files using `ledongthuc/pdf` + `fumiama/go-docx` (text-layer only; scanned/image PDFs yield nothing — the "no text extracted" UX path must be solid). Generated (non-user-controlled) storage names; metadata JSON sidecars + extracted-text sidecars form the three-part attachment model. ExtractJob extends the Phase 1 job worker; SSE surfaces extraction status.
+**Notes**: PHASE RESEARCH COMPLETE (02-RESEARCH.md, HIGH confidence) — both spikes resolved: (1) large-binary-in-Git is workable at this scale with cap + MIME-sniffed allow-list guardrails (LOCKED, do not relitigate); (2) pure-Go extraction (`ledongthuc/pdf` + `fumiama/go-docx` + stdlib) validated against pinned versions, with the empty-but-succeeded "No text extracted" path for scanned/image PDFs. Generated (non-user-controlled) ULID storage names; metadata JSON sidecars + extracted-text sidecars form the three-part attachment model. ExtractJob extends the Phase 1 job worker (new KindExtract on the same single-writer worker; KindCommit reused unchanged); SSE surfaces extraction status. All attachment writes/deletes flow through the existing single-writer CommitJob — no second write path.
 
 ### Phase 3: Search
 
@@ -210,7 +227,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 0. Skeleton, Auth & Foundations | 4/4 | Complete | 2026-06-18 |
 | 1. OKF Pages, Navigation & Hidden Git | 5/5 | Complete   | 2026-06-18 |
-| 2. Attachments & Text Extraction | 0/TBD | Not started | - |
+| 2. Attachments & Text Extraction | 0/4 | Planned | - |
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 0/TBD | Not started | - |
 | 5. Collaboration | 0/TBD | Not started | - |
