@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/okf"
+	"github.com/postfix/okworkspace/internal/search"
 )
 
 // trashDir is the repository location deleted pages move into (SPEC §9). A
@@ -96,6 +98,12 @@ func (s *Service) Delete(ctx context.Context, pagePath, user string) error {
 	// is the ORIGINAL page path; the page now lives under trashDir, which the index
 	// excludes, so only the delete is enqueued. Fire-and-forget.
 	s.enqueueIndexDelete(ctx, pagePath)
+	// Also drop the trashed page's attachment docs (WR-04): an attachment's indexed
+	// page_path stays the original LIVE path (not the trash path), so the query-time
+	// trash filter never matches it and the attachment would remain searchable,
+	// deep-linking to a page that no longer exists at that path. Enqueue a delete for
+	// each owned attachment, consistent with the page exclusion. Fire-and-forget.
+	s.enqueueTrashedAttachmentDeletes(ctx, pagePath)
 
 	// Record provenance (D-10). The page content is NOT stored here — only the
 	// metadata Restore needs (original path, trash path, title, who, when).
@@ -107,6 +115,45 @@ func (s *Service) Delete(ctx context.Context, pagePath, user string) error {
 		return fmt.Errorf("pages: record trash row: %w", err)
 	}
 	return nil
+}
+
+// enqueueTrashedAttachmentDeletes fires a FIRE-AND-FORGET search delete for every
+// attachment owned by pagePath (WR-04), so trashing a page also evicts its
+// attachment docs from the live index. The owning page is read from the
+// operational attachments table (page_path, indexed). Best-effort: a query error
+// or a dropped enqueue is logged and swallowed — the idempotent rebuild backstop
+// reconciles, mirroring enqueueIndexDelete's contract.
+func (s *Service) enqueueTrashedAttachmentDeletes(ctx context.Context, pagePath string) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM attachments WHERE page_path = ?`, pagePath)
+	if err != nil {
+		slog.WarnContext(ctx, "pages: failed to list attachments for trashed page (rebuild backstop reconciles)",
+			slog.String("path", pagePath), slog.String("error", err.Error()))
+		return
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			slog.WarnContext(ctx, "pages: failed to scan attachment id for trashed page (rebuild backstop reconciles)",
+				slog.String("path", pagePath), slog.String("error", err.Error()))
+			return
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		slog.WarnContext(ctx, "pages: failed to iterate attachments for trashed page (rebuild backstop reconciles)",
+			slog.String("path", pagePath), slog.String("error", err.Error()))
+		return
+	}
+
+	for _, id := range ids {
+		if err := s.worker.Enqueue(ctx, search.KindIndex, search.DeleteAttachmentPayload(id)); err != nil {
+			slog.WarnContext(ctx, "pages: failed to enqueue trashed-attachment search delete (rebuild backstop reconciles)",
+				slog.String("path", pagePath), slog.String("attachment_id", id), slog.String("error", err.Error()))
+		}
+	}
 }
 
 // ReconcileTrash prunes trash rows whose trash_path no longer exists on disk and

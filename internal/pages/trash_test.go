@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/postfix/okworkspace/internal/search"
 )
 
 // waitForRevisionNonEmpty polls until the committed revision of path is non-empty
@@ -87,6 +89,55 @@ func TestTrashRestore(t *testing.T) {
 	// The page now lives under the trash directory.
 	if !strings.Contains(e.OriginalPath, "runbooks/deploy.md") {
 		t.Fatalf("unexpected original path %q", e.OriginalPath)
+	}
+}
+
+// TestTrashEnqueuesAttachmentDeletes is the WR-04 regression: trashing a page must
+// also evict its attachment docs from the live index. An attachment's indexed
+// page_path stays the original LIVE path, so without an explicit delete the
+// query-time trash filter never matches it and the attachment stays searchable.
+func TestTrashEnqueuesAttachmentDeletes(t *testing.T) {
+	svc, r, rec := newIndexedFixture(t)
+	ctx := context.Background()
+
+	pagePath, err := svc.Create(ctx, "runbooks", "Deploy", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	waitForFile(t, r, pagePath)
+
+	// Record two attachments owned by the page in the operational table (the
+	// page_path the trash delete queries), plus one owned by a DIFFERENT page that
+	// must NOT be evicted.
+	for _, a := range []struct{ id, page string }{
+		{"att-1", pagePath},
+		{"att-2", pagePath},
+		{"att-other", "runbooks/other.md"},
+	} {
+		if _, err := svc.db.ExecContext(ctx,
+			`INSERT INTO attachments (id, page_path, original_name, mime_type) VALUES (?, ?, ?, ?)`,
+			a.id, a.page, a.id+".pdf", "application/pdf"); err != nil {
+			t.Fatalf("insert attachment %q: %v", a.id, err)
+		}
+	}
+
+	if err := svc.Delete(ctx, pagePath, "alice"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	waitForGone(t, svc, pagePath)
+
+	// Both owned attachments are evicted from the index.
+	rec.waitForPayload(t, search.DeleteAttachmentPayload("att-1"))
+	rec.waitForPayload(t, search.DeleteAttachmentPayload("att-2"))
+
+	// The attachment owned by another page is NOT evicted.
+	otherPayload := search.DeleteAttachmentPayload("att-other")
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	for _, p := range rec.payloads {
+		if p == otherPayload {
+			t.Fatalf("evicted an attachment (att-other) owned by a non-trashed page: %v", rec.payloads)
+		}
 	}
 }
 
