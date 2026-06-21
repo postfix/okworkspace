@@ -84,8 +84,16 @@ func normalizeQuery(q string) (string, bool) {
 	if q == "" {
 		return "", false
 	}
+	// Cap on RUNES, not bytes (WR-05): a byte slice at the 256-byte boundary can
+	// split a multibyte UTF-8 rune (CJK, accented Latin, emoji), feeding invalid
+	// UTF-8 to the Bleve analyzer. maxQueryLen is a DoS guard, so capping the rune
+	// count keeps the guard while never producing a malformed string.
 	if len(q) > maxQueryLen {
-		q = q[:maxQueryLen]
+		r := []rune(q)
+		if len(r) > maxQueryLen {
+			r = r[:maxQueryLen]
+		}
+		q = string(r)
 	}
 	return q, true
 }

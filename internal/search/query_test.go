@@ -2,7 +2,9 @@ package search
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // containsPath reports whether any result navigates to the given page path.
@@ -215,5 +217,39 @@ func TestQuery_EmptyFastPath(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Fatalf("empty query returned %d results, want 0", len(results))
+	}
+}
+
+// TestNormalizeQuery_RuneBoundary is the WR-05 regression: a query of multibyte
+// runes longer than maxQueryLen must be truncated on a RUNE boundary, never
+// mid-rune, so the result is always valid UTF-8 (a byte slice would split a
+// 3-byte CJK rune at the 256-byte cap and produce invalid UTF-8).
+func TestNormalizeQuery_RuneBoundary(t *testing.T) {
+	// "世" is 3 bytes in UTF-8; maxQueryLen+10 of them is well over the byte cap.
+	q := strings.Repeat("世", maxQueryLen+10)
+	got, ok := normalizeQuery(q)
+	if !ok {
+		t.Fatal("normalizeQuery reported nothing to search for a non-empty query")
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("normalizeQuery produced invalid UTF-8 (split a rune): %q", got)
+	}
+	if n := utf8.RuneCountInString(got); n != maxQueryLen {
+		t.Fatalf("normalizeQuery rune count = %d, want %d", n, maxQueryLen)
+	}
+	// Every rune must be the intact multibyte rune, none truncated.
+	for _, r := range got {
+		if r != '世' {
+			t.Fatalf("unexpected rune %q in truncated query (truncation split a rune)", r)
+		}
+	}
+}
+
+// TestNormalizeQuery_ShortUnchanged: a sub-cap query is returned trimmed and
+// unchanged.
+func TestNormalizeQuery_ShortUnchanged(t *testing.T) {
+	got, ok := normalizeQuery("  hello world  ")
+	if !ok || got != "hello world" {
+		t.Fatalf("normalizeQuery(short) = %q,%v; want \"hello world\",true", got, ok)
 	}
 }
