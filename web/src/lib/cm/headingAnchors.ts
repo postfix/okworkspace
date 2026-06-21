@@ -203,14 +203,27 @@ export function scrollToHash(
   // The heading line ids live on the .cm-line elements the field decorated. A
   // CSS.escape keeps an id with special chars a valid selector; the value itself
   // is still only matched, never executed.
-  const escaped =
-    typeof CSS !== "undefined" && typeof CSS.escape === "function"
-      ? CSS.escape(target)
-      : target.replace(/["\\]/g, "\\$&");
+  const escaped = cssEscape(target);
   const el = view.dom.querySelector<HTMLElement>(`#${escaped}`);
   if (!el) {
     return false;
   }
   el.scrollIntoView({ block: "start" });
   return true;
+}
+
+// cssEscape escapes `s` for safe use as the value part of an id selector
+// (`#<value>`). It prefers the native CSS.escape (all modern browsers, jsdom 20+);
+// when CSS.escape is absent it falls back to a blanket identifier escape that
+// backslash-escapes every character that is NOT a CSS-safe identifier char
+// ([A-Za-z0-9_-]). The previous fallback escaped only `"` and `\`, leaving
+// `.`/`#`/`[`/`:`/etc. unescaped so a crafted hash could form a compound selector
+// and match an unintended element. `[A-Za-z0-9_-]` is always safe unescaped in a
+// CSS identifier; every other char is escaped, which is what CSS.escape produces
+// for the non-empty, non-numeric-leading identifiers all slug anchors satisfy.
+function cssEscape(s: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(s);
+  }
+  return s.replace(/[^A-Za-z0-9_-]/g, (ch) => `\\${ch}`);
 }
