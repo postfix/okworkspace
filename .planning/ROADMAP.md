@@ -211,7 +211,24 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Saving from the live-preview editor produces byte-identical Markdown to the source-mode round-trip — the okf golden-corpus exit gate still holds (no lossy block model)
   4. Existing editor guarantees are preserved: autosave drafts, optimistic-concurrency save, and sanitized rendering (rehype-sanitize on / raw HTML off)
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — CM6 editor swap slice: add CM6/Lezer deps + all Wave-0 test stubs + persisted Live/Source mode store + minimal LivePreviewEditor swapped into PageEditor (verbatim save, Compartment toggle, Cmd/Ctrl-E) (EDIT-02/03/04) (wave 1)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 06-02-PLAN.md — Live-preview ViewPlugin: Lezer tree-walk decorations (headings/bold/italic/links/inline-code/code-blocks) + active-line marker reveal + theme parity with MarkdownProse (EDIT-01 text constructs) (wave 2)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 06-03-PLAN.md — Inline image + GFM table widgets (sanitized, no-innerHTML) + internal `.md` link SPA navigation; completes the EDIT-01 render set + the image-src V5 control (EDIT-01/04) (wave 3)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 06-04-PLAN.md — Unified read-only surface: heading-anchor ids (==okf slug, SRCH-06 preserved) + scroll-to-#hash + PageView swap + retire MarkdownProse + remove @uiw/react-md-editor + CLAUDE.md update + end-of-phase human verify (EDIT-01/04) (wave 4)
+
 **UI hint**: yes
 **Notes**: Part of the Obsidian-alignment UI direction (team are ex-Obsidian users; the web app stays the client). Replace the MVP `@uiw/react-md-editor` split-pane with a CodeMirror 6 live-preview surface (inline-rendered Markdown decorations — the same engine family Obsidian uses). Storage/sync are OUT of scope and unchanged: Git remains the system of record; live multi-user co-editing stays in Phase 5 (CRDT→Git), NOT a store swap. Must preserve the okf byte-stable round-trip (raw Markdown in/out) and keep rehype-sanitize / raw-HTML-off. Sibling Obsidian-feel items (quick switcher Ctrl-O, command palette Ctrl-P, `[[wikilink]]` autocomplete, backlinks panel, denser file tree, dark theme) are related but tracked separately. Depends on Phase 1's editor; position can be moved earlier than 2–5 (via `/gsd-phase --edit`/`--insert`) if the team wants the editor first.
 
@@ -245,5 +262,5 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 0/TBD | Not started | - |
 | 5. Collaboration | 0/TBD | Not started | - |
-| 6. Live-Preview Editor (Obsidian-style) | 0/TBD | Not started | - |
+| 6. Live-Preview Editor (Obsidian-style) | 0/4 | Planned | - |
 | 7. Obsidian-style File Tree (folder operations & tree UX) | 0/TBD | Not started | - |
