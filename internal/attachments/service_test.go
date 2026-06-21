@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -212,6 +213,190 @@ func TestCommitPayloadShape(t *testing.T) {
 		}
 	}
 }
+
+// TestReplaceKeepsID (ATT-05): Replace produces a commit writing the SAME id's
+// binary + an updated meta (new size/sha256) and re-enqueues a KindExtract job; the
+// id is unchanged and the prior bytes are retained in history (modeled here by the
+// commit being captured, not destroyed).
+func TestReplaceKeepsID(t *testing.T) {
+	svc, fe, db := newTestService(t, []string{"txt"}, 100)
+
+	orig := []byte("the original attachment body")
+	up, err := svc.Upload(context.Background(), "runbooks/deploy.md", "notes.txt", orig, "alice")
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	uploadCommits := len(fe.payloads)
+	uploadExtracts := countKind(fe, KindExtract)
+
+	newBytes := []byte("the REPLACED attachment body, now longer than before")
+	rep, err := svc.Replace(context.Background(), up.ID, "notes-v2.txt", newBytes, "bob")
+	if err != nil {
+		t.Fatalf("Replace: %v", err)
+	}
+
+	// Same id (ATT-05): every page link keeps resolving without a page edit.
+	if rep.ID != up.ID {
+		t.Fatalf("Replace changed id: got %q, want %q", rep.ID, up.ID)
+	}
+	// New size + new sha256 (the bytes really changed).
+	if rep.SizeBytes != int64(len(newBytes)) {
+		t.Fatalf("replaced size = %d, want %d", rep.SizeBytes, len(newBytes))
+	}
+	if rep.Sha256 == up.Sha256 {
+		t.Fatalf("replaced sha256 unchanged (%q) — bytes did not change", rep.Sha256)
+	}
+
+	// Exactly one NEW commit (binary + meta) landed on top of the upload commit.
+	if len(fe.payloads) != uploadCommits+1 {
+		t.Fatalf("commit payloads = %d, want %d (one replace commit)", len(fe.payloads), uploadCommits+1)
+	}
+	p := fe.payloads[len(fe.payloads)-1]
+	if len(p.Writes) != 2 {
+		t.Fatalf("replace writes = %d, want 2 (binary + meta)", len(p.Writes))
+	}
+	if len(p.Removes) != 0 {
+		t.Fatalf("replace removes = %d, want 0 (same ext, same path)", len(p.Removes))
+	}
+	wrote := map[string]bool{p.Writes[0].Path: true, p.Writes[1].Path: true}
+	if !wrote[BinPath(up.ID, "txt")] || !wrote[MetaPath(up.ID)] {
+		t.Fatalf("replace did not write the same id's bin+meta: %v", wrote)
+	}
+	if p.Spec.Message != "Replace attachment" {
+		t.Fatalf("replace commit message = %q, want %q (hidden-Git)", p.Spec.Message, "Replace attachment")
+	}
+
+	// Re-extraction was re-enqueued (one MORE KindExtract than after upload).
+	if got := countKind(fe, KindExtract); got != uploadExtracts+1 {
+		t.Fatalf("KindExtract enqueues = %d, want %d (one re-extract on replace)", got, uploadExtracts+1)
+	}
+
+	// The operational row still exists under the SAME id with the new size.
+	st, err := ExtractionStatusFor(context.Background(), db, up.ID)
+	if err != nil {
+		t.Fatalf("status after replace: %v", err)
+	}
+	if st != ExtractionPending {
+		t.Fatalf("extract status after replace = %q, want pending (reset for re-extract)", st)
+	}
+}
+
+// TestOrphanDelete (ATT-07): when the only referencing page's link is removed,
+// Remove emits ONE commitPayload whose Removes carries [bin, meta, txt] and deletes
+// the operational row.
+func TestOrphanDelete(t *testing.T) {
+	svc, fe, db := newTestService(t, []string{"txt"}, 100)
+
+	data := []byte("orphan-bound attachment")
+	up, err := svc.Upload(context.Background(), "notes.md", "doc.txt", data, "alice")
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	// Seed the single referencing page with the canonical link, and a .txt sidecar
+	// (extraction is fire-and-forget in tests, so write it directly to assert it is
+	// part of the delete payload).
+	ref := DownloadRefPath(up.ID)
+	mustWrite(t, svc, "notes.md", "Body. See [doc]("+ref+").\n")
+	mustWrite(t, svc, TxtPath(up.ID), "extracted text")
+
+	before := len(fe.payloads)
+	orphan, err := svc.Remove(context.Background(), up.ID, "notes.md", "bob")
+	if err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if !orphan {
+		t.Fatalf("Remove deletedOrphan = false, want true (last reference removed)")
+	}
+
+	// Two commits: (1) the unlink edit of notes.md, (2) the orphan delete.
+	if len(fe.payloads) != before+2 {
+		t.Fatalf("commit payloads = %d, want %d (unlink + delete)", len(fe.payloads), before+2)
+	}
+	del := fe.payloads[len(fe.payloads)-1]
+	if del.Spec.Message != "Delete attachment" {
+		t.Fatalf("delete message = %q, want %q", del.Spec.Message, "Delete attachment")
+	}
+	gotRemoves := map[string]bool{}
+	for _, rm := range del.Removes {
+		gotRemoves[rm] = true
+	}
+	for _, want := range []string{BinPath(up.ID, "txt"), MetaPath(up.ID), TxtPath(up.ID)} {
+		if !gotRemoves[want] {
+			t.Fatalf("orphan delete Removes missing %q; got %v", want, del.Removes)
+		}
+	}
+	if len(del.Removes) != 3 {
+		t.Fatalf("orphan delete Removes = %d, want 3 (bin+meta+txt in ONE commit)", len(del.Removes))
+	}
+
+	// The operational row is gone.
+	if _, err := ExtractionStatusFor(context.Background(), db, up.ID); err != ErrAttachmentNotFound {
+		t.Fatalf("row after orphan delete: err = %v, want ErrAttachmentNotFound", err)
+	}
+
+	// The files are gone on disk (the fake applies Removes to the repo).
+	if exists, _ := svc.repo.Exists(BinPath(up.ID, "txt")); exists {
+		t.Fatalf("binary still on disk after orphan delete")
+	}
+	if exists, _ := svc.repo.Exists(MetaPath(up.ID)); exists {
+		t.Fatalf("meta still on disk after orphan delete")
+	}
+}
+
+// TestRemoveKeepsSharedFile (Pitfall 6): when a SECOND page still references the
+// id, Remove drops the link from the target page but does NOT delete the files.
+func TestRemoveKeepsSharedFile(t *testing.T) {
+	svc, fe, db := newTestService(t, []string{"txt"}, 100)
+
+	data := []byte("shared attachment")
+	up, err := svc.Upload(context.Background(), "page-one.md", "shared.txt", data, "alice")
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	ref := DownloadRefPath(up.ID)
+	// Two pages reference the same id.
+	mustWrite(t, svc, "page-one.md", "One: [shared]("+ref+").\n")
+	mustWrite(t, svc, "page-two.md", "Two: [shared]("+ref+") too.\n")
+
+	before := len(fe.payloads)
+	orphan, err := svc.Remove(context.Background(), up.ID, "page-one.md", "bob")
+	if err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if orphan {
+		t.Fatalf("Remove deletedOrphan = true, want false (page-two still references it)")
+	}
+
+	// Exactly ONE commit: the unlink edit of page-one (no delete commit).
+	if len(fe.payloads) != before+1 {
+		t.Fatalf("commit payloads = %d, want %d (unlink only, NO delete)", len(fe.payloads), before+1)
+	}
+	last := fe.payloads[len(fe.payloads)-1]
+	if len(last.Removes) != 0 {
+		t.Fatalf("shared-file Remove produced Removes %v, want none", last.Removes)
+	}
+
+	// The files are STILL on disk and the row STILL exists.
+	if exists, _ := svc.repo.Exists(BinPath(up.ID, "txt")); !exists {
+		t.Fatalf("shared binary was deleted — must be kept")
+	}
+	if _, err := ExtractionStatusFor(context.Background(), db, up.ID); err != nil {
+		t.Fatalf("shared row missing after Remove: %v", err)
+	}
+
+	// page-one no longer references it; page-two still does.
+	one, _ := svc.repo.Read("page-one.md")
+	if contains(string(one), ref) {
+		t.Fatalf("page-one still contains the link after unlink: %q", string(one))
+	}
+	two, _ := svc.repo.Read("page-two.md")
+	if !contains(string(two), ref) {
+		t.Fatalf("page-two lost the link it should keep: %q", string(two))
+	}
+}
+
+// contains is a thin strings.Contains alias for readable assertions.
+func contains(s, sub string) bool { return strings.Contains(s, sub) }
 
 // TestUploadRejectsBadType (ATT-09): a sniffed type not on the allow-list returns
 // ErrTypeForbidden; oversize returns ErrTooLarge.
