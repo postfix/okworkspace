@@ -385,6 +385,59 @@ func RewriteLinks(body []byte, fromDir, oldRel, newRel string) ([]byte, bool) {
 	return out.Bytes(), true
 }
 
+// RewriteLinksMoved is RewriteLinks for the case where the LINKING page is itself
+// being relocated in the same operation (a folder move). resolveDir is the page's
+// CURRENT directory (used to resolve each link to its target, matching oldRel);
+// emitDir is the page's NEW directory (used to recompute the replacement relative
+// path so the rewritten link is correct from the page's new location). When
+// resolveDir == emitDir this is identical to RewriteLinks. It preserves the same
+// round-trip safety: only genuine repo-relative links that resolve to oldRel are
+// touched, code/inline-code spans are skipped by FindLinks, and unrelated bytes are
+// never altered.
+func RewriteLinksMoved(body []byte, resolveDir, emitDir, oldRel, newRel string) ([]byte, bool) {
+	links := FindLinks(body)
+	if len(links) == 0 {
+		return body, false
+	}
+	oldRel = path.Clean(oldRel)
+	newRel = path.Clean(newRel)
+
+	var out bytes.Buffer
+	out.Grow(len(body))
+	last := 0
+	changed := false
+	for _, l := range links {
+		dest, frag := splitFragment(l.Dest)
+		if dest == "" {
+			continue
+		}
+		if isAbsoluteOrExternal(dest) {
+			continue
+		}
+		resolved := path.Clean(path.Join(resolveDir, dest))
+		if resolved != oldRel {
+			continue
+		}
+		newDest := relPath(emitDir, newRel) + frag
+		if newDest == l.Dest {
+			// The recomputed destination is byte-identical to the original (e.g. a
+			// moved sibling link that stays a bare filename). Leave it untouched so a
+			// moving page that only carries such links is NOT needlessly re-emitted —
+			// preserving byte-stability (the caller copies its bytes verbatim).
+			continue
+		}
+		out.Write(body[last:l.start])
+		out.WriteString(newDest)
+		last = l.end
+		changed = true
+	}
+	if !changed {
+		return body, false
+	}
+	out.Write(body[last:])
+	return out.Bytes(), true
+}
+
 // splitFragment splits a destination into its path part and an optional
 // #fragment (preserved verbatim, including the leading '#').
 func splitFragment(dest string) (pathPart, frag string) {

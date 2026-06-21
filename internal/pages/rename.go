@@ -91,6 +91,328 @@ func (s *Service) Move(ctx context.Context, oldPath, newParentDir, user string) 
 	return s.relocate(ctx, oldPath, newPath, "move", user)
 }
 
+// RenameFolder renames the folder at dir to a sibling folder named slugify(newName),
+// relocating the folder's index.md AND every descendant page under the dir/ prefix
+// AND rewriting every inbound link to every moved page in ONE commit (TREE-02).
+// Returns the new folder dir. Rejects with ErrFolderExists if the target dir already
+// exists (folders never auto-suffix or merge — TREE-06). dir not existing returns
+// ErrPageNotFound.
+func (s *Service) RenameFolder(ctx context.Context, dir, newName, user string) (string, error) {
+	dir = strings.Trim(strings.TrimSpace(dir), "/")
+	exists, err := s.repo.Exists(dir + "/index.md")
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", ErrPageNotFound
+	}
+	slug := slugify(newName)
+	if slug == "" {
+		return "", ErrTitleRequired
+	}
+	parent := path.Dir(dir)
+	if parent == "." {
+		parent = ""
+	}
+	newDir := slug
+	if parent != "" {
+		newDir = parent + "/" + slug
+	}
+	if newDir == dir {
+		// No-op rename (same slug): nothing to do.
+		return dir, nil
+	}
+	if err := s.relocateFolder(ctx, dir, newDir, "rename", user); err != nil {
+		return "", err
+	}
+	return newDir, nil
+}
+
+// MoveFolder relocates the folder at dir into newParentDir (repo-relative, "" =
+// root), keeping the folder's own base name, and atomically relocates every
+// descendant + rewrites all inbound links in ONE commit (TREE-02). Returns the new
+// folder dir. Rejects with ErrFolderExists if the destination dir already exists
+// (TREE-06). dir not existing returns ErrPageNotFound.
+func (s *Service) MoveFolder(ctx context.Context, dir, newParentDir, user string) (string, error) {
+	dir = strings.Trim(strings.TrimSpace(dir), "/")
+	exists, err := s.repo.Exists(dir + "/index.md")
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", ErrPageNotFound
+	}
+	base := path.Base(dir)
+	newParentDir = strings.Trim(strings.TrimSpace(newParentDir), "/")
+	newDir := base
+	if newParentDir != "" {
+		newDir = newParentDir + "/" + base
+	}
+	newDir = path.Clean(newDir)
+	if newDir == dir {
+		// No-op move (same location): nothing to do.
+		return dir, nil
+	}
+	if err := s.relocateFolder(ctx, dir, newDir, "move", user); err != nil {
+		return "", err
+	}
+	return newDir, nil
+}
+
+// descendantPages returns every .md page that belongs to the folder dir: the
+// folder's own index.md plus every page under the dir/ prefix (recursively). Paths
+// are repo-relative, slash-separated. It mirrors the rewriteInboundLinks walk
+// (skip .git/.okf-workspace, .md files only).
+func (s *Service) descendantPages(dir string) ([]string, error) {
+	root := s.repo.Root()
+	prefix := dir + "/"
+	var pages []string
+	err := filepath.WalkDir(root, func(abs string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if abs == root {
+			return nil
+		}
+		rel, err := filepath.Rel(root, abs)
+		if err != nil {
+			return err
+		}
+		slashRel := filepath.ToSlash(rel)
+		if isSkippedDir(slashRel) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() || !strings.HasSuffix(slashRel, ".md") {
+			return nil
+		}
+		if slashRel == prefix+"index.md" || strings.HasPrefix(slashRel, prefix) {
+			pages = append(pages, slashRel)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("pages: enumerate descendants of %q: %w", dir, err)
+	}
+	return pages, nil
+}
+
+// relocateFolder relocates every descendant page of oldDir to the same path under
+// newDir and rewrites every inbound link to every moved page, all in ONE commit
+// (TREE-02). It REJECTS with ErrFolderExists if newDir already exists, BEFORE any
+// disk write (TREE-06). Moved pages are written with their EXISTING bytes verbatim
+// (never re-emitted through okf.Emit — byte-stability invariant); only genuine
+// inbound links are rewritten through the round-trip-safe okf path. A page that is
+// BOTH moved and an inbound-link target is staged exactly once with the rewritten
+// bytes (Pitfall 1, last-write-wins merge-by-path).
+func (s *Service) relocateFolder(ctx context.Context, oldDir, newDir, action, user string) error {
+	// (1) Collision precheck FIRST — before building any payload or touching disk.
+	exists, err := s.repo.Exists(newDir)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return ErrFolderExists
+	}
+
+	// (2) Enumerate every descendant page of the folder.
+	oldPaths, err := s.descendantPages(oldDir)
+	if err != nil {
+		return err
+	}
+	if len(oldPaths) == 0 {
+		return ErrPageNotFound
+	}
+
+	// (3) Build the new-path write set (existing bytes verbatim) and the per-page
+	// old->new mapping. byPath is keyed by NEW (or unchanged) path so a later
+	// inbound-link rewrite of a moved page (Pitfall 1) overwrites the verbatim copy
+	// with the rewritten bytes (last-write-wins, one stage per path).
+	byPath := map[string][]byte{}
+	var removes []string
+	var stagePaths []string
+	moves := make(map[string]string, len(oldPaths)) // oldPath -> newPath
+	for _, oldPath := range oldPaths {
+		newPath := newDir + strings.TrimPrefix(oldPath, oldDir)
+		srcBytes, err := s.repo.Read(oldPath)
+		if err != nil {
+			return fmt.Errorf("pages: read source %q: %w", oldPath, err)
+		}
+		byPath[newPath] = srcBytes
+		moves[oldPath] = newPath
+		removes = append(removes, oldPath)
+		// Stage both the new path and the old path so git detects each per-descendant
+		// rename and `git log --follow` traces history across the move.
+		stagePaths = append(stagePaths, newPath, oldPath)
+	}
+
+	// (4) Rewrite inbound links to EVERY moved page in ONE unified per-page pass.
+	// For each page in the repo (moved or not), resolve links from its CURRENT dir
+	// and emit relative paths from its FINAL dir (its new dir if it is itself moving,
+	// Pitfall 1 — a moved sibling that links to another moved sibling must recompute
+	// from the new location, not produce a ../ back-reference). A moved page's
+	// rewrite lands on its NEW path key, superseding the verbatim copy exactly once.
+	rewritten, rewriteStage, err := s.rewriteFolderInboundLinks(moves)
+	if err != nil {
+		return err
+	}
+	for p, b := range rewritten {
+		byPath[p] = b
+	}
+	stagePaths = append(stagePaths, rewriteStage...)
+
+	// (5) Convert the merged map to []fileWrite and enqueue ONE commit.
+	writes := make([]fileWrite, 0, len(byPath))
+	for p, b := range byPath {
+		writes = append(writes, fileWrite{Path: p, Bytes: b})
+	}
+	cp := commitPayload{
+		Writes:  writes,
+		Removes: removes,
+		Spec: gitstore.CommitSpec{
+			Paths:   stagePaths,
+			Message: relocateSubject(action, oldDir, newDir),
+			User:    user,
+			Action:  action,
+			Source:  "web-ui",
+		},
+		Push: s.pushOnCommit,
+	}
+	if err := EnqueueCommit(ctx, s.worker, cp); err != nil {
+		return err
+	}
+
+	// (6) Index maintenance: per moved page delete the old doc and upsert the new
+	// one; re-upsert any OTHER page whose body was rewritten. Fire-and-forget; the
+	// rebuild backstop reconciles a dropped enqueue (T-03-20).
+	for oldPath, newPath := range moves {
+		s.enqueueIndexDelete(ctx, oldPath)
+		s.enqueueIndexUpsert(ctx, newPath)
+	}
+	for p := range byPath {
+		if _, moved := movedDestinations(moves)[p]; moved {
+			continue // already upserted above
+		}
+		s.enqueueIndexUpsert(ctx, p)
+	}
+	return nil
+}
+
+// rewriteFolderInboundLinks scans every .md page in the repo once and rewrites
+// every inbound link that points at ANY page in the moves set (oldPath -> newPath).
+// It returns the rewritten bytes keyed by each page's FINAL path (a moving page's
+// own new path; a stationary linker's unchanged path) plus the stage paths to add
+// to the commit spec. The rewrite goes through the round-trip-safe okf path:
+// okf.Parse -> RewriteLinksMoved(body, resolveDir, emitDir, oldRel, newRel) ->
+// okf.Emit. resolveDir is the page's CURRENT directory (so a link resolves to its
+// real target); emitDir is the page's FINAL directory (so a moving page's links are
+// recomputed from where it lands — Pitfall 1, no stale ../ back-reference and no
+// double-staging). A page is staged at most once: its FINAL-path key is unique, and
+// a moving page's stage paths are already added by the caller, so only stationary
+// linkers contribute new stage paths here.
+func (s *Service) rewriteFolderInboundLinks(moves map[string]string) (map[string][]byte, []string, error) {
+	root := s.repo.Root()
+	out := map[string][]byte{}
+	var stage []string
+
+	err := filepath.WalkDir(root, func(abs string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if abs == root {
+			return nil
+		}
+		rel, err := filepath.Rel(root, abs)
+		if err != nil {
+			return err
+		}
+		slashRel := filepath.ToSlash(rel)
+		if isSkippedDir(slashRel) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() || !strings.HasSuffix(slashRel, ".md") {
+			return nil
+		}
+
+		// finalPath is where this page will live after the relocate (its new path if
+		// it is itself moving, else unchanged).
+		finalPath, moving := moves[slashRel]
+		if !moving {
+			finalPath = slashRel
+		}
+		resolveDir := path.Dir(slashRel)
+		if resolveDir == "." {
+			resolveDir = ""
+		}
+		emitDir := path.Dir(finalPath)
+		if emitDir == "." {
+			emitDir = ""
+		}
+
+		raw, err := s.repo.Read(slashRel)
+		if err != nil {
+			return fmt.Errorf("pages: read %q for link rewrite: %w", slashRel, err)
+		}
+		doc, err := okf.Parse(raw)
+		if err != nil {
+			return fmt.Errorf("pages: parse %q for link rewrite: %w", slashRel, err)
+		}
+
+		body := doc.Body
+		changed := false
+		for oldRel, newRel := range moves {
+			// A page's own move does not change a link that points at ITSELF; and a
+			// page never links to its own old path in a way that needs rewriting here
+			// (RewriteLinksMoved is a no-op when nothing resolves to oldRel).
+			nb, ch := okf.RewriteLinksMoved(body, resolveDir, emitDir, oldRel, newRel)
+			if ch {
+				body = nb
+				changed = true
+			}
+		}
+
+		if !changed {
+			// A stationary page with no inbound link is untouched. A MOVING page with
+			// no rewritten link is still relocated by the caller's verbatim copy, so we
+			// must not emit it here (that would re-encode bytes and break byte-stability).
+			return nil
+		}
+
+		doc.Body = body
+		emitted, err := doc.Emit()
+		if err != nil {
+			return fmt.Errorf("pages: emit %q after link rewrite: %w", slashRel, err)
+		}
+		out[finalPath] = emitted
+		if !moving {
+			// Stationary linker: stage its (unchanged) path. Moving pages are already
+			// staged by the caller (new+old), so they are not added again here.
+			stage = append(stage, slashRel)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("pages: scan folder inbound links: %w", err)
+	}
+	return out, stage, nil
+}
+
+// movedDestinations returns the set of NEW paths from a moves map (oldPath ->
+// newPath), used to skip double-upserting a page that was already index-upserted as
+// a relocation target.
+func movedDestinations(moves map[string]string) map[string]struct{} {
+	dests := make(map[string]struct{}, len(moves))
+	for _, newPath := range moves {
+		dests[newPath] = struct{}{}
+	}
+	return dests
+}
+
 // relocate is the shared rename/move body: read the source bytes, scan the whole
 // repo for inbound links, rewrite each to the new path (round-trip-safe), and
 // enqueue ONE commit that writes the new file, rewrites every linking file, and
