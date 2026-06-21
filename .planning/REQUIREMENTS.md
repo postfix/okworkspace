@@ -93,7 +93,7 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 - [ ] **AGNT-08**: User can ask the agent to draft a new page
 - [ ] **AGNT-09**: User can ask the agent to propose a patch to the current page, shown as a diff
 - [ ] **AGNT-10**: User must explicitly approve an agent patch before it is applied and committed
-- [ ] **AGNT-11**: The agent cannot write files directly, read secrets, run shell, escape the repository, or push to Git (enforced in the tool layer, not by prompt)
+- [x] **AGNT-11**: The agent cannot write files directly, read secrets, run shell, escape the repository, or push to Git (enforced in the tool layer, not by prompt)
 
 ### Collaboration
 
@@ -204,7 +204,7 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | AGNT-08 | Phase 4 | Pending |
 | AGNT-09 | Phase 4 | Pending |
 | AGNT-10 | Phase 4 | Pending |
-| AGNT-11 | Phase 4 | Pending |
+| AGNT-11 | Phase 4 | Complete |
 | COLL-01 | Phase 5 | Pending |
 | COLL-02 | Phase 5 | Pending |
 | COLL-03 | Phase 5 | Pending |

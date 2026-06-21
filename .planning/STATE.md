@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 07
 current_phase_name: obsidian-style-file-tree-folder-operations-tree-ux
 status: executing
-stopped_at: Phase 7 COMPLETE (verified passed, browser-validated). Phases 6+7 done; 4+5 deferred per user. Milestone NOT closed.
-last_updated: "2026-06-21T14:29:57.651Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-06-21T19:44:43.642Z"
 last_activity: 2026-06-21
-last_activity_desc: Completed 07-04-PLAN.md (folder operations + optimistic tree UX, 240 frontend tests green)
+last_activity_desc: Completed 04-01-PLAN.md (Eino v0.9.9 + DeepSeek deepseek-v4-flash wiring; agent.Service + ChatModel + key-gated smoke test reached DeepSeek; 3 audit constants)
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 25
-  completed_plans: 25
-  percent: 75
+  total_plans: 31
+  completed_plans: 27
+  percent: 87
 ---
 
 # Project State
@@ -77,6 +77,7 @@ Progress: [██████████] 100% (4 of 4 plans)
 | Phase 07 P01 | 18min | 3 tasks | 7 files |
 | Phase 07 P02 | 7min | 3 tasks | 8 files |
 | Phase 07 P03 | 13min | 3 tasks | 7 files |
+| Phase 04 P01 | 9min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -134,6 +135,7 @@ Recent decisions affecting current work:
 - [Phase 7 P04]: Optimistic ["tree"] updates via useTreeMutations — onMutate cancel+snapshot+applyMove → onError rollback → onSettled invalidate; pure applyMove does the literal prefix swap identical to server relocateFolder (Pitfall 6) so the reconcile refetch never jumps the node
 - [Phase 7 P04]: Folder DnD drop-validity guard runs DURING dragover by reading the dragged path from a module-level activeDragPath ref (HTML5 dataTransfer.getData() returns '' mid-drag); invalid drops (self/descendant/same-parent) skip preventDefault → native cursor:not-allowed, no highlight (TREE-06 client)
 - [Phase 7 P04]: Grouped TrashView folds ["trash"] by delete_group_id into one "Folder '{name}' · N pages" row per group (folder name from common-ancestor index.md path) with a Restore folder action calling restoreFolderGroup; batched (restored)-suffix notice on collision (TREE-05 UI)
+- [Phase ?]: Pinned eino-ext openai as real semver v0.1.13 (not pseudo-version); anchored go-udiff via blank import so the pin survives go mod tidy.
 
 ### Pending Todos
 
@@ -159,6 +161,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-21T14:29:57.642Z
-Stopped at: Phase 7 COMPLETE (verified passed, browser-validated). Phases 6+7 done; 4+5 deferred per user. Milestone NOT closed.
-Resume file: .planning/ROADMAP.md
+Last session: 2026-06-21T19:44:43.638Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None
