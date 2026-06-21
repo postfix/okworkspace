@@ -205,7 +205,12 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	if indexDir == "" {
 		indexDir = filepath.Join(cfg.Storage.DataDir, "index")
 	}
-	searchIdx, err := search.OpenOrCreate(indexDir)
+	// A corrupt existing index (e.g. a torn scorch segment after an unclean
+	// shutdown — Pitfall 3) must NOT take the server down: OpenOrRecover wipes and
+	// recreates a fresh empty index and signals a rebuild-from-files rather than
+	// aborting startup (WR-02). The drift check below would also catch this, but the
+	// explicit recovery rebuild repopulates the freshly-emptied index promptly.
+	searchIdx, indexRecovered, err := search.OpenOrRecover(indexDir)
 	if err != nil {
 		return fmt.Errorf("open search index: %w", err)
 	}
@@ -239,6 +244,17 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		logger.Warn("trash reconcile failed at startup", slog.String("error", err.Error()))
 	} else if pruned > 0 {
 		logger.Info("pruned phantom trash rows at startup", slog.Int("pruned", pruned))
+	}
+
+	// Corrupt-index recovery (WR-02): OpenOrRecover already wiped a corrupt index and
+	// recreated it empty; enqueue a rebuild-from-files to repopulate it. Fire-and-
+	// forget on the single worker (Enqueue, never EnqueueAndWait — CR-01).
+	if indexRecovered {
+		if eerr := worker.Enqueue(context.Background(), search.KindIndex, search.RebuildPayload()); eerr != nil {
+			logger.Warn("search rebuild enqueue after corrupt-index recovery failed", slog.String("error", eerr.Error()))
+		} else {
+			logger.Info("search index was corrupt — recreated empty and rebuild enqueued")
+		}
 	}
 
 	// Search drift recovery: if the index was built against a different Git HEAD than

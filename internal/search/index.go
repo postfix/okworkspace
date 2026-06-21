@@ -45,6 +45,36 @@ func OpenOrCreate(dir string) (*Index, error) {
 	return &Index{dir: dir, idx: bidx}, nil
 }
 
+// OpenOrRecover opens the on-disk index, and — unlike OpenOrCreate — never fails
+// on a corrupt existing index. When the existing index does not open (e.g. a
+// corrupt scorch segment after an unclean shutdown — Pitfall 3), it removes the
+// dir, creates a fresh empty index in its place, and reports recovered=true so the
+// caller can enqueue a rebuild-from-files (the designed self-healing path). A
+// missing dir is created fresh with recovered=false (the normal first-run case).
+// This keeps a corrupt index from taking the whole server down at startup (WR-02).
+func OpenOrRecover(dir string) (idx *Index, recovered bool, err error) {
+	bidx, oerr := bleve.Open(dir)
+	if oerr == nil {
+		return &Index{dir: dir, idx: bidx}, false, nil
+	}
+	if oerr == bleve.ErrorIndexPathDoesNotExist {
+		fresh, ferr := bleve.New(dir, buildMapping())
+		if ferr != nil {
+			return nil, false, fmt.Errorf("search: create index %q: %w", dir, ferr)
+		}
+		return &Index{dir: dir, idx: fresh}, false, nil
+	}
+	// Corrupt/unreadable existing index: wipe and recreate fresh, signal a rebuild.
+	if rerr := os.RemoveAll(dir); rerr != nil {
+		return nil, false, fmt.Errorf("search: remove corrupt index %q: %w", dir, rerr)
+	}
+	fresh, ferr := bleve.New(dir, buildMapping())
+	if ferr != nil {
+		return nil, false, fmt.Errorf("search: recreate index after corruption %q: %w", dir, ferr)
+	}
+	return &Index{dir: dir, idx: fresh}, true, nil
+}
+
 // openOrCreateBleve opens an existing scorch index or creates a new one.
 func openOrCreateBleve(dir string) (bleve.Index, error) {
 	bidx, err := bleve.Open(dir)
