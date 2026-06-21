@@ -95,7 +95,11 @@ export default function MoveDialog({
       queryClient.invalidateQueries({ queryKey: ["tree"] });
       queryClient.invalidateQueries({ queryKey: ["page"] });
       onClose();
-      navigate(`/app/page/${res.path}`);
+      // A folder move returns the raw folder directory (e.g. "newparent/guides"),
+      // not a .md path. Navigating there hits getPage on a directory → HTTP 500.
+      // The folder's addressable home page is its index.md (per CreateFolder).
+      const target = kind === "folder" ? `${res.path}/index.md` : res.path;
+      navigate(`/app/page/${target}`);
     },
     onError: (err: Error & { status?: number }) => {
       // A folder collision (409) is recoverable: surface the collision copy and
