@@ -13,6 +13,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 
 import { markdownExtension } from "./markdown";
+import { livePreview } from "./livePreview";
 import { theme, sourceTheme } from "./theme";
 import { useEditorMode } from "../../stores/editorMode";
 
@@ -20,10 +21,11 @@ import { useEditorMode } from "../../stores/editorMode";
 // whole toggle (no document edit).
 export const modeCompartment = new Compartment();
 
-// liveExtensions: the Live-preview configuration. 06-02 appends the livePreview
-// ViewPlugin (inline decorations) and 06-03 the image/table widgets; this plan
-// ships the markdown language + theme so the seam exists and the tree parses.
-export const liveExtensions: Extension[] = [markdownExtension, theme];
+// liveExtensions: the Live-preview configuration. 06-02 adds the livePreview
+// ViewPlugin (inline text-construct decorations + active-line marker reveal);
+// 06-03 appends the image/table widgets. The markdown language parses the tree
+// the plugin walks; the theme renders the decoration classes at token values.
+export const liveExtensions: Extension[] = [markdownExtension, livePreview, theme];
 
 // sourceExtensions: raw Markdown, monospace document-wide, no live-preview
 // decorations. The markdown language stays loaded (syntax-aware editing) but no
