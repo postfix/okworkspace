@@ -19,6 +19,7 @@ import (
 	"github.com/postfix/okworkspace/internal/jobs"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/repo"
+	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
 	"github.com/postfix/okworkspace/internal/users"
@@ -192,6 +193,27 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	// KindCommit handler above (no second commit kind). A parser panic on an
 	// adversarial file is recovered inside the handler so the drain survives.
 	worker.Register(attachments.KindExtract, attachments.ExtractHandler(contentRepo, worker, st.DB(), cfg.Git.PushOnCommit))
+
+	// Full-text search index (Phase 3). The Bleve scorch index lives UNDER the data
+	// dir (a derived, rebuildable artifact, NEVER inside the content/Git repo). It is
+	// opened once and shared (single worker writer + many HTTP readers). The KindIndex
+	// handler maintains it; a startup HEAD-drift check (below, after ReconcileTrash)
+	// triggers a rebuild-from-files when the working tree moved out-of-band. Search is
+	// always wired; cfg.Search.Enabled is left for a future flag — when the index fails
+	// to open the routes return the generic 500 like any other optional dependency.
+	indexDir := cfg.Search.IndexDir
+	if indexDir == "" {
+		indexDir = filepath.Join(cfg.Storage.DataDir, "index")
+	}
+	searchIdx, err := search.OpenOrCreate(indexDir)
+	if err != nil {
+		return fmt.Errorf("open search index: %w", err)
+	}
+	defer func() { _ = searchIdx.Close() }()
+	searchIdx.SetRepo(contentRepo)
+	searchIdx.SetDB(st.DB())
+	worker.Register(search.KindIndex, search.IndexHandler(searchIdx, contentRepo))
+
 	worker.Start(ctx)
 	defer worker.Stop()
 	logger.Info("job worker started")
@@ -218,6 +240,21 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		logger.Info("pruned phantom trash rows at startup", slog.Int("pruned", pruned))
 	}
 
+	// Search drift recovery: if the index was built against a different Git HEAD than
+	// the current working tree (an out-of-band pull/restore, or a crash between commit
+	// and index), enqueue a rebuild-from-files. Best-effort and fire-and-forget — this
+	// is a startup goroutine, not the single drain goroutine, so Enqueue (NOT
+	// EnqueueAndWait) is correct (CR-01); a drift-check error must never block startup.
+	if drifted, derr := searchIdx.DriftCheck(context.Background(), gs); derr != nil {
+		logger.Warn("search drift check failed at startup", slog.String("error", derr.Error()))
+	} else if drifted {
+		if eerr := worker.Enqueue(context.Background(), search.KindIndex, search.RebuildPayload()); eerr != nil {
+			logger.Warn("search rebuild enqueue failed at startup", slog.String("error", eerr.Error()))
+		} else {
+			logger.Info("search index drift detected — rebuild enqueued")
+		}
+	}
+
 	spa, err := web.Handler()
 	if err != nil {
 		return fmt.Errorf("build SPA handler: %w", err)
@@ -231,6 +268,8 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		Audit:       auditLog,
 		Pages:       pagesSvc,
 		Attachments: attachSvc,
+		Search:      searchIdx,
+		SearchJobs:  worker,
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)

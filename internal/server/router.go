@@ -12,6 +12,7 @@ import (
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/pages"
+	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/store"
 	"github.com/postfix/okworkspace/internal/users"
 )
@@ -39,6 +40,13 @@ type Deps struct {
 	// Attachments is the attachment lifecycle service backing the upload/list/
 	// download routes. Optional; when nil those routes return a 500.
 	Attachments *attachments.Service
+	// Search is the full-text search index backing GET /search and the admin
+	// reindex. Optional; when nil those routes return a 500 (generic copy),
+	// following the existing optional-dependency pattern.
+	Search *search.Index
+	// SearchJobs enqueues the rebuild job for POST /admin/search/reindex
+	// (fire-and-forget). Optional; when nil reindex returns a 500.
+	SearchJobs searchEnqueuer
 }
 
 // New builds the HTTP handler: chi mux with the middleware stack (recover,
@@ -61,6 +69,8 @@ func New(deps Deps) (http.Handler, error) {
 		audit:       rec,
 		pages:       deps.Pages,
 		attachments: deps.Attachments,
+		search:      deps.Search,
+		searchJobs:  deps.SearchJobs,
 	}
 	health := &healthHandler{checker: deps.Health}
 
@@ -116,6 +126,11 @@ func New(deps Deps) (http.Handler, error) {
 			// slash-bearing list wildcard.
 			authed.Get("/attachments/*", h.handleGetAttachment)
 
+			// Full-text search — available to ANY authenticated user (matches the
+			// page-read authorization model, Area 4). q is a query param (not a
+			// path), so no cleanPathParam is needed.
+			authed.Get("/search", h.handleSearch)
+
 			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin
 			// subgroup). Authorization is read from the session role via
 			// RequireRole, never client input (T-02-02). Admin passes the editor
@@ -161,6 +176,9 @@ func New(deps Deps) (http.Handler, error) {
 				admin.Put("/admin/users/{id}/role", h.handleSetRole)
 				admin.Post("/admin/users/{id}/reset-password", h.handleResetPassword)
 				admin.Post("/admin/users/{id}/deactivate", h.handleDeactivate)
+				// Rebuild the search index from files — admin-only operational
+				// action (T-03-07), already behind RequireRole(admin) + nosurf CSRF.
+				admin.Post("/admin/search/reindex", h.handleReindex)
 			})
 		})
 	})

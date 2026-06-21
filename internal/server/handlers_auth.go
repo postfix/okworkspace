@@ -14,6 +14,7 @@ import (
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/pages"
+	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/users"
 )
 
@@ -49,6 +50,12 @@ type authHandlers struct {
 	// Optional: when nil the attachment handlers return a 500, following the same
 	// optional-dependency pattern as pages.
 	attachments *attachments.Service
+	// search is the full-text search index (GET /search + admin reindex).
+	// Optional: when nil the search handlers return a 500 with the generic copy.
+	search *search.Index
+	// searchJobs enqueues the rebuild job for the admin reindex (fire-and-forget).
+	// Optional: when nil reindex returns a 500.
+	searchJobs searchEnqueuer
 }
 
 type loginRequest struct {

@@ -46,6 +46,7 @@ const (
 	ActionAttachUpload      = "attach_upload"
 	ActionAttachReplace     = "attach_replace"
 	ActionAttachDelete      = "attach_delete"
+	ActionSearchReindex     = "search_reindex"
 )
 
 // Event is one audit record. It carries only non-secret provenance — there is
