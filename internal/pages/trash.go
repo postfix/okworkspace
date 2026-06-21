@@ -2,11 +2,14 @@ package pages
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,6 +36,10 @@ type TrashEntry struct {
 	OriginalPath string `json:"original_path"`
 	DeletedBy    string `json:"deleted_by"`
 	DeletedAt    string `json:"deleted_at"`
+	// DeleteGroupID groups every trash row produced by ONE folder-delete operation
+	// (TREE-04/05) so the client can render them as a single restorable unit. Empty
+	// for a solo per-page delete (the stored column is NULL).
+	DeleteGroupID string `json:"delete_group_id"`
 }
 
 // Delete moves the page at path into the trash directory as a recoverable commit
@@ -43,6 +50,19 @@ type TrashEntry struct {
 // path). The trash directory is created defensively on first delete (RESEARCH
 // A1). ErrPageNotFound is returned when the page does not exist.
 func (s *Service) Delete(ctx context.Context, pagePath, user string) error {
+	// A solo per-page delete stores delete_group_id = NULL (empty group id binds as
+	// SQL NULL via deleteWithGroup), so the per-page row is byte-identical to before
+	// the grouped-delete refactor.
+	return s.deleteWithGroup(ctx, pagePath, user, "")
+}
+
+// deleteWithGroup is the shared delete body for both a solo per-page Delete (empty
+// groupID -> SQL NULL) and a grouped folder delete (a shared opaque groupID bound
+// on every member row). The groupID is bound as a PARAMETER (sql.NullString) — never
+// string-interpolated — so an attacker-influenced value can never be SQL-injected
+// (T-07-05). Everything else mirrors the original single-page delete (git mv into
+// trash + provenance row + live-index eviction) through the single-writer worker.
+func (s *Service) deleteWithGroup(ctx context.Context, pagePath, user, groupID string) error {
 	exists, err := s.repo.Exists(pagePath)
 	if err != nil {
 		return err
@@ -106,15 +126,66 @@ func (s *Service) Delete(ctx context.Context, pagePath, user string) error {
 	s.enqueueTrashedAttachmentDeletes(ctx, pagePath)
 
 	// Record provenance (D-10). The page content is NOT stored here — only the
-	// metadata Restore needs (original path, trash path, title, who, when).
+	// metadata Restore needs (original path, trash path, title, who, when, and the
+	// folder-delete group id). An empty groupID stores SQL NULL (solo delete) via
+	// sql.NullString; a non-empty one tags this row as part of a folder delete. The
+	// value is BOUND (?), never interpolated (T-07-05 SQLi guard).
+	group := sql.NullString{String: groupID, Valid: groupID != ""}
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO trash (original_path, trash_path, title, deleted_by, deleted_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		pagePath, trashPath, title, user, s.now().UTC().Format(time.RFC3339))
+		`INSERT INTO trash (original_path, trash_path, title, deleted_by, deleted_at, delete_group_id)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		pagePath, trashPath, title, user, s.now().UTC().Format(time.RFC3339), group)
 	if err != nil {
 		return fmt.Errorf("pages: record trash row: %w", err)
 	}
 	return nil
+}
+
+// DeleteFolder moves an entire folder (its index.md plus every descendant page) to
+// trash under ONE shared opaque delete_group_id so the whole folder delete can be
+// restored as a unit (TREE-04). It enumerates the folder with descendantPages
+// (added in 07-01) and loops the existing per-page deleteWithGroup over each member
+// under the shared group id. Per the RESOLVED atomicity decision (CONTEXT/RESEARCH
+// Pitfall 3) the loop is per-page — each page keeps its own restorable trash row and
+// its own commit, NOT one mega-commit — so partial progress is accepted and
+// recoverable by the group id (mirrors ReconcileTrash WR-01). Returns
+// ErrPageNotFound when the folder has no pages.
+func (s *Service) DeleteFolder(ctx context.Context, dir, user string) error {
+	dir = strings.Trim(strings.TrimSpace(dir), "/")
+	pages, err := s.descendantPages(dir)
+	if err != nil {
+		return err
+	}
+	if len(pages) == 0 {
+		return ErrPageNotFound
+	}
+
+	groupID, err := newDeleteGroupID()
+	if err != nil {
+		return err
+	}
+
+	for _, p := range pages {
+		if err := s.deleteWithGroup(ctx, p, user, groupID); err != nil {
+			// Per-page-looped: a mid-loop failure leaves the already-trashed rows
+			// coherent under the shared group id (still restorable as a group). The
+			// error is surfaced so the caller can report partial progress; the
+			// reconcile backstop converges any phantom row (WR-01).
+			return err
+		}
+	}
+	return nil
+}
+
+// newDeleteGroupID returns an opaque hex group id (NOT a secret — just a collision-
+// resistant tag) for a folder-delete batch, sourced from crypto/rand (stdlib; no new
+// dependency).
+func newDeleteGroupID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("pages: generate delete group id: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
 }
 
 // enqueueTrashedAttachmentDeletes fires a FIRE-AND-FORGET search delete for every
@@ -219,7 +290,7 @@ func (s *Service) ReconcileTrash(ctx context.Context) (int, error) {
 // the SQLite-stored provenance, not page content.
 func (s *Service) ListTrash(ctx context.Context) ([]TrashEntry, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, title, original_path, deleted_by, deleted_at
+		`SELECT id, title, original_path, deleted_by, deleted_at, delete_group_id
 		   FROM trash
 		  ORDER BY id DESC`)
 	if err != nil {
@@ -230,9 +301,13 @@ func (s *Service) ListTrash(ctx context.Context) ([]TrashEntry, error) {
 	entries := []TrashEntry{}
 	for rows.Next() {
 		var e TrashEntry
-		if err := rows.Scan(&e.ID, &e.Title, &e.OriginalPath, &e.DeletedBy, &e.DeletedAt); err != nil {
+		// delete_group_id is NULL for solo deletes; scan into a NullString and surface
+		// it as the empty string so the client groups only genuine folder-delete rows.
+		var group sql.NullString
+		if err := rows.Scan(&e.ID, &e.Title, &e.OriginalPath, &e.DeletedBy, &e.DeletedAt, &group); err != nil {
 			return nil, fmt.Errorf("pages: scan trash row: %w", err)
 		}
+		e.DeleteGroupID = group.String
 		entries = append(entries, e)
 	}
 	if err := rows.Err(); err != nil {
@@ -306,6 +381,81 @@ func (s *Service) Restore(ctx context.Context, id int64, user string) (string, e
 		return "", fmt.Errorf("pages: delete trash row %d: %w", id, err)
 	}
 	return target, nil
+}
+
+// RestoreGroup restores every trash row sharing groupID as a unit (the undo of a
+// folder delete, TREE-05). It loops the EXISTING per-page Restore over the group so
+// the live-page collision auto-suffix (restoredAlternative) applies per page
+// automatically and the per-page restore path stays unchanged. The folder's
+// <dir>/index.md row is restored FIRST so the folder exists before its descendants
+// land. The group id is bound as a PARAMETER (?) in the SELECT — never interpolated —
+// so an attacker-supplied id cannot be SQL-injected (T-07-05). Returns the list of
+// restored paths (so the handler can surface a collision notice) and
+// ErrTrashNotFound when no row matches groupID.
+func (s *Service) RestoreGroup(ctx context.Context, groupID, user string) ([]string, error) {
+	if strings.TrimSpace(groupID) == "" {
+		return nil, ErrTrashNotFound
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, original_path FROM trash WHERE delete_group_id = ?`, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("pages: list trash group %q: %w", groupID, err)
+	}
+	type member struct {
+		id   int64
+		orig string
+	}
+	var members []member
+	for rows.Next() {
+		var m member
+		if err := rows.Scan(&m.id, &m.orig); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("pages: scan trash group row: %w", err)
+		}
+		members = append(members, m)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("pages: iterate trash group rows: %w", err)
+	}
+	rows.Close()
+
+	if len(members) == 0 {
+		return nil, ErrTrashNotFound
+	}
+
+	// Order so the folder's index.md row(s) restore FIRST (the folder exists before
+	// its descendants land), then the rest by ascending original path for a stable,
+	// shallow-to-deep order.
+	sort.SliceStable(members, func(i, j int) bool {
+		ii := isFolderIndex(members[i].orig)
+		ij := isFolderIndex(members[j].orig)
+		if ii != ij {
+			return ii // index.md sorts before non-index
+		}
+		return members[i].orig < members[j].orig
+	})
+
+	restored := make([]string, 0, len(members))
+	for _, m := range members {
+		// Reuse the EXISTING per-page Restore: it auto-suffixes on a live-page
+		// collision (restoredAlternative) so a live page is never clobbered, per page.
+		path, err := s.Restore(ctx, m.id, user)
+		if err != nil {
+			// A mid-group failure leaves the rest of the group still restorable (the
+			// remaining rows survive); surface the error with what was restored so far.
+			return restored, err
+		}
+		restored = append(restored, path)
+	}
+	return restored, nil
+}
+
+// isFolderIndex reports whether a repo-relative page path is a folder's index.md
+// (the page that must be restored first so the folder exists for its descendants).
+func isFolderIndex(p string) bool {
+	return path.Base(p) == "index.md"
 }
 
 // restoredAlternative computes the collision-safe restore target and the
