@@ -1,10 +1,11 @@
 ---
 phase: 6
 slug: live-preview-editor-obsidian-style
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-06-21
+reviewed_at: 2026-06-21
 ---
 
 # Phase 6 — UI Design Contract
