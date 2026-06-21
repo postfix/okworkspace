@@ -335,6 +335,18 @@ func churnRatio(oldBody, newBody string) float64 {
 	return r
 }
 
+// ChurnRatio is the exported wrapper over churnRatio for the server's /propose-patch
+// audit Detail (the changed-line fraction between the old and proposed body). Kept
+// exported (not the internal helper) so the HTTP layer records the metric without
+// reaching into agent internals.
+func ChurnRatio(oldBody, newBody string) float64 { return churnRatio(oldBody, newBody) }
+
+// ValidateProposedBody is the exported wrapper over validateProposedBody for the
+// server's /apply-patch defense-in-depth re-validation (a tampered body never
+// reaches pages.Save). It returns nil for a body safe to apply; ErrProposalInvalid
+// (wrapped) otherwise.
+func ValidateProposedBody(source, body string) error { return validateProposedBody(source, body) }
+
 // countLines counts the newline-delimited lines in s (a non-empty trailing segment
 // without a newline still counts as one line). Empty string is zero lines.
 func countLines(s string) int {

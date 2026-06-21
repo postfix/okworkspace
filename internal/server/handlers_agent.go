@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/postfix/okworkspace/internal/agent"
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
+	"github.com/postfix/okworkspace/internal/pages"
 )
 
 // agentChatRequest is the POST /agent/chat body. The actor and the ROLE that
@@ -360,6 +362,208 @@ func writeAgentModeError(w http.ResponseWriter, err error) {
 	default:
 		writeError(w, http.StatusBadGateway, "The assistant is unavailable right now. Try again in a moment.")
 	}
+}
+
+// ─── Propose / Apply patch: the SAFETY CORE gate (AGNT-09/10/11) ─────────────
+//
+// /propose-patch (editor) calls the agent's ProposePatch (the ONLY whole-body
+// proposal path), returning the OLD body + the proposed NEW body + the base
+// revision captured at proposal time, so the FRONTEND renders a real diff — never
+// a prose "I updated it for you" summary. /apply-patch (editor + CSRF) is a
+// SEPARATE gated HTTP endpoint — NOT an Eino tool (the read-only 5-tool allow-list
+// is unchanged, AGNT-11) — that reuses pages.Save(baseRevision) → the single-writer
+// gitstore.Commit(Action="approved_agent_patch", Source="agent"). A revision that
+// moved since the proposal blocks the apply with a 409 (ErrStaleRevision) and writes
+// NOTHING — never a silent overwrite of a concurrent edit (T-04-17). Both events are
+// audited (ActionAgentPatchProposal / ActionAgentPatchApproval, non-fatal).
+
+// proposePatchRequest is the POST /agent/propose-patch body. page_path is the page
+// to patch; instruction describes the change. The actor/role are session-derived,
+// never read from the body.
+type proposePatchRequest struct {
+	PagePath    string `json:"page_path"`
+	Instruction string `json:"instruction"`
+}
+
+// proposePatchResponse carries the two bodies the frontend diffs (old↔new) plus the
+// base revision the eventual apply must echo back for the stale-revision floor. The
+// diff is computed by the client from old_body + new_body — the server never returns
+// a prose summary in place of the change.
+type proposePatchResponse struct {
+	PagePath     string `json:"page_path"`
+	OldBody      string `json:"old_body"`
+	NewBody      string `json:"new_body"`
+	BaseRevision string `json:"base_revision"`
+}
+
+// applyPatchRequest is the POST /agent/apply-patch body. It is the one consequential
+// write: base_revision is the token captured at proposal time, re-checked by
+// pages.Save so a moved revision 409s instead of overwriting.
+type applyPatchRequest struct {
+	PagePath     string `json:"page_path"`
+	NewBody      string `json:"new_body"`
+	Frontmatter  string `json:"frontmatter"`
+	BaseRevision string `json:"base_revision"`
+}
+
+// handleProposePatch produces a whole-body patch proposal (AGNT-09). Editor-gated.
+// It returns the old body (for the diff's left side), the proposed new body, and the
+// base revision captured at proposal time — never auto-applying. The proposal is
+// validated + retried inside ProposePatch; an exhausted validation fails closed.
+func (h *authHandlers) handleProposePatch(w http.ResponseWriter, r *http.Request) {
+	if h.agent == nil || h.pages == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req proposePatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	path := strings.TrimSpace(req.PagePath)
+	instruction := strings.TrimSpace(req.Instruction)
+	if path == "" || strings.ContainsRune(path, '\x00') {
+		writeError(w, http.StatusBadRequest, "Choose a page to patch.")
+		return
+	}
+	if instruction == "" {
+		writeError(w, http.StatusBadRequest, "Describe the change you'd like the assistant to propose.")
+		return
+	}
+	if strings.ContainsRune(instruction, '\x00') {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	if len(instruction) > maxPromptLen {
+		writeError(w, http.StatusBadRequest, "That instruction is too long. Please shorten it and try again.")
+		return
+	}
+
+	// The proposal fetches the current body + captures the base revision; we also
+	// fetch the page here for the OLD side of the diff (and to 404 cleanly).
+	pg, err := h.pages.Get(r.Context(), path)
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+
+	newBody, baseRev, err := h.agent.ProposePatch(r.Context(), path, instruction)
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		writeAgentModeError(w, err)
+		return
+	}
+
+	// Audit the proposal (non-fatal). Detail carries only the non-secret churn
+	// metric + role — never the instruction text or the proposed body.
+	oldSource := assembleSource(pg.Frontmatter, pg.Body)
+	churn := agent.ChurnRatio(oldSource, newBody)
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionAgentPatchProposal,
+		Actor:  h.actorUsername(r.Context()),
+		Target: path,
+		Detail: fmt.Sprintf("churn=%.3f role=%s", churn, h.actorRole(r.Context())),
+		Source: auditSourceWeb,
+	})
+
+	writeJSON(w, http.StatusOK, proposePatchResponse{
+		PagePath:     path,
+		OldBody:      pg.Body,
+		NewBody:      newBody,
+		BaseRevision: baseRev,
+	})
+}
+
+// handleApplyPatch applies an approved patch (AGNT-10). Editor-gated + CSRF (the
+// global nosurf middleware covers the mutating method). It reuses pages.Save with
+// the proposal's base_revision: a moved revision returns ErrStaleRevision → 409 and
+// writes nothing (never a silent overwrite). pages.Save reaching
+// gitstore.Commit(Action="approved_agent_patch", Source="agent") is the ONLY write
+// path — there is no bespoke commit here and apply is NOT an Eino tool (AGNT-11).
+func (h *authHandlers) handleApplyPatch(w http.ResponseWriter, r *http.Request) {
+	if h.pages == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req applyPatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	path := strings.TrimSpace(req.PagePath)
+	if path == "" || strings.ContainsRune(path, '\x00') {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	if strings.TrimSpace(req.NewBody) == "" {
+		writeError(w, http.StatusBadRequest, "There is no proposed change to apply.")
+		return
+	}
+	if strings.ContainsRune(req.NewBody, '\x00') || strings.ContainsRune(req.Frontmatter, '\x00') {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+
+	// Re-validate the body BEFORE it reaches the write path (defense in depth — the
+	// same gate ProposePatch ran, in case the client tampered the body before
+	// approving). A fenced/empty/frontmatter-mangled body never reaches pages.Save.
+	if err := agent.ValidateProposedBody(assembleSource(req.Frontmatter, ""), req.NewBody); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "The proposed change is not in a clean state to apply. Re-run the assistant.")
+		return
+	}
+
+	actor := h.actorUsername(r.Context())
+	err := h.pages.Save(r.Context(), path, req.NewBody, req.Frontmatter, req.BaseRevision, actor)
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		if errors.Is(err, pages.ErrStaleRevision) {
+			// The page changed since the assistant read it — block, never overwrite.
+			writeError(w, http.StatusConflict, "This page changed since the assistant read it. Re-run the assistant to propose against the latest version.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "We couldn't apply that change just now. Check your connection and try again.")
+		return
+	}
+
+	// Audit the approval (non-fatal). Every Source=agent commit must reconcile to one
+	// of these approval rows (AI-SPEC §7 metric #1).
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionAgentPatchApproval,
+		Actor:  actor,
+		Target: path,
+		Detail: "role=" + h.actorRole(r.Context()),
+		Source: auditSourceWeb,
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// assembleSource reconstructs an OKF source from a frontmatter region and a body so
+// it can be passed to the agent's frontmatter-preserving validators / churn metric.
+// Mirrors pages.assemble (the service re-derives the exact bytes it writes).
+func assembleSource(frontmatter, body string) string {
+	fm := strings.TrimSpace(frontmatter)
+	if fm == "" {
+		return body
+	}
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString(fm)
+	if !strings.HasSuffix(fm, "\n") {
+		b.WriteByte('\n')
+	}
+	b.WriteString("---\n")
+	b.WriteString(body)
+	return b.String()
 }
 
 // actorRole resolves the session-bound user's role for the audit Detail. It

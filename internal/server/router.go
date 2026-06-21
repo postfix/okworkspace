@@ -161,6 +161,17 @@ func New(deps Deps) (http.Handler, error) {
 			// gate (roleSatisfies).
 			authed.Group(func(editor chi.Router) {
 				editor.Use(auth.RequireRole(auth.RoleEditor))
+
+				// Agent SAFETY-CORE gate (AGNT-09/10/11) — editor-gated, inheriting
+				// the global nosurf CSRF on these mutating POSTs. /propose-patch
+				// returns old+new bodies + the captured base revision so the FRONTEND
+				// renders a real diff; /apply-patch is the ONE consequential write,
+				// reusing pages.Save → the single-writer commit and 409-ing on a moved
+				// revision. NEITHER is an Eino tool — the read-only 5-tool allow-list is
+				// unchanged (apply/write is never tool-reachable, AGNT-11).
+				editor.Post("/agent/propose-patch", h.handleProposePatch)
+				editor.Post("/agent/apply-patch", h.handleApplyPatch)
+
 				editor.Post("/pages", h.handleCreatePage)
 				editor.Put("/pages/*", h.handleSavePage)
 				// Rename/move share one endpoint: POST /pages/{path}/rename.
