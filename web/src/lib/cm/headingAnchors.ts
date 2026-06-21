@@ -61,17 +61,47 @@ export function dedupSlug(occurrences: Map<string, number>, base: string): strin
   return result;
 }
 
+// trimATXClosing removes a trailing run of '#' (the optional ATX closing sequence)
+// and the whitespace that precedes it. Ported BYTE-FOR-BYTE from Go's
+// okf.trimATXClosing (internal/okf/headings.go) so the frontend id matches the
+// backend Anchor for headings that use a closing marker. CommonMark §4.2 requires
+// the closing '#' run be preceded by whitespace to count as a closer; otherwise
+// (e.g. "foo#") the '#' run is part of the text.
+function trimATXClosing(s: string): string {
+  const t = s.replace(/#+$/, ""); // strings.TrimRight(s, "#")
+  if (t === s) {
+    // No trailing '#' run — just trim trailing whitespace.
+    return s.replace(/[ \t]+$/, ""); // strings.TrimRight(s, " \t")
+  }
+  // There was a trailing '#' run; it is a valid closer only if preceded by
+  // whitespace. Trim the trailing whitespace before it.
+  const trimmed = t.replace(/[ \t]+$/, ""); // strings.TrimRight(t, " \t")
+  if (trimmed !== t) {
+    // There was whitespace before the '#' run — valid closer, return trimmed.
+    return trimmed;
+  }
+  // No whitespace before the '#' run (e.g. "foo#") — not a closer; keep the
+  // original minus trailing whitespace.
+  return s.replace(/[ \t]+$/, ""); // strings.TrimRight(s, " \t")
+}
+
 // headingText strips the leading ATX '#' run and the single required space from a
-// heading line, returning the heading text 06-04 feeds to slug() when stamping the
-// line id. A line that is not an ATX heading is returned unchanged. (Trailing-'#'
-// closer handling lives in okf.atxHeading on the backend; the read surface only
-// needs the leading-marker strip for id computation.)
+// heading line, then strips any trailing ATX closing '#' run (mirroring
+// okf.atxHeading's trimATXClosing on the backend), returning the heading text
+// 06-04 feeds to slug() when stamping the line id. A line that is not an ATX
+// heading is returned unchanged.
+//
+// The backend trims " \t\r" off the right of the text BEFORE trimATXClosing, so a
+// trailing '\r' (CRLF line) must be removed first here too — otherwise a heading
+// like "## Title ##\r" would not match the closing-marker logic byte-for-byte.
 export function headingText(line: string): string {
   const m = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(line);
   if (!m) {
     return line;
   }
-  return (m[2] ?? "").replace(/[ \t]+$/, "");
+  // strings.TrimRight(rest, " \t\r") then TrimLeft(rest, " \t") on the backend.
+  const rest = (m[2] ?? "").replace(/[ \t\r]+$/, "").replace(/^[ \t]+/, "");
+  return trimATXClosing(rest);
 }
 
 // ---------------------------------------------------------------------------

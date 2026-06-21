@@ -72,6 +72,29 @@ describe("headingText", () => {
     expect(headingText("not a heading")).toBe("not a heading");
     expect(headingText("#NoSpace")).toBe("#NoSpace");
   });
+
+  it("strips an ATX closing '#' run preceded by whitespace (CommonMark §4.2, okf.trimATXClosing parity)", () => {
+    // A closing '#' run preceded by whitespace is removed along with that space.
+    expect(headingText("## My Title ##")).toBe("My Title");
+    expect(headingText("## Title ###")).toBe("Title");
+    expect(headingText("# Foo #")).toBe("Foo");
+    expect(headingText("## Baz ## ")).toBe("Baz");
+    // No whitespace before the '#' run → NOT a closer; the '#'s stay in the text.
+    expect(headingText("## foo#")).toBe("foo#");
+    expect(headingText("### Bar###")).toBe("Bar###");
+    // No closing marker → unchanged.
+    expect(headingText("## Title")).toBe("Title");
+  });
+
+  it("slug(headingText(line)) matches okf.ScanHeadings for closing-marker headings", () => {
+    // Backend: "## My Title ##" → trimATXClosing → "My Title" → slug "my-title".
+    // Without trimATXClosing the trailing space would slug to "my-title-".
+    expect(slug(headingText("## My Title ##"))).toBe("my-title");
+    expect(slug(headingText("## Title ###"))).toBe("title");
+    // "## foo#" is not a closer → "foo#" → slug drops '#' → "foo".
+    expect(slug(headingText("## foo#"))).toBe("foo");
+    expect(slug(headingText("## Title"))).toBe("title");
+  });
 });
 
 // ---------------------------------------------------------------------------
