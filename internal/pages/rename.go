@@ -18,6 +18,12 @@ import (
 // normally auto-suffixed per D-12; this sentinel exists for the exhausted case.)
 var ErrRenameCollision = errors.New("rename target collision")
 
+// ErrFolderExists is returned when a folder rename/move targets a directory that
+// already exists. Folders NEVER auto-suffix or silently merge (TREE-06): the
+// operation rejects cleanly (surfaced as HTTP 409) before any disk write so two
+// folders are never merged into one.
+var ErrFolderExists = errors.New("folder target already exists")
+
 // Rename changes the page at oldPath to a new title within the SAME folder. The
 // new filename is slugged from newTitle (collision-suffixed, D-12). Every inbound
 // link across the whole workspace is eagerly recomputed and rewritten to the new
