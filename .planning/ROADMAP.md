@@ -223,7 +223,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 06-03-PLAN.md — Inline image + GFM table widgets (sanitized, no-innerHTML) + internal `.md` link SPA navigation; completes the EDIT-01 render set + the image-src V5 control (EDIT-01/04) (wave 3)
+- [x] 06-03-PLAN.md — Inline image + GFM table widgets (sanitized, no-innerHTML) + internal `.md` link SPA navigation; completes the EDIT-01 render set + the image-src V5 control (EDIT-01/04) (wave 3)
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -262,5 +262,5 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 0/TBD | Not started | - |
 | 5. Collaboration | 0/TBD | Not started | - |
-| 6. Live-Preview Editor (Obsidian-style) | 2/4 | In Progress|  |
+| 6. Live-Preview Editor (Obsidian-style) | 3/4 | In Progress|  |
 | 7. Obsidian-style File Tree (folder operations & tree UX) | 0/TBD | Not started | - |
