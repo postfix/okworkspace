@@ -145,7 +145,21 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A user can search the extracted text of attachments and find the pages they belong to
   4. Search results are typed as page, attachment, or heading so the user knows what they found
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Backend search foundation: Bleve v2.6.0 typed index + mapping + query builder (title/body/tag, title boost, type facet) + idempotent rebuild-from-files + startup drift detection + GET /search (authed) & POST /admin/search/reindex (admin) + Wave 0 test scaffolds (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — ⌘K SearchPalette UI: zustand store + debounced react-query hook + search() client + Obsidian-style palette (focus-trap, keyboard nav, 5 states, weight-only highlight) + top-bar trigger (wave 2)
+- [ ] 03-03-PLAN.md — Attachments + extracted-text (owning-page link) + headings deep-link: ATX heading scanner + attachment/heading typed docs + stale-heading cleanup + rehype-slug renderer anchors (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-04-PLAN.md — Lifecycle hardening: incremental KindIndex enqueues on all page/attachment mutations + extraction-done + admin Rebuild UI + concurrency race test + end-of-phase human verification (wave 3)
+
 **UI hint**: yes
 **Notes**: No phase research needed — standard Bleve patterns. Bleve indexes both page content (Phase 1) and extracted attachment text (Phase 2), so it follows both. The rebuild-from-files reindex job (admin action + startup HEAD-mismatch trigger) is this phase's primary engineering concern alongside the index itself, and is the defense against SQLite/Bleve drift. Incremental IndexJob wires to page-save and extraction-done events, reusing the Phase 1 job worker.
 
