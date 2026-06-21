@@ -1,0 +1,113 @@
+/*
+ * DiffReviewDialog — the trust-gate modal. It reuses the base modal shell classes
+ * (.dialog-backdrop / .dialog / .dialog-title / .dialog-footer) from Dialog.css,
+ * imported here so the styles ship even though DiffReviewDialog renders its own
+ * markup (it cannot delegate to Dialog because of the Approve-not-auto-focused
+ * inversion). Only the diff-specific layout is declared below. Token-only.
+ */
+@import "./Dialog.css";
+
+/* The diff modal is wider than a standard dialog so a side-by-side diff stays
+   readable; it is viewport-bounded with an internal scroll on the diff body. */
+.diff-dialog {
+  max-width: 920px;
+  max-height: calc(100vh - var(--space-xl) * 2);
+}
+
+.diff-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.diff-view-toggle {
+  display: inline-flex;
+  gap: var(--space-xs);
+}
+
+.diff-view-toggle .btn {
+  min-height: var(--hit-min-height);
+  font-size: var(--font-size-label);
+}
+
+.diff-summary {
+  margin: 0;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-muted);
+}
+
+/* The real-diff body: bordered frame, internal scroll so long patches stay
+   reviewable without growing the modal past the viewport. */
+.diff-region {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  max-height: 60vh;
+  background: var(--color-bg);
+}
+
+.diff-region:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.diff-empty {
+  margin: 0;
+  padding: var(--space-lg);
+  text-align: center;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* The footer is space-between so Reject (left) and Approve (right) are
+   positionally separated — never two same-weight adjacent buttons. */
+.diff-footer {
+  justify-content: space-between;
+}
+
+.diff-footer-actions {
+  display: inline-flex;
+  gap: var(--space-sm);
+}
+
+.diff-approve {
+  gap: var(--space-xs);
+}
+
+/* Stale-revision banner: warning color (never accent) marks the blocking
+   condition; the icon + heading + body pair color with text so color is never
+   the sole signal. */
+.diff-stale {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  flex: 1 1 auto;
+}
+
+.diff-stale-icon {
+  color: var(--color-warning);
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.diff-stale-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.diff-stale-heading {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-label);
+  color: var(--color-text);
+}
+
+.diff-stale-body {
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
