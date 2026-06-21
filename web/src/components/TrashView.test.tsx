@@ -11,7 +11,12 @@ import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 
 import TrashView, { relativeTime } from "./TrashView";
-import { listTrash, restoreFromTrash, type TrashEntry } from "../api/client";
+import {
+  listTrash,
+  restoreFromTrash,
+  restoreFolderGroup,
+  type TrashEntry,
+} from "../api/client";
 
 vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/client")>();
@@ -19,11 +24,13 @@ vi.mock("../api/client", async (importOriginal) => {
     ...actual,
     listTrash: vi.fn(),
     restoreFromTrash: vi.fn(),
+    restoreFolderGroup: vi.fn(),
   };
 });
 
 const mockListTrash = vi.mocked(listTrash);
 const mockRestore = vi.mocked(restoreFromTrash);
+const mockRestoreGroup = vi.mocked(restoreFolderGroup);
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({
@@ -107,6 +114,84 @@ describe("TrashView", () => {
     expect(container.textContent ?? "").not.toMatch(
       /\b(commit|branch|SHA|HEAD|push|merge)\b/i,
     );
+  });
+
+  // TREE-05 — grouped folder restore.
+  const GROUPED: TrashEntry[] = [
+    // Two pages trashed together by one folder-delete (shared group id).
+    {
+      id: 10,
+      title: "runbooks",
+      original_path: "runbooks/index.md",
+      deleted_by: "Sam",
+      deleted_at: new Date(Date.now() - 3600 * 1000).toISOString(),
+      delete_group_id: "grp-1",
+    },
+    {
+      id: 11,
+      title: "Deploy",
+      original_path: "runbooks/deploy.md",
+      deleted_by: "Sam",
+      deleted_at: new Date(Date.now() - 3600 * 1000).toISOString(),
+      delete_group_id: "grp-1",
+    },
+    // One individually-trashed page (no group).
+    {
+      id: 12,
+      title: "Notes",
+      original_path: "notes.md",
+      deleted_by: "Ada",
+      deleted_at: new Date(Date.now() - 7200 * 1000).toISOString(),
+      delete_group_id: "",
+    },
+  ];
+
+  it("renders ONE grouped 'Restore folder' row + a per-page row and restores the group", async () => {
+    mockListTrash.mockResolvedValue(GROUPED);
+    mockRestoreGroup.mockResolvedValue({
+      paths: ["runbooks/index.md", "runbooks/deploy.md"],
+    });
+    render(<TrashView />, { wrapper });
+
+    // The grouped row labels the folder + page count and offers Restore folder.
+    expect(
+      await screen.findByText(/Folder 'runbooks' · 2 pages/),
+    ).toBeInTheDocument();
+    const groupBtn = screen.getByRole("button", { name: /restore folder/i });
+    // The solo page keeps its per-page row.
+    expect(screen.getByText("Notes")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /restore page/i }),
+    ).toBeInTheDocument();
+    // Exactly one grouped row (not one per grouped entry).
+    expect(
+      screen.getAllByRole("button", { name: /restore folder/i }),
+    ).toHaveLength(1);
+
+    const user = userEvent.setup();
+    await user.click(groupBtn);
+    await waitFor(() =>
+      expect(mockRestoreGroup).toHaveBeenCalledWith("grp-1"),
+    );
+  });
+
+  it("surfaces the batched collision notice when a grouped page was auto-suffixed", async () => {
+    mockListTrash.mockResolvedValue(GROUPED);
+    // One restored path differs from the original → a collision was suffixed.
+    mockRestoreGroup.mockResolvedValue({
+      paths: ["runbooks/index.md", "runbooks/deploy-2.md"],
+    });
+    render(<TrashView />, { wrapper });
+
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: /restore folder/i }),
+    );
+    expect(
+      await screen.findByText(
+        /Some pages already existed, so they were restored with a '\(restored\)' suffix\./,
+      ),
+    ).toBeInTheDocument();
   });
 });
 
