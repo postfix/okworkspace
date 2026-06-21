@@ -295,9 +295,10 @@ func (s *Service) Meta(ctx context.Context, id string) (AttachmentMeta, error) {
 	return readMeta(s.repo, id)
 }
 
-// Open resolves and reads the byte-exact binary for an attachment. The download
-// handler uses the resolved path with http.ServeContent; this returns the raw
-// bytes for callers that need them directly. ErrAttachmentNotFound when missing.
+// ResolveBin resolves an attachment's binary to a safe absolute path (SEC-01) and
+// returns it. It reads NOTHING — the download handler passes the resolved path to
+// http.ServeContent, which streams the byte-exact file itself. Returns an error
+// when the path cannot be resolved (e.g. the attachment is missing).
 func (s *Service) ResolveBin(id, ext string) (string, error) {
 	abs, err := s.repo.Resolve(BinPath(id, ext))
 	if err != nil {

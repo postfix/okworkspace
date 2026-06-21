@@ -435,7 +435,7 @@ export function subscribeExtractionStatus(
 export function humanFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
   if (bytes < 1000) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
+  const units = ["KB", "MB", "GB", "TB", "PB", "EB"];
   let value = bytes / 1000;
   let i = 0;
   while (value >= 1000 && i < units.length - 1) {
