@@ -11,6 +11,7 @@ import (
 	"github.com/postfix/okworkspace/internal/agent"
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
+	"github.com/postfix/okworkspace/internal/okf"
 	"github.com/postfix/okworkspace/internal/pages"
 )
 
@@ -462,9 +463,10 @@ func (h *authHandlers) handleProposePatch(w http.ResponseWriter, r *http.Request
 	}
 
 	// Audit the proposal (non-fatal). Detail carries only the non-secret churn
-	// metric + role — never the instruction text or the proposed body.
-	oldSource := assembleSource(pg.Frontmatter, pg.Body)
-	churn := agent.ChurnRatio(oldSource, newBody)
+	// metric + role — never the instruction text or the proposed body. The proposal
+	// is body-only, so churn is the body↔body changed-line fraction (frontmatter is
+	// never part of the diff under the body-only contract — CR-01).
+	churn := agent.ChurnRatio(pg.Body, newBody)
 	_ = h.audit.Record(r.Context(), audit.Event{
 		Action: audit.ActionAgentPatchProposal,
 		Actor:  h.actorUsername(r.Context()),
@@ -513,8 +515,21 @@ func (h *authHandlers) handleApplyPatch(w http.ResponseWriter, r *http.Request) 
 
 	// Re-validate the body BEFORE it reaches the write path (defense in depth — the
 	// same gate ProposePatch ran, in case the client tampered the body before
-	// approving). A fenced/empty/frontmatter-mangled body never reaches pages.Save.
-	if err := agent.ValidateProposedBody(assembleSource(req.Frontmatter, ""), req.NewBody); err != nil {
+	// approving). The proposal is BODY-ONLY (the frontmatter is server-owned and
+	// re-attached by pages.Save), so validate against an empty source: there is no
+	// frontmatter key-set to preserve here, only the empty/fenced rules. A fenced/
+	// empty body never reaches pages.Save.
+	if err := agent.ValidateProposedBody("", req.NewBody); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "The proposed change is not in a clean state to apply. Re-run the assistant.")
+		return
+	}
+
+	// pages.Save assembles ---frontmatter--- + body exactly once. req.NewBody is the
+	// body only and req.Frontmatter is the page's original frontmatter region (the
+	// single source of frontmatter) — so the frontmatter is written exactly once, no
+	// stray second fence (the CR-01 double-write). A body that itself carries a
+	// leading "---" fence would be double-fenced, so reject one defensively.
+	if hasLeadingFrontmatterFence(req.NewBody) {
 		writeError(w, http.StatusUnprocessableEntity, "The proposed change is not in a clean state to apply. Re-run the assistant.")
 		return
 	}
@@ -547,23 +562,20 @@ func (h *authHandlers) handleApplyPatch(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// assembleSource reconstructs an OKF source from a frontmatter region and a body so
-// it can be passed to the agent's frontmatter-preserving validators / churn metric.
-// Mirrors pages.assemble (the service re-derives the exact bytes it writes).
-func assembleSource(frontmatter, body string) string {
-	fm := strings.TrimSpace(frontmatter)
-	if fm == "" {
-		return body
+// hasLeadingFrontmatterFence reports whether body begins with its own YAML
+// frontmatter fence at byte 0. The propose→apply contract is body-only (CR-01): the
+// frontmatter is server-owned and re-attached by pages.Save exactly once. A body
+// that itself opens with a "---" fence block would be double-fenced on write, so
+// apply rejects it. okf.Parse is the single source of "is this a frontmatter fence"
+// (the same recognizer pages.Save uses), so this can never drift from the writer.
+func hasLeadingFrontmatterFence(body string) bool {
+	doc, err := okf.Parse([]byte(body))
+	if err != nil {
+		// A parse error here means okf could not split it — treat as not-a-clean-body
+		// (the caller rejects). Returning true funnels it to the same 422.
+		return true
 	}
-	var b strings.Builder
-	b.WriteString("---\n")
-	b.WriteString(fm)
-	if !strings.HasSuffix(fm, "\n") {
-		b.WriteByte('\n')
-	}
-	b.WriteString("---\n")
-	b.WriteString(body)
-	return b.String()
+	return doc.HasFrontmatter
 }
 
 // actorRole resolves the session-bound user's role for the audit Detail. It
