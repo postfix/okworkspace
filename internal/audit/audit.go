@@ -51,6 +51,12 @@ const (
 	ActionAttachReplace     = "attach_replace"
 	ActionAttachDelete      = "attach_delete"
 	ActionSearchReindex     = "search_reindex"
+
+	// Agent actions (Phase 4). Recorded non-fatally; callers MUST NOT place the
+	// prompt's secret-shaped content or the LLM API key in Event.Detail.
+	ActionAgentPrompt        = "agent_prompt"
+	ActionAgentPatchProposal = "agent_patch_proposal"
+	ActionAgentPatchApproval = "agent_patch_approval"
 )
 
 // Event is one audit record. It carries only non-secret provenance — there is
