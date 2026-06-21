@@ -108,7 +108,7 @@ describe("LeftTree", () => {
     expect(homeRow).toHaveAttribute("aria-current", "page");
   });
 
-  it("right-clicking a folder opens a create-here menu (context menu)", async () => {
+  it("right-clicking a folder opens the 5-action folder menu (editor)", async () => {
     vi.mocked(client.getTree).mockResolvedValue(TREE);
     renderTree();
     const folderRow = (await screen.findByText("runbooks")).closest(
@@ -121,8 +121,120 @@ describe("LeftTree", () => {
     expect(
       screen.getByRole("menuitem", { name: "New folder here" }),
     ).toBeInTheDocument();
-    // Folders have no rename/move/delete (no backend) — create-only.
-    expect(screen.queryByRole("menuitem", { name: /rename/i })).toBeNull();
+    // Net-new (Plan 04): folders now carry rename/move/delete; Delete is the only
+    // destructive item.
+    expect(screen.getByRole("menuitem", { name: /^rename$/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /^move$/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /^delete$/i })).toHaveClass(
+      "treemenu-item-danger",
+    );
+  });
+
+  it("a reader gets no folder menu (RBAC)", async () => {
+    vi.mocked(client.getTree).mockResolvedValue(TREE);
+    vi.mocked(client.me).mockResolvedValue({ ...EDITOR, role: "reader" });
+    renderTree();
+    const folderRow = (await screen.findByText("runbooks")).closest(
+      ".navrow-folder",
+    ) as HTMLElement;
+    fireEvent.contextMenu(folderRow);
+    // No mutate (or create) actions for a reader: the folder menu is suppressed
+    // entirely (an empty menu never renders).
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("folder 'Delete' opens DeleteFolderDialog naming the page count N", async () => {
+    vi.mocked(client.getTree).mockResolvedValue(TREE);
+    const user = userEvent.setup();
+    renderTree();
+    const folderRow = (await screen.findByText("runbooks")).closest(
+      ".navrow-folder",
+    ) as HTMLElement;
+    fireEvent.contextMenu(folderRow);
+    await user.click(await screen.findByRole("menuitem", { name: /^delete$/i }));
+    // runbooks has exactly one descendant page (deploy.md) → "its 1 page".
+    expect(await screen.findByText(/its 1 page will move to Trash/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /delete folder/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("folder 'Rename' opens the folder-kind RenameModal", async () => {
+    vi.mocked(client.getTree).mockResolvedValue(TREE);
+    const user = userEvent.setup();
+    renderTree();
+    const folderRow = (await screen.findByText("runbooks")).closest(
+      ".navrow-folder",
+    ) as HTMLElement;
+    fireEvent.contextMenu(folderRow);
+    await user.click(await screen.findByRole("menuitem", { name: /^rename$/i }));
+    expect(await screen.findByRole("dialog", { name: /rename folder/i })).toBeInTheDocument();
+  });
+
+  it("folder rows are draggable (editor) and set application/x-okf-folder", async () => {
+    vi.mocked(client.getTree).mockResolvedValue(TREE);
+    renderTree();
+    const folderRow = (await screen.findByText("runbooks")).closest(
+      ".navrow-folder",
+    ) as HTMLElement;
+    expect(folderRow).toHaveAttribute("draggable", "true");
+    const dt = makeDataTransfer({});
+    fireEvent.dragStart(folderRow, { dataTransfer: dt });
+    expect(dt.setData).toHaveBeenCalledWith(
+      "application/x-okf-folder",
+      "runbooks",
+    );
+  });
+
+  it("dragging a folder onto its own descendant does NOT move it (TREE-06 guard)", async () => {
+    // TREE2 nests a child folder so we have a descendant target.
+    const TREE2: TreeNode[] = [
+      {
+        type: "folder",
+        path: "runbooks",
+        title: "runbooks",
+        children: [
+          {
+            type: "folder",
+            path: "runbooks/aws",
+            title: "aws",
+            children: [],
+          },
+        ],
+      },
+    ];
+    vi.mocked(client.getTree).mockResolvedValue(TREE2);
+    renderTree();
+    const childRow = (await screen.findByText("aws")).closest(
+      ".navrow-folder",
+    ) as HTMLElement;
+    // Start dragging the parent folder, then drop on its descendant.
+    const parentRow = (await screen.findByText("runbooks")).closest(
+      ".navrow-folder",
+    ) as HTMLElement;
+    const startDt = makeDataTransfer({});
+    fireEvent.dragStart(parentRow, { dataTransfer: startDt });
+    const dropDt = makeDataTransfer({ "application/x-okf-folder": "runbooks" });
+    fireEvent.drop(childRow, { dataTransfer: dropDt });
+    expect(client.moveFolder).not.toHaveBeenCalled();
+  });
+
+  it("dropping a folder onto another folder calls moveFolder", async () => {
+    const TREE3: TreeNode[] = [
+      { type: "folder", path: "runbooks", title: "runbooks", children: [] },
+      { type: "folder", path: "archive", title: "archive", children: [] },
+    ];
+    vi.mocked(client.getTree).mockResolvedValue(TREE3);
+    vi.mocked(client.moveFolder).mockResolvedValue({ path: "archive/runbooks" });
+    renderTree();
+    const archiveRow = (await screen.findByText("archive")).closest(
+      ".navrow-folder",
+    ) as HTMLElement;
+    const dt = makeDataTransfer({ "application/x-okf-folder": "runbooks" });
+    fireEvent.drop(archiveRow, { dataTransfer: dt });
+    await waitFor(() =>
+      expect(client.moveFolder).toHaveBeenCalledWith("runbooks", "archive"),
+    );
   });
 
   it("folder 'New page here' opens CreatePageModal scoped to that folder", async () => {

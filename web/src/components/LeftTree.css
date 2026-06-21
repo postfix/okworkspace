@@ -32,6 +32,18 @@
   cursor: default;
 }
 
+/* A draggable folder row hints it can be picked up to relocate its subtree. The
+   browser shows the native not-allowed cursor over an invalid drop target on its
+   own (we don't preventDefault those dragovers — UI-SPEC), so no extra rule is
+   needed for the invalid affordance; this only sets the resting grab hint. */
+.navrow-folder[draggable="true"] {
+  cursor: grab;
+}
+
+.navrow-folder[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .navrow-page {
   width: 100%;
   background: transparent;

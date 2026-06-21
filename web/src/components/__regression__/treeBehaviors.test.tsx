@@ -164,8 +164,11 @@ describe("regression: LeftTree behavior inventory", () => {
     expect(screen.queryByRole("menuitem", { name: /delete/i })).toBeNull();
   });
 
-  // Inventory #6
-  it("right-click a folder (editor) shows the create-here actions", async () => {
+  // Inventory #6 (updated in Plan 04: folders gained the net-new mutate actions).
+  // The create-here actions remain — the regression contract is that folder
+  // create never regressed; the rename/move/delete additions are net-new feature
+  // coverage owned by LeftTree.test.tsx.
+  it("right-click a folder (editor) still shows the create-here actions", async () => {
     renderTree();
     const folderRow = (await screen.findByText("runbooks")).closest(
       ".navrow-folder",
@@ -177,8 +180,6 @@ describe("regression: LeftTree behavior inventory", () => {
     expect(
       screen.getByRole("menuitem", { name: "New folder here" }),
     ).toBeInTheDocument();
-    // No folder rename/move/delete in this base (those land in Plan 04).
-    expect(screen.queryByRole("menuitem", { name: /^rename$/i })).toBeNull();
   });
 
   // Inventory #8
