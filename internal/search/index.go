@@ -122,14 +122,21 @@ func (s *Index) swapDir(tmp string) error {
 	return nil
 }
 
-// withIndex runs fn against the current index pointer under a read lock so a
-// concurrent swap cannot pull the index out from under a query.
+// withIndex runs fn against the current index pointer while HOLDING the read lock
+// for the WHOLE duration of fn, so a concurrent atomic swap (which takes the write
+// lock to close the old handle and reopen the new one) cannot close the index
+// out from under an in-flight query/upsert/delete (T-03-19). Holding only long
+// enough to snapshot the pointer was a race: the snapshotted bleve handle could be
+// Close()d by swapDir while fn was still reading it, surfacing "index closed".
+// Many readers still proceed concurrently (RLock); only a swap blocks them, and
+// only briefly. Bleve's own per-index operations are concurrency-safe, so holding
+// the RLock across fn adds correctness without serializing readers against each
+// other.
 func (s *Index) withIndex(fn func(idx bleve.Index) error) error {
 	s.mu.RLock()
-	idx := s.idx
-	s.mu.RUnlock()
-	if idx == nil {
+	defer s.mu.RUnlock()
+	if s.idx == nil {
 		return fmt.Errorf("search: index is closed")
 	}
-	return fn(idx)
+	return fn(s.idx)
 }

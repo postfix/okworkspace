@@ -8,6 +8,7 @@ import {
   deactivateUser,
   listUsers,
   me,
+  reindexSearch,
   resetUserPassword,
   setUserRole,
   type AdminUser,
@@ -128,6 +129,25 @@ export default function Admin() {
     },
   });
 
+  // Rebuild-search-index action (SRCH admin operational story). The endpoint is
+  // admin-only + CSRF on the server; the button only renders in this admin route.
+  // The rebuild is async (202), so success shows a brief muted confirmation rather
+  // than blocking. Hidden-Git rule: the label says "Rebuild search index", never
+  // "Reindex Bleve"; errors carry no Git/index vocabulary.
+  const [reindexNotice, setReindexNotice] = useState<string | null>(null);
+  const [reindexError, setReindexError] = useState<string | null>(null);
+  const reindexMut = useMutation({
+    mutationFn: () => reindexSearch(),
+    onSuccess: () => {
+      setReindexError(null);
+      setReindexNotice("Search index rebuild started.");
+    },
+    onError: (err: Error) => {
+      setReindexNotice(null);
+      setReindexError(err.message);
+    },
+  });
+
   function openRoleDialog(u: AdminUser) {
     setRoleTarget(u);
     setRoleValue(u.role as UserRole);
@@ -195,6 +215,34 @@ export default function Admin() {
           </button>
         </div>
       )}
+
+      <section className="admin-section">
+        <h2 className="admin-section-heading">Search</h2>
+        <p className="admin-muted">
+          Rebuild the search index if results look out of date. This runs in the
+          background and won't interrupt anyone.
+        </p>
+        <div className="admin-section-row">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => reindexMut.mutate()}
+            disabled={reindexMut.isPending}
+          >
+            {reindexMut.isPending ? "Starting…" : "Rebuild search index"}
+          </button>
+          {reindexNotice && (
+            <span className="admin-muted" role="status">
+              {reindexNotice}
+            </span>
+          )}
+        </div>
+        {reindexError && (
+          <div className="field-error" role="alert">
+            {reindexError}
+          </div>
+        )}
+      </section>
 
       {isLoading ? (
         <p className="admin-muted">Loading…</p>
