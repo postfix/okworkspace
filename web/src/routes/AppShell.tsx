@@ -13,11 +13,13 @@ import {
 
 import {
   applyPatch,
+  draft,
   health,
   logout,
   me,
   proposePatch,
   subscribeAgentChat,
+  summarizePage,
   type AgentScope,
   type Me,
   type ProposePatchResult,
@@ -102,68 +104,15 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     setStatus("idle");
   }, []);
 
-  const handleSubmit = useCallback(
-    (prompt: string) => {
-      // Reset per-request state; keep the prompt-kept contract on error.
-      cancelStream();
-      setSubmitted(true);
-      setAnswer("");
-      setCitations([]);
-      setAnswerError(null);
-      setBarError(null);
-      setDisabledReason(null);
-      setUnreachable(false);
-      setStatus("thinking");
-      // Auto-open the panel on first submit so the answer is visible.
-      if (!panelOpen) setPanelOpen(true);
-
-      const unsub = subscribeAgentChat(
-        {
-          prompt,
-          scope: effectiveScope,
-          page_path: hasPage ? currentPath : undefined,
-        },
-        {
-          onToken: (delta) => {
-            setStatus("streaming");
-            setAnswer((a) => a + delta);
-          },
-          onCitation: (paths) => setCitations(paths),
-          onDone: () => {
-            setStatus("idle");
-            unsubRef.current = null;
-          },
-          onError: (message, { disabled, unreachable: isUnreachable }) => {
-            setStatus("idle");
-            unsubRef.current = null;
-            if (disabled || isUnreachable) {
-              // Fail-closed: the PromptBar shows the dedicated disabled note.
-              setDisabledReason(message);
-              setUnreachable(isUnreachable);
-            } else if (answerRef.current) {
-              // Mid-stream failure with a partial answer: keep it + show the
-              // error in the panel (the user's prompt is never discarded).
-              setAnswerError(message);
-            } else {
-              // Pre-answer transient failure: surface on the bar for retry.
-              setBarError(message);
-            }
-          },
-        },
-      );
-      unsubRef.current = unsub;
-    },
-    [cancelStream, effectiveScope, hasPage, currentPath, panelOpen, setPanelOpen],
-  );
-
-  // answerRef mirrors answer so onError (a stable closure) can read the latest
-  // value without re-subscribing each render.
+  // answerRef mirrors answer so a stable closure can read the latest value without
+  // re-subscribing each render.
   const answerRef = useRef("");
   useEffect(() => {
     answerRef.current = answer;
   }, [answer]);
 
   // ── Propose / apply trust flow (editor-gated) ───────────────────────────────
+  // Declared before handleSubmit so the Propose mode branch can drive it.
   const [proposal, setProposal] = useState<ProposePatchResult | null>(null);
   const [proposeError, setProposeError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
@@ -186,9 +135,9 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       applyPatch({
         page_path: p.page_path,
         new_body: p.new_body,
-        // The frontmatter is preserved by the proposal (whole-body); we re-read
-        // the page's frontmatter from the cache so apply re-assembles the exact
-        // source. The proposal's new_body is the body only.
+        // The frontmatter is preserved by the proposal (body-only); we re-read the
+        // page's frontmatter from the cache so apply re-assembles the exact source.
+        // The proposal's new_body is the body only (CR-01).
         frontmatter: frontmatterFromCache(queryClient, p.page_path),
         base_revision: p.base_revision,
       }),
@@ -209,6 +158,133 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       }
     },
   });
+
+  // resetSubmitState clears per-request UI state (kept-prompt contract on error)
+  // and opens the panel so the result is visible. Shared by every mode.
+  const resetSubmitState = useCallback(() => {
+    cancelStream();
+    setSubmitted(true);
+    setAnswer("");
+    setCitations([]);
+    setAnswerError(null);
+    setBarError(null);
+    setDisabledReason(null);
+    setUnreachable(false);
+    setStatus("thinking");
+    if (!panelOpen) setPanelOpen(true);
+  }, [cancelStream, panelOpen, setPanelOpen]);
+
+  // runAsk streams the token-by-token Ask answer (the default mode).
+  const runAsk = useCallback(
+    (prompt: string) => {
+      const unsub = subscribeAgentChat(
+        {
+          prompt,
+          scope: effectiveScope,
+          page_path: hasPage ? currentPath : undefined,
+        },
+        {
+          onToken: (delta) => {
+            setStatus("streaming");
+            setAnswer((a) => a + delta);
+          },
+          onCitation: (paths) => setCitations(paths),
+          onDone: () => {
+            setStatus("idle");
+            unsubRef.current = null;
+          },
+          onError: (message, { disabled, unreachable: isUnreachable }) => {
+            setStatus("idle");
+            unsubRef.current = null;
+            if (disabled || isUnreachable) {
+              setDisabledReason(message);
+              setUnreachable(isUnreachable);
+            } else if (answerRef.current) {
+              setAnswerError(message);
+            } else {
+              setBarError(message);
+            }
+          },
+        },
+      );
+      unsubRef.current = unsub;
+    },
+    [effectiveScope, hasPage, currentPath],
+  );
+
+  // runSingleShot runs an AWAITED mode (Summarize/Draft) and renders the whole
+  // result into the AgentPanel answer. Unlike Ask there is no token stream — the
+  // status goes thinking → idle and the answer is set once. A failure routes to
+  // the bar (no partial answer to preserve). Fail-closed: a thrown server error
+  // carries its message; we never silently swallow a wrong action.
+  const runSingleShot = useCallback((run: () => Promise<string>) => {
+    run()
+      .then((result) => {
+        setStatus("idle");
+        setAnswer(result);
+      })
+      .catch((err: Error) => {
+        setStatus("idle");
+        setBarError(
+          err.message || "The assistant couldn't finish that. Try again.",
+        );
+      });
+  }, []);
+
+  // handleSubmit dispatches on the selected mode (WR-01): Ask streams; Summarize
+  // and Draft are awaited single-shot calls; Propose opens the diff flow. Rewrite
+  // needs a captured editor selection (not yet plumbed), so the PromptBar disables
+  // it — it never reaches here. A mode never silently runs the wrong action.
+  const handleSubmit = useCallback(
+    (prompt: string) => {
+      resetSubmitState();
+      switch (mode) {
+        case "summarize":
+          if (!hasPage) {
+            // Workspace summarize is not an MVP endpoint; require an open page.
+            setStatus("idle");
+            setBarError("Open a page to summarize.");
+            return;
+          }
+          runSingleShot(() => summarizePage(currentPath));
+          return;
+        case "draft":
+          runSingleShot(() => draft(prompt));
+          return;
+        case "rewrite":
+          // Rewrite needs a captured editor selection (not yet plumbed). The bar
+          // disables it; if it is somehow active, refuse rather than run an Ask.
+          setStatus("idle");
+          setBarError("Select some text in the editor to rewrite it.");
+          return;
+        case "propose":
+          // Propose routes through the editor-gated diff flow, not the answer pane.
+          setStatus("idle");
+          if (!canEdit || !hasPage) {
+            setBarError("Open a page you can edit to propose a change.");
+            return;
+          }
+          setProposeError(null);
+          setStale(false);
+          proposeMutation.mutate(prompt);
+          return;
+        case "ask":
+        default:
+          runAsk(prompt);
+          return;
+      }
+    },
+    [
+      resetSubmitState,
+      mode,
+      hasPage,
+      currentPath,
+      canEdit,
+      runSingleShot,
+      runAsk,
+      proposeMutation,
+    ],
+  );
 
   // Propose from a completed Ask/Summarize answer: re-use the answer as the
   // instruction so the assistant proposes a concrete page change.

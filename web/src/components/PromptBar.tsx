@@ -81,9 +81,13 @@ export default function PromptBar({
   const inFlight = status !== "idle";
   const disabled = !!disabledReason;
   const copy = MODE_COPY[mode];
-  // Propose/Rewrite need editor role; Propose additionally needs a page in scope.
+  // Propose needs editor role + a page in scope. Summarize needs an open page.
   const proposeAvailable = canEdit && hasPage && !workspace;
-  const rewriteAvailable = canEdit;
+  const summarizeAvailable = hasPage && !workspace;
+  // Rewrite needs a captured editor selection, which is not plumbed yet (WR-01):
+  // expose it disabled with a "select text first" hint rather than letting a
+  // submit silently run an Ask. It becomes available once selection capture lands.
+  const rewriteAvailable = false;
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -120,9 +124,11 @@ export default function PromptBar({
           onChange={(e) => onModeChange(e.target.value as AgentMode)}
         >
           <option value="ask">Ask</option>
-          <option value="summarize">Summarize</option>
+          <option value="summarize" disabled={!summarizeAvailable}>
+            Summarize{!summarizeAvailable ? " (open a page)" : ""}
+          </option>
           <option value="rewrite" disabled={!rewriteAvailable}>
-            Rewrite
+            Rewrite (select text first)
           </option>
           <option value="draft">Draft</option>
           <option value="propose" disabled={!proposeAvailable}>

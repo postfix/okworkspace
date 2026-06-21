@@ -675,6 +675,57 @@ export async function proposePatch(
   });
 }
 
+// --- Single-shot agent modes: Summarize / Rewrite / Draft (AGNT-05..08) ---
+//
+// Unlike the streamed Ask, these are AWAITED JSON calls: the whole result is
+// returned at once (a summary string, a rewritten span, or a drafted body). None
+// auto-writes — Rewrite/Draft return proposals the UI routes to the diff dialog or
+// editor. The server is fail-closed (503 agent off, 502 unreachable, 422 the model
+// could not produce a clean body); mutate() surfaces the server's error message.
+
+// summarizePage summarizes the open page (AGNT-05). page_path is required; no
+// selection. Returns the summary text.
+export async function summarizePage(pagePath: string): Promise<string> {
+  const res = await mutate<{ summary: string }>("/api/v1/agent/summarize-page", {
+    page_path: pagePath,
+  });
+  return res.summary;
+}
+
+// summarizeAttachment summarizes an attachment's extracted text (AGNT-06). A 422
+// (no readable text yet) surfaces as a thrown error with the server's message.
+export async function summarizeAttachment(attachmentId: string): Promise<string> {
+  const res = await mutate<{ summary: string }>(
+    "/api/v1/agent/summarize-attachment",
+    { attachment_id: attachmentId },
+  );
+  return res.summary;
+}
+
+// rewrite rewrites a selected span per an instruction (AGNT-07, editor-gated
+// server-side). selection is the UNTRUSTED span; instruction is how to change it.
+// Returns the rewritten text as a PROPOSAL — the caller diffs old↔new and routes
+// to the review dialog; it never auto-applies.
+export async function rewrite(
+  selection: string,
+  instruction: string,
+): Promise<string> {
+  const res = await mutate<{ rewritten: string }>("/api/v1/agent/rewrite", {
+    selection,
+    instruction,
+  });
+  return res.rewritten;
+}
+
+// draft drafts a full new-page body from an instruction (AGNT-08). The returned
+// body opens in the editor pending an explicit save — never auto-written.
+export async function draft(instruction: string): Promise<string> {
+  const res = await mutate<{ body: string }>("/api/v1/agent/draft", {
+    instruction,
+  });
+  return res.body;
+}
+
 // applyPatch applies an approved patch (AGNT-10, editor + CSRF). base_revision is
 // the token proposePatch captured; a stale value (the page moved while the user
 // reviewed) surfaces as a 409 (err.status === 409) so the DiffReviewDialog shows
