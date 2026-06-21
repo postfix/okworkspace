@@ -84,9 +84,9 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 ### Agent (Eino)
 
 - [x] **AGNT-01**: User can ask the agent a question about the current page
-- [ ] **AGNT-02**: User can ask the agent about selected text
-- [ ] **AGNT-03**: User can ask the agent about a selected attachment
-- [ ] **AGNT-04**: User can ask the agent about the whole workspace
+- [x] **AGNT-02**: User can ask the agent about selected text
+- [x] **AGNT-03**: User can ask the agent about a selected attachment
+- [x] **AGNT-04**: User can ask the agent about the whole workspace
 - [ ] **AGNT-05**: User can ask the agent to summarize a page
 - [ ] **AGNT-06**: User can ask the agent to summarize an attachment
 - [ ] **AGNT-07**: User can ask the agent to rewrite selected text and see the proposal
@@ -195,9 +195,9 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | SRCH-05 | Phase 3 | Pending |
 | SRCH-06 | Phase 3 | Pending |
 | AGNT-01 | Phase 4 | Complete |
-| AGNT-02 | Phase 4 | Pending |
-| AGNT-03 | Phase 4 | Pending |
-| AGNT-04 | Phase 4 | Pending |
+| AGNT-02 | Phase 4 | Complete |
+| AGNT-03 | Phase 4 | Complete |
+| AGNT-04 | Phase 4 | Complete |
 | AGNT-05 | Phase 4 | Pending |
 | AGNT-06 | Phase 4 | Pending |
 | AGNT-07 | Phase 4 | Pending |
