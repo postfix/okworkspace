@@ -14,6 +14,7 @@ import (
 
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/pages"
+	"github.com/postfix/okworkspace/internal/search"
 )
 
 // deepseekConfig builds the live DeepSeek agent config from the environment.
@@ -178,6 +179,71 @@ func TestSmokeReActAskStream(t *testing.T) {
 		t.Logf("streamed answer did not echo the page phrase (model phrasing varies); body:\n%s", body)
 	}
 	t.Logf("AskStream streamed %d bytes of SSE", len(body))
+}
+
+// fakeWorkspaceDeps wires a key-free, in-memory page reader + searcher so the
+// live workspace-RAG test can prove top-K retrieval + tool-trace citation
+// WITHOUT a real Bleve index: search returns one relevant page, read_page
+// serves its body. A second "secret" page is deliberately NOT returned by
+// search, modeling a role-scoped index — it must never appear in the citation.
+type fakeWorkspaceSearcher struct{ path, title, snippet string }
+
+func (f fakeWorkspaceSearcher) Query(_ context.Context, _ string) ([]search.Result, error) {
+	return []search.Result{{Kind: "page", Path: f.path, Title: f.title, Snippet: f.snippet}}, nil
+}
+
+// TestSmokeWorkspaceAskCitesRetrievedPage exercises the full AGNT-04 path live:
+// a workspace Ask drives the ReAct loop to call search_pages (→ the fake
+// searcher) and read_page (→ the fake body), the answer streams as SSE, and the
+// terminal `event: citation` frame names exactly the retrieved page. The
+// returned []string must equal the trace. SKIPS clean without the key.
+func TestSmokeWorkspaceAskCitesRetrievedPage(t *testing.T) {
+	cfg := deepseekConfig(t)
+
+	const wsPath = "runbooks/deploy.md"
+	const fact = "Our deploy process: run make ship, then tag the release v-PHOENIX."
+	svc := NewService(cfg, &Deps{
+		Pages:  fakePageReader{body: fact, path: wsPath},
+		Search: fakeWorkspaceSearcher{path: wsPath, title: "Deploy", snippet: "deploy process"},
+	})
+	if svc == nil || svc.cm == nil {
+		t.Fatal("enabled agent service has a nil ChatModel")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	rec := httptest.NewRecorder()
+	cited, err := svc.AskStream(ctx, rec, "What is our deploy process?", Scope{Kind: ScopeWorkspace})
+	if err != nil {
+		if isProviderUnreachable(err) {
+			t.Skipf("DeepSeek unreachable (non-code failure): %v", err)
+		}
+		t.Fatalf("workspace AskStream failed: %v", err)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "data:") {
+		t.Fatalf("expected SSE data frames, got:\n%s", body)
+	}
+	// The citation must name the retrieved page — from the REAL tool-call trace,
+	// not the model's prose. (The model must have called search_pages/read_page.)
+	if len(cited) == 0 {
+		t.Fatalf("workspace Ask returned no citations — the agent did not retrieve via the tools; body:\n%s", body)
+	}
+	foundPath := false
+	for _, p := range cited {
+		if p == wsPath {
+			foundPath = true
+		}
+	}
+	if !foundPath {
+		t.Fatalf("citation set %v did not include the retrieved page %q", cited, wsPath)
+	}
+	if !strings.Contains(body, "event: citation") || !strings.Contains(body, wsPath) {
+		t.Fatalf("SSE stream missing the citation frame naming %q:\n%s", wsPath, body)
+	}
+	t.Logf("workspace Ask cited %v over %d bytes of SSE", cited, len(body))
 }
 
 // isProviderUnreachable classifies network/transport/quota errors (non-code
