@@ -1,8 +1,15 @@
 /**
  * PAGE-03 — PageView renders committed Markdown safely and records a recent.
+ *
+ * As of Phase 6 (06-04) the read surface is the UNIFIED read-only LivePreviewEditor
+ * (a CodeMirror 6 live-preview view), not react-markdown/MarkdownProse. Headings are
+ * therefore styled `.cm-line` elements carrying a github-slugger `id` (NOT semantic
+ * `<h*>` `role="heading"` nodes). The load-bearing guarantees are unchanged: the
+ * heading text renders, the line id equals okf.ScanHeadings's anchor (SRCH-06,
+ * un-prefixed), raw HTML never executes, and the open is recorded as a recent.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -54,10 +61,16 @@ describe("PageView", () => {
       revision: "abc123",
     });
     renderView("runbooks/deploy.md");
-    expect(await screen.findByRole("heading", { name: "Heading" })).toBeInTheDocument();
-    expect(screen.getByText("bold")).toBeInTheDocument();
-    // The page title (from frontmatter) appears.
-    expect(screen.getByText("Deploy Staging")).toBeInTheDocument();
+    // The page title (from frontmatter) appears in the header.
+    expect(await screen.findByText("Deploy Staging")).toBeInTheDocument();
+    // The body renders on the read-only live-preview surface: the heading line and
+    // the bold text are present in the CM document.
+    await waitFor(() =>
+      expect(document.querySelector(".cm-line[id='heading']")?.textContent).toContain(
+        "Heading",
+      ),
+    );
+    expect(document.querySelector(".cm-strong")?.textContent).toBe("bold");
   });
 
   it("assigns GitHub-style heading ids matching the search anchor (SRCH-06)", async () => {
@@ -67,9 +80,15 @@ describe("PageView", () => {
       revision: "r1",
     });
     renderView("guide.md");
-    const heading = await screen.findByRole("heading", { name: "Rollback Procedure" });
-    // The rendered id must equal okf.ScanHeadings's anchor (no user-content- prefix).
+    // The rendered heading line carries an id equal to okf.ScanHeadings's anchor
+    // (no user-content- prefix) — the SRCH-06 deep-link target.
+    const heading = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>(".cm-line[id]");
+      expect(el).not.toBeNull();
+      return el!;
+    });
     expect(heading.id).toBe("rollback-procedure");
+    expect(heading.textContent).toContain("Rollback Procedure");
   });
 
   it("does not render raw HTML (XSS-safe, rehype-raw off)", async () => {

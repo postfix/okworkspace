@@ -11,6 +11,7 @@ import {
   toggleKeymap,
 } from "../lib/cm/mode";
 import { linkNav } from "../lib/cm/linkNav";
+import { headingAnchors, scrollToHash } from "../lib/cm/headingAnchors";
 import "./LivePreviewEditor.css";
 
 // LivePreviewEditor is the CodeMirror 6 editing surface that replaces
@@ -27,11 +28,18 @@ import "./LivePreviewEditor.css";
 // Live/Source choice is a `mode` prop driven by the persisted editorMode store;
 // switching modes reconfigures a Compartment WITHOUT touching the document, so the
 // toggle is byte-identical by construction (EDIT-02).
+// When `readOnly` is true the surface is the UNIFIED read view (PageView): the
+// document is non-editable (no caret, no edits) but selection/copy still work, the
+// render is ALWAYS the Live decoration set (read mode never offers a Source toggle),
+// each heading line carries its github-slugger id (headingAnchors), and on mount the
+// surface scrolls to `#hash` if present (SRCH-06 deep-link). `onChange` is never
+// fired in read mode (the doc cannot change). Edit mode (readOnly falsy) is unchanged.
 interface LivePreviewEditorProps {
   value: string;
   onChange: (value: string) => void;
   currentPath: string;
   mode: "live" | "source";
+  readOnly?: boolean;
 }
 
 // CmEditorEl is the .cm-editor host element with the EditorView exposed for tests
@@ -50,6 +58,7 @@ export default function LivePreviewEditor({
   onChange,
   currentPath,
   mode,
+  readOnly = false,
 }: LivePreviewEditorProps) {
   const navigate = useNavigate();
   const host = useRef<HTMLDivElement>(null);
@@ -74,24 +83,38 @@ export default function LivePreviewEditor({
   // The `value`/`mode` deps are intentionally omitted (synced by the effects
   // below) so a prop change never tears down and rebuilds the editor.
   useEffect(() => {
-    const v = new EditorView({
-      parent: host.current!,
-      state: EditorState.create({
-        doc: value,
-        extensions: [
+    // Shared extensions: internal `.md` link click-navigation (D-06), live in BOTH
+    // read and edit modes. The handler reads the live currentPath/navigate from refs
+    // so it stays correct across prop changes without recreating the view
+    // (StrictMode-safe). resolveRelativeMdLink owns the scheme allowlist, so no
+    // javascript:/data: href is ever navigated (T-06-07).
+    const nav = linkNav(
+      () => pathRef.current,
+      (to) => navigateRef.current(to),
+    );
+
+    const extensions = readOnly
+      ? [
+          // Unified READ surface: non-editable (no caret/edits) but selection/copy
+          // works. The render is ALWAYS Live (read mode never toggles to Source), and
+          // each heading line gets its github-slugger id via headingAnchors so a
+          // search `#hash` deep-link lands correctly (SRCH-06). T-06-10: read mode
+          // reuses the SAME live-preview decoration pipeline as edit Live — there is
+          // no second, weaker read renderer.
+          EditorState.readOnly.of(true),
+          EditorView.editable.of(false),
+          nav,
+          headingAnchors,
+          // Force Live decorations through the same compartment seam edit mode uses,
+          // so read and edit are pixel-identical. No toggleKeymap, no Source path.
+          modeCompartment.of(liveExtensions),
+        ]
+      : [
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           toggleKeymap,
           placeholder("Start writing in Markdown…"),
-          // Internal `.md` link click-navigation (D-06). The handler reads the live
-          // currentPath/navigate from refs so it stays correct across prop changes
-          // without recreating the view (StrictMode-safe — torn down with the view,
-          // no extra cleanup). resolveRelativeMdLink owns the scheme allowlist, so
-          // no javascript:/data: href is ever navigated (T-06-07).
-          linkNav(
-            () => pathRef.current,
-            (to) => navigateRef.current(to),
-          ),
+          nav,
           modeCompartment.of(mode === "live" ? liveExtensions : sourceExtensions),
           EditorView.updateListener.of((u) => {
             // Fire onChange ONLY on a document change, with the bytes verbatim —
@@ -106,12 +129,20 @@ export default function LivePreviewEditor({
               onChangeRef.current(u.state.doc.toString());
             }
           }),
-        ],
-      }),
+        ];
+
+    const v = new EditorView({
+      parent: host.current!,
+      state: EditorState.create({ doc: value, extensions }),
     });
     view.current = v;
     // Expose the view on the .cm-editor host for tests / imperative callers.
     (v.dom as CmEditorEl).cmView = { view: v };
+    // Read mode: scroll to a #hash heading on mount (SRCH-06 deep-link). The hash is
+    // only a lookup key against the rendered heading ids (T-06-12).
+    if (readOnly) {
+      scrollToHash(v);
+    }
     return () => {
       v.destroy();
       view.current = null;
@@ -138,6 +169,9 @@ export default function LivePreviewEditor({
   // Reconfigure the mode Compartment on a `mode` change WITHOUT touching the
   // document (effects-only dispatch) — byte-identical toggle (EDIT-02).
   useEffect(() => {
+    // Read mode never toggles: the compartment stays on liveExtensions for the life
+    // of the read view (pixel-identical to edit Live), so skip reconfiguration.
+    if (readOnly) return;
     const v = view.current;
     if (!v) return;
     v.dispatch({
@@ -145,7 +179,7 @@ export default function LivePreviewEditor({
         mode === "live" ? liveExtensions : sourceExtensions,
       ),
     });
-  }, [mode]);
+  }, [mode, readOnly]);
 
   return <div ref={host} className="livepreview-editor" />;
 }

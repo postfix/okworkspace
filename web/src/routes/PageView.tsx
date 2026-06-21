@@ -6,7 +6,7 @@ import { Pencil } from "lucide-react";
 import { getPage, me, type Me, type Page } from "../api/client";
 import { okfTitle } from "../lib/frontmatter";
 import { useRecent } from "../stores/recent";
-import MarkdownProse from "../components/MarkdownProse";
+import LivePreviewEditor from "../components/LivePreviewEditor";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PageActionMenu from "../components/PageActionMenu";
 import RenameModal from "../components/RenameModal";
@@ -15,9 +15,12 @@ import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
 import HistoryPanel from "../components/HistoryPanel";
 import "./PageView.css";
 
-// PageView is Read mode (/app/page/:path). It renders the committed Markdown via
-// MarkdownProse (sanitized), records the opened page in the client-side recent
-// store, and shows an "Edit page" affordance to editors only.
+// PageView is Read mode (/app/page/:path). It renders the committed Markdown on the
+// UNIFIED read-only live-preview surface (a read-only LivePreviewEditor) — pixel-
+// identical to edit Live mode, with github-slugger heading ids + #hash deep-link
+// scroll (SRCH-06) and internal `.md` SPA navigation, but non-editable. It records
+// the opened page in the client-side recent store and shows an "Edit page"
+// affordance to editors only.
 export default function PageView() {
   const params = useParams();
   const navigate = useNavigate();
@@ -101,7 +104,13 @@ export default function PageView() {
       {body.trim() === "" ? (
         <p className="pageview-empty">This page is empty. Select Edit to start writing.</p>
       ) : (
-        <MarkdownProse body={body} currentPath={path} />
+        <LivePreviewEditor
+          value={body}
+          onChange={() => {}}
+          currentPath={path}
+          mode="live"
+          readOnly
+        />
       )}
       <AttachmentsSection
         pagePath={path}
