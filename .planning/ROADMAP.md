@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: OKF Pages, Navigation & Hidden Git** - Users create, edit, organize, and version pages with automatic hidden Git history and restore (completed 2026-06-18)
 - [x] **Phase 2: Attachments & Text Extraction** - Users upload, preview, download, and manage original-fidelity attachments with searchable extracted text (completed 2026-06-21; 11/11 verified, code review resolved incl. stored-XSS + worker-stall fixes; 4 browser-only checks deferred)
 - [x] **Phase 3: Search** - Users find pages, headings, and attachments across titles, body, tags, filenames, and extracted text (completed 2026-06-21; 13/13 verified, code review resolved incl. drift-detection + heading-deep-link fixes; 13 browser checks deferred)
-- [ ] **Phase 4: Eino Agent** - Users get approval-gated AI help over pages, selections, attachments, and the workspace
+- [x] **Phase 4: Eino Agent** - Users get approval-gated AI help over pages, selections, attachments, and the workspace (completed 2026-06-21)
 - [ ] **Phase 5: Collaboration** - Users see presence, soft locks, and conflict resolution so concurrent edits never silently lose work
 - [x] **Phase 6: Live-Preview Editor (Obsidian-style)** - Editors get an Obsidian-style live-preview Markdown editor (inline rendering as you type, source toggle) while keeping the byte-stable Markdown round-trip (completed 2026-06-21)
 - [x] **Phase 7: Obsidian-style File Tree (folder operations & tree UX)** - Users manage folders and files directly in the tree (right-click menus, drag-and-drop, folder rename/move/delete) the way they would in Obsidian (completed 2026-06-21)
@@ -177,14 +177,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. No agent change is applied or committed until the user explicitly approves the diff
   5. The agent cannot write files directly, read secrets, run shell, escape the repository, or push to Git — enforced in the Go tool layer, not by prompt
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 
 - [x] 04-01-PLAN.md — Slice 1: pin eino v0.9.9 + eino-ext openai v0.1.13 + go-udiff; DeepSeek config (deepseek-v4-flash); agent.Service + ChatModel + key-gated smoke test; 3 audit constants
 - [x] 04-02-PLAN.md — Slice 2: 5 read-only tools + D5 allow-list build gate + ReAct Ask-page over SSE (AGNT-01/11)
 - [x] 04-03-PLAN.md — Slice 3: Ask scope expansion — selection/attachment/workspace-RAG with role-scoped retrieval + citations (AGNT-02/03/04)
 - [x] 04-04-PLAN.md — Slice 4: single-shot Summarize/Rewrite/Draft + validateProposedBody+retry (AGNT-05/06/07/08)
 - [x] 04-05-PLAN.md — Slice 5 (safety core): propose→server-diff→approve→apply; D4 round-trip + D8 stale-409 tests (AGNT-09/10/11)
-- [ ] 04-06-PLAN.md — Slice 6: frontend — PromptBar + AgentPanel + DiffReviewDialog (real-diff trust gate) + SSE consumer (AGNT-01..10 UI)
+- [x] 04-06-PLAN.md — Slice 6: frontend — PromptBar + AgentPanel + DiffReviewDialog (real-diff trust gate) + SSE consumer (AGNT-01..10 UI)
 
 **UI hint**: yes
 **Notes**: NEEDS PHASE RESEARCH — Eino is pre-1.0 (v0.9.9, fast-moving). Before Phase 4 planning, re-verify `react.NewAgent` / `AgentConfig` / `utils.InferTool` / `openai.NewChatModel` signatures against current eino + eino-ext source, confirm the interrupt/resume pattern for the approval gate, and test the chosen provider with `utils.InferTool`-generated schemas before building the full loop. Pin both `eino` and `eino-ext` via `go.sum` immediately after `go get` and commit the lockfile. The approval gate is the load-bearing defense against indirect prompt injection: the DiffReviewDialog must show a real diff (never a prose summary), and the read/write boundary is structural (write tools are NOT in the Eino graph). Every agent file read goes through `repo.Resolve`. The DiffReviewDialog built here is reused in Phase 5. Audit logs capture prompt + approval.
@@ -285,7 +285,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. OKF Pages, Navigation & Hidden Git | 5/5 | Complete   | 2026-06-18 |
 | 2. Attachments & Text Extraction | 0/4 | Planned | - |
 | 3. Search | 0/TBD | Not started | - |
-| 4. Eino Agent | 5/6 | In Progress|  |
+| 4. Eino Agent | 6/6 | Complete   | 2026-06-21 |
 | 5. Collaboration | 0/TBD | Not started | - |
 | 6. Live-Preview Editor (Obsidian-style) | 4/4 | Complete   | 2026-06-21 |
 | 7. Obsidian-style File Tree (folder operations & tree UX) | 4/4 | Complete   | 2026-06-21 |
