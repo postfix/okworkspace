@@ -316,12 +316,12 @@ func (s *Service) allowedExt(mt *mimetype.MIME) (string, bool) {
 		return "", false
 	}
 	for _, a := range s.allowedExtensions {
+		// Single allow-list semantics (WR-05): match by the sniffed canonical
+		// extension only. The old `mt.Is(a)` branch silently widened the check to
+		// MIME-string matching, which could accept a type whose extension the rest
+		// of the system (extractable set, inline-image set, download disposition)
+		// does not expect — a footgun that desyncs the allow-list from those.
 		if strings.EqualFold(strings.TrimPrefix(a, "."), ext) {
-			return ext, true
-		}
-		// Also allow when the sniffed MIME advertises an alias the config lists by
-		// MIME string (defensive; allow-list is normally extensions).
-		if mt.Is(a) {
 			return ext, true
 		}
 	}
