@@ -40,6 +40,57 @@ func TestMigrateIdempotent(t *testing.T) {
 	}
 }
 
+// TestMigrateTrashGroupColumn asserts migration 0008 added the nullable
+// delete_group_id column to the trash table (TREE-04/05 grouped folder delete)
+// and that the migration runner recorded schema version 8. The column must be
+// nullable so existing/solo per-page deletes read NULL.
+func TestMigrateTrashGroupColumn(t *testing.T) {
+	st := openTempStore(t)
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	// The delete_group_id column exists on trash and is nullable.
+	rows, err := st.DB().QueryContext(ctx, `PRAGMA table_info(trash)`)
+	if err != nil {
+		t.Fatalf("PRAGMA table_info(trash): %v", err)
+	}
+	defer rows.Close()
+	var found bool
+	for rows.Next() {
+		var (
+			cid       int
+			name, typ string
+			notNull   int
+			dflt      interface{}
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			t.Fatalf("scan table_info: %v", err)
+		}
+		if name == "delete_group_id" {
+			found = true
+			if notNull != 0 {
+				t.Errorf("delete_group_id must be nullable (notNull=%d, want 0)", notNull)
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate table_info: %v", err)
+	}
+	if !found {
+		t.Fatal("trash table is missing the delete_group_id column (migration 0008 not applied)")
+	}
+
+	// The migration runner recorded version 8.
+	var name string
+	if err := st.DB().QueryRowContext(ctx,
+		`SELECT name FROM schema_migrations WHERE version=8`).Scan(&name); err != nil {
+		t.Fatalf("schema_migrations missing version 8: %v", err)
+	}
+}
+
 func TestUsersWriteThenRead(t *testing.T) {
 	st := openTempStore(t)
 	ctx := context.Background()
