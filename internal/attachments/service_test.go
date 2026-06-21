@@ -29,6 +29,11 @@ type fakeEnqueuer struct {
 	// (non-timeout) commit-enqueue failure so the WR-01 row-rollback path is
 	// exercised.
 	failCommit error
+	// recordOnlyMessages: commit payloads whose Spec.Message is in this set are
+	// RECORDED but NOT applied to the repo — simulating a commit that was accepted
+	// (soft-success / queued) but has not landed on disk yet. Used to exercise the
+	// WR-02 stale-working-tree hazard (the unlink edit not yet on disk).
+	recordOnlyMessages map[string]bool
 }
 
 func (f *fakeEnqueuer) Enqueue(ctx context.Context, kind, payload string) error {
@@ -71,6 +76,10 @@ func (f *fakeEnqueuer) apply(payload string) error {
 		return err
 	}
 	f.payloads = append(f.payloads, p)
+	if f.recordOnlyMessages != nil && f.recordOnlyMessages[p.Spec.Message] {
+		// Accepted but not landed on disk yet (simulated soft-success/queued).
+		return nil
+	}
 	for _, w := range p.Writes {
 		if err := f.r.Write(w.Path, w.Bytes); err != nil {
 			return err
@@ -352,6 +361,56 @@ func TestOrphanDelete(t *testing.T) {
 	}
 	if exists, _ := svc.repo.Exists(MetaPath(up.ID)); exists {
 		t.Fatalf("meta still on disk after orphan delete")
+	}
+}
+
+// TestRemoveOrphansEvenIfUnlinkCommitNotLanded (WR-02): when the unlink edit has
+// NOT yet landed on disk (its commit soft-succeeded / is still queued), the
+// orphan recount must still treat pagePath as unlinked and delete the now-orphaned
+// files, instead of re-reading the stale page (which still shows the link) and
+// keeping a silent orphan.
+func TestRemoveOrphansEvenIfUnlinkCommitNotLanded(t *testing.T) {
+	svc, fe, db := newTestService(t, []string{"txt"}, 100)
+
+	data := []byte("attachment whose only ref is about to go")
+	up, err := svc.Upload(context.Background(), "only.md", "doc.txt", data, "alice")
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	ref := DownloadRefPath(up.ID)
+	mustWrite(t, svc, "only.md", "Sole ref: [doc]("+ref+").\n")
+	mustWrite(t, svc, TxtPath(up.ID), "extracted text")
+
+	// Simulate the unlink commit being accepted but NOT landing on disk: the
+	// "Remove attachment link" commit is recorded but not applied, so only.md on
+	// disk STILL contains the canonical link when the recount runs.
+	fe.recordOnlyMessages = map[string]bool{"Remove attachment link": true}
+
+	before := len(fe.payloads)
+	orphan, err := svc.Remove(context.Background(), up.ID, "only.md", "bob")
+	if err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if !orphan {
+		t.Fatalf("Remove deletedOrphan = false, want true (sole ref removed even though unlink not landed)")
+	}
+
+	// only.md on disk STILL has the link (the unlink commit was not applied) —
+	// proving the recount did NOT rely on a stale working-tree read of pagePath.
+	body, _ := svc.repo.Read("only.md")
+	if !contains(string(body), ref) {
+		t.Fatalf("test precondition broken: only.md unexpectedly had its link applied")
+	}
+
+	// A delete commit landed and the row is gone.
+	if len(fe.payloads) != before+2 {
+		t.Fatalf("commit payloads = %d, want %d (unlink recorded + delete)", len(fe.payloads), before+2)
+	}
+	if _, err := ExtractionStatusFor(context.Background(), db, up.ID); err != ErrAttachmentNotFound {
+		t.Fatalf("row after orphan delete: err = %v, want ErrAttachmentNotFound", err)
+	}
+	if exists, _ := svc.repo.Exists(BinPath(up.ID, "txt")); exists {
+		t.Fatalf("binary still on disk after orphan delete")
 	}
 }
 

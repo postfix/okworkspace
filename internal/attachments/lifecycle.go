@@ -179,8 +179,13 @@ func (s *Service) Remove(ctx context.Context, id, pagePath, user string) (bool, 
 		return false, err
 	}
 
-	// (2) Ref-count across ALL pages using the SINGLE canonical match (Pitfall 6).
-	refs, err := PageReferences(ctx, s.repo, id)
+	// (2) Ref-count across all OTHER pages using the SINGLE canonical match
+	// (Pitfall 6). We exclude pagePath from the scan (WR-02): its link was just
+	// stripped in step (1), but that unlink commit may not be on disk yet
+	// (enqueueCommit soft-succeeds on ErrJobTimeout). Re-reading pagePath could
+	// therefore still find the old link and wrongly keep a now-orphaned file.
+	// Treating pagePath as definitively unlinked removes that structural hazard.
+	refs, err := PageReferencesExcluding(ctx, s.repo, id, pagePath)
 	if err != nil {
 		return false, err
 	}

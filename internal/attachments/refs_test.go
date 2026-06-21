@@ -52,6 +52,51 @@ func TestPageReferences(t *testing.T) {
 	}
 }
 
+// TestPageReferencesExcluding (WR-02): the excluding variant skips the named page
+// when counting, so a page whose link is still on disk (e.g. its unlink commit has
+// not landed yet) is treated as definitively non-referencing.
+func TestPageReferencesExcluding(t *testing.T) {
+	svc, _, _ := newTestService(t, []string{"txt"}, 100)
+	id := "01TARGETATTACHMENT"
+	ref := DownloadRefPath(id)
+
+	// Two pages reference the target; one of them is the page being unlinked.
+	mustWrite(t, svc, "unlinked.md", "Still on disk: [file]("+ref+").\n")
+	mustWrite(t, svc, "other.md", "Other page: [file]("+ref+").\n")
+
+	// Whole-tree count sees both pages.
+	all, err := PageReferences(context.Background(), svc.repo, id)
+	if err != nil {
+		t.Fatalf("PageReferences: %v", err)
+	}
+	if all != 2 {
+		t.Fatalf("PageReferences = %d, want 2", all)
+	}
+
+	// Excluding the unlinked page (even though its link is still on disk) counts
+	// only the OTHER page — exactly the WR-02 robustness property.
+	excl, err := PageReferencesExcluding(context.Background(), svc.repo, id, "unlinked.md")
+	if err != nil {
+		t.Fatalf("PageReferencesExcluding: %v", err)
+	}
+	if excl != 1 {
+		t.Fatalf("PageReferencesExcluding(exclude unlinked.md) = %d, want 1 (other.md only)", excl)
+	}
+
+	// When the excluded page was the ONLY referencer, the count is zero — the
+	// orphan trigger fires even with a stale on-disk link.
+	if err := svc.repo.Remove("other.md"); err != nil {
+		t.Fatalf("seed remove other.md: %v", err)
+	}
+	zero, err := PageReferencesExcluding(context.Background(), svc.repo, id, "unlinked.md")
+	if err != nil {
+		t.Fatalf("PageReferencesExcluding (sole): %v", err)
+	}
+	if zero != 0 {
+		t.Fatalf("PageReferencesExcluding(sole referencer excluded) = %d, want 0", zero)
+	}
+}
+
 // mustWrite writes a page directly through the repo (test seed; not a commit path).
 func mustWrite(t *testing.T, svc *Service, path, body string) {
 	t.Helper()
