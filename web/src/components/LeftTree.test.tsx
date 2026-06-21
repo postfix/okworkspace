@@ -18,6 +18,13 @@ vi.mock("../api/client", () => ({
   deletePage: vi.fn(),
   getHistory: vi.fn(),
   viewVersion: vi.fn(),
+  // 07-01/07-02 folder client functions. The rebuilt LeftTree/RenameModal/
+  // MoveDialog import these (folder branch wired in Plan 04); an incomplete
+  // factory would throw "X is not a function" at import time, so list them now.
+  renameFolder: vi.fn(),
+  moveFolder: vi.fn(),
+  deleteFolder: vi.fn(),
+  restoreFolderGroup: vi.fn(),
 }));
 
 import * as client from "../api/client";
