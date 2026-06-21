@@ -249,7 +249,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Backend folder relocate (rename/move as a unit + ErrFolderExists collision reject) + folder rename/move routes + Go tests (TREE-02, TREE-06 backend) (wave 1)
+- [x] 07-01-PLAN.md — Backend folder relocate (rename/move as a unit + ErrFolderExists collision reject) + folder rename/move routes + Go tests (TREE-02, TREE-06 backend) (wave 1) — COMPLETE 2026-06-21
 
 **Wave 2** *(blocked on Wave 1)*
 
