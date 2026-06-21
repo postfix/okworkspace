@@ -43,6 +43,8 @@ const SAMPLE: TrashEntry[] = [
     original_path: "runbooks/deploy.md",
     deleted_by: "Sam",
     deleted_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    // A solo per-page delete carries no group id (07-02 added this required field).
+    delete_group_id: "",
   },
 ];
 
