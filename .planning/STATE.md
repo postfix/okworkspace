@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
 status: executing
-stopped_at: Phase 6 planned (4 plans verified); executing
-last_updated: "2026-06-21T11:07:06.793Z"
-last_activity: 2026-06-21 -- Phase 06 execution started
+stopped_at: Phase 6 plan 4/4 complete; awaiting phase-level human verification
+last_updated: "2026-06-21T11:15:00.000Z"
+last_activity: 2026-06-21 -- Completed 06-04-PLAN.md (unified read mode + heading anchors)
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 21
-  completed_plans: 20
+  completed_plans: 21
   percent: 50
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 06 (live-preview-editor-obsidian-style) — EXECUTING
-Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 06 execution started
+Phase: 06 (live-preview-editor-obsidian-style) — EXECUTING (all plans complete)
+Plan: 4 of 4 — COMPLETE
+Status: All 4 plans executed; awaiting phase-level human verification (perceptual checks)
+Last activity: 2026-06-21 -- Completed 06-04-PLAN.md (unified read mode + heading anchors)
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Quick Tasks Completed
 
@@ -70,6 +70,7 @@ Progress: [████████░░] 80%
 | Phase 06 P01 | 17min | 4 tasks | 20 files |
 | Phase 06 P02 | 12min | 2 tasks | 5 files |
 | Phase 06 P03 | 11min | 2 tasks | 10 files |
+| Phase 06 P04 | 6min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 06-02: fenced-code fences kept vs inline backticks hidden by CodeMark parent check; inline-link URL hidden only under a Link; focus ring moved to CSS to keep theme.ts tokens-only
 - [Phase ?]: 06-03: GFM table block widget moved to a StateField — CM6 forbids block replace decorations from a ViewPlugin; inline image widgets stay on the plugin; livePreviewExtension bundles both
 - [Phase ?]: 06-03: link marks carry data-href (data not action); linkNav routes internal .md via resolveRelativeMdLink scheme gate — no javascript:/data: href reaches navigate (T-06-07)
+- [Phase ?]: 06-04: read mode unified onto a read-only LivePreviewEditor (EditorState.readOnly + EditorView.editable.of(false), compartment forced to liveExtensions) — pixel-identical to edit Live, single decoration pipeline (no second weaker read renderer); @uiw/react-md-editor removed
+- [Phase ?]: 06-04: heading anchors via a whole-document StateField (Decoration.line id == github-slugger slug, deduped matching okf.ScanHeadings, never user-content-prefixed) + scrollToHash-on-mount preserves SRCH-06; location.hash used only as a lookup key (T-06-11/T-06-12)
+- [Phase ?]: 06-04: MarkdownProse retained on disk (not deleted) — HistoryPanel still uses it for old-version preview; retired only from the PageView read path
 
 ### Pending Todos
 
@@ -138,6 +142,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-21T11:06:56.293Z
-Stopped at: Phase 6 planned (4 plans verified); executing
-Resume file: .planning/phases/06-live-preview-editor-obsidian-style/06-01-PLAN.md
+Last session: 2026-06-21T11:15:00.000Z
+Stopped at: Phase 6 plan 4/4 complete; awaiting phase-level human verification
+Resume file: None

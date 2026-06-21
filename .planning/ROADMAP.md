@@ -227,7 +227,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 06-04-PLAN.md — Unified read-only surface: heading-anchor ids (==okf slug, SRCH-06 preserved) + scroll-to-#hash + PageView swap + retire MarkdownProse + remove @uiw/react-md-editor + CLAUDE.md update + end-of-phase human verify (EDIT-01/04) (wave 4)
+- [x] 06-04-PLAN.md — Unified read-only surface: heading-anchor ids (==okf slug, SRCH-06 preserved) + scroll-to-#hash + PageView swap + retire MarkdownProse + remove @uiw/react-md-editor + CLAUDE.md update + end-of-phase human verify (EDIT-01/04) (wave 4) — implementation + automated coverage complete; perceptual human-verify deferred to phase-level verification
 
 **UI hint**: yes
 **Notes**: Part of the Obsidian-alignment UI direction (team are ex-Obsidian users; the web app stays the client). Replace the MVP `@uiw/react-md-editor` split-pane with a CodeMirror 6 live-preview surface (inline-rendered Markdown decorations — the same engine family Obsidian uses). Storage/sync are OUT of scope and unchanged: Git remains the system of record; live multi-user co-editing stays in Phase 5 (CRDT→Git), NOT a store swap. Must preserve the okf byte-stable round-trip (raw Markdown in/out) and keep rehype-sanitize / raw-HTML-off. Sibling Obsidian-feel items (quick switcher Ctrl-O, command palette Ctrl-P, `[[wikilink]]` autocomplete, backlinks panel, denser file tree, dark theme) are related but tracked separately. Depends on Phase 1's editor; position can be moved earlier than 2–5 (via `/gsd-phase --edit`/`--insert`) if the team wants the editor first.
