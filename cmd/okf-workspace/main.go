@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/postfix/okworkspace/internal/agent"
 	"github.com/postfix/okworkspace/internal/attachments"
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/config"
@@ -235,6 +236,21 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	// allow-list from config.Attachments.AllowedExtensions.
 	attachSvc := attachments.NewService(contentRepo, worker, st.DB(), cfg.Attachments, cfg.Storage.MaxUploadMB, cfg.Git.PushOnCommit)
 
+	// Eino agent service (Phase 4): backs POST /agent/chat (Ask). Its five read-
+	// only tools route through the SAME repo.Resolve-backed services — pagesSvc
+	// (read_page/list_tree), searchIdx (search_pages/search_attachments), and
+	// attachSvc.ExtractedText (read_attachment_text) — never os.ReadFile, and no
+	// write/apply tool exists. The API key is read once via cfg.Agent.APIKey()
+	// inside the service and never logged. When cfg.Agent.Enabled is false the
+	// service still constructs (disabled) so the handler can return the off-state
+	// rather than a hang.
+	agentSvc := agent.NewService(cfg.Agent, &agent.Deps{
+		Pages:       pagesSvc,
+		Search:      searchIdx,
+		Attachments: attachSvc,
+		Audit:       auditLog,
+	})
+
 	// Reconcile the trash table against the working tree at startup: a prior
 	// Delete/Restore whose async commit failed can leave a SQLite trash row that
 	// points at a trash_path never written to disk (WR-01). Prune those phantom
@@ -287,6 +303,7 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		Attachments: attachSvc,
 		Search:      searchIdx,
 		SearchJobs:  worker,
+		Agent:       agentSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)

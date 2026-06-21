@@ -324,6 +324,24 @@ func (s *Service) Meta(ctx context.Context, id string) (AttachmentMeta, error) {
 	return readMeta(s.repo, id)
 }
 
+// ExtractedText reads an attachment's extracted-text sidecar (attachments/<id>.txt)
+// through the SEC-01 repo resolver — NEVER os.ReadFile, NEVER a client-supplied
+// absolute path. It returns "" (no error) when the sidecar is absent (extraction
+// pending/empty/unsupported), mirroring the search index's tolerant read. This is
+// the read-only accessor the agent's read_attachment_text tool routes through, so
+// a path supplied by the model can never escape the attachments directory.
+func (s *Service) ExtractedText(ctx context.Context, id string) (string, error) {
+	exists, err := s.repo.Exists(TxtPath(id))
+	if err != nil || !exists {
+		return "", nil
+	}
+	raw, err := s.repo.Read(TxtPath(id))
+	if err != nil {
+		return "", nil
+	}
+	return string(raw), nil
+}
+
 // ResolveBin resolves an attachment's binary to a safe absolute path (SEC-01) and
 // returns it. It reads NOTHING — the download handler passes the resolved path to
 // http.ServeContent, which streams the byte-exact file itself. Returns an error

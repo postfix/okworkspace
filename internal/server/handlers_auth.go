@@ -9,6 +9,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/justinas/nosurf"
 
+	"github.com/postfix/okworkspace/internal/agent"
 	"github.com/postfix/okworkspace/internal/attachments"
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
@@ -56,6 +57,10 @@ type authHandlers struct {
 	// searchJobs enqueues the rebuild job for the admin reindex (fire-and-forget).
 	// Optional: when nil reindex returns a 500.
 	searchJobs searchEnqueuer
+	// agent is the Eino agent service backing POST /agent/chat (Ask). Optional:
+	// when nil the handler returns a 500; when constructed-but-disabled the
+	// handler returns a structured "agent off" error rather than hanging.
+	agent *agent.Service
 }
 
 type loginRequest struct {

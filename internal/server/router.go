@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/postfix/okworkspace/internal/agent"
 	"github.com/postfix/okworkspace/internal/attachments"
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
@@ -47,6 +48,10 @@ type Deps struct {
 	// SearchJobs enqueues the rebuild job for POST /admin/search/reindex
 	// (fire-and-forget). Optional; when nil reindex returns a 500.
 	SearchJobs searchEnqueuer
+	// Agent is the Eino agent service backing POST /agent/chat (Ask). Optional;
+	// when nil the route returns a 500. When constructed-but-disabled (cfg.Agent.
+	// Enabled false) the handler returns a structured "agent off" error.
+	Agent *agent.Service
 }
 
 // New builds the HTTP handler: chi mux with the middleware stack (recover,
@@ -71,6 +76,7 @@ func New(deps Deps) (http.Handler, error) {
 		attachments: deps.Attachments,
 		search:      deps.Search,
 		searchJobs:  deps.SearchJobs,
+		agent:       deps.Agent,
 	}
 	health := &healthHandler{checker: deps.Health}
 
@@ -130,6 +136,14 @@ func New(deps Deps) (http.Handler, error) {
 			// page-read authorization model, Area 4). q is a query param (not a
 			// path), so no cleanPathParam is needed.
 			authed.Get("/search", h.handleSearch)
+
+			// Agent Ask (AGNT-01) — any authenticated user may ask a question
+			// about the current page; the answer streams back as SSE. POST (it
+			// carries a prompt body and so inherits the global nosurf CSRF on
+			// mutating methods), but it is READ-ONLY: the agent reaches the
+			// workspace only through the five read-only tools, no write/apply tool
+			// is reachable, and authorization/scope are read from the SESSION.
+			authed.Post("/agent/chat", h.handleAgentChat)
 
 			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin
 			// subgroup). Authorization is read from the session role via
