@@ -3,12 +3,14 @@ package agent
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/flow/agent/react"
+	"github.com/cloudwego/eino/schema"
 
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/config"
@@ -20,6 +22,12 @@ import (
 // false. Handlers map it to a structured "agent is turned off" UI state rather
 // than a 500 — the service still constructs so the off-state can be rendered.
 var ErrAgentDisabled = errors.New("agent: disabled in configuration")
+
+// ErrNoExtractedText is returned by SummarizeAttachment when the attachment has
+// no extracted text yet (extraction pending) or is a binary with no text layer.
+// Handlers map it to a structured "nothing to summarize" message rather than
+// letting the model hallucinate a summary of empty content.
+var ErrNoExtractedText = errors.New("agent: attachment has no extracted text")
 
 // maxReActStep bounds the ReAct loop (tool-call → exec → feed-back) so a flaky
 // provider or a tool-loop can't run unbounded (T-04-06 DoS). DeepSeek tool-
@@ -184,7 +192,12 @@ type Deps struct {
 // tools through Deps. The resolved API key lives ONLY inside cm (constructed
 // from cfg.APIKey()) and is never stored, logged, or returned by this struct.
 type Service struct {
-	cm   *openai.ChatModel // nil when the agent is disabled.
+	// cm is the eino ChatModel interface (model.ToolCallingChatModel), NOT the
+	// concrete *openai.ChatModel — so a fake can be injected in unit tests
+	// (TestDispatch) without standing up a provider. openai.NewChatModel already
+	// returns a value satisfying this interface, so production wiring is unchanged.
+	// nil when the agent is disabled.
+	cm   model.ToolCallingChatModel
 	cfg  config.AgentConfig
 	deps Deps
 	now  func() time.Time
@@ -242,7 +255,7 @@ func (s *Service) buildReActAgent(ctx context.Context, trace *scopeTrace) (*reac
 		return nil, err
 	}
 	return react.NewAgent(ctx, &react.AgentConfig{
-		ToolCallingModel: s.cm, // *openai.ChatModel satisfies model.ToolCallingChatModel.
+		ToolCallingModel: s.cm, // model.ToolCallingChatModel (openai.NewChatModel satisfies it).
 		ToolsConfig: compose.ToolsNodeConfig{
 			Tools: tools,
 			// Gracefully absorb a hallucinated tool name rather than failing the
@@ -254,4 +267,155 @@ func (s *Service) buildReActAgent(ctx context.Context, trace *scopeTrace) (*reac
 		},
 		MaxStep: maxReActStep,
 	})
+}
+
+// ─── Single-shot modes (Summarize / Rewrite / Draft) ─────────────────────────
+//
+// These four modes (AGNT-05/06/07/08) use a DIRECT ChatModel.Generate call — NOT
+// the ReAct loop (AI-SPEC §4 "Core Pattern"). The context is supplied up front
+// (the one page/attachment body, the selection, or just the user instruction), so
+// no tool round-trips are needed: cheaper, fewer failure modes. Every call is
+// wrapped in context.WithTimeout(singleShotTimeout) with an explicit per-mode
+// MaxTokens + Temperature (never unbounded — T-04-14). Rewrite and Draft outputs
+// are candidate bodies and MUST pass validateProposedBody (+ retry) before they
+// are returned — a fenced/empty/frontmatter-mangled body never reaches the user
+// (T-04-12). Neither Rewrite nor Draft ever writes: Draft opens in the editor
+// pending an explicit save; Rewrite returns a proposal the slice-5/6 diff dialog
+// renders.
+
+// singleShotTimeout is the hard per-request ceiling for a single-shot Generate
+// call so a hung provider can't hang the request goroutine (AI-SPEC §4 #6 / §4
+// Per-call guards). ~60s matches the ReAct path's intent.
+const singleShotTimeout = 60 * time.Second
+
+// Per-mode output token caps and sampling. Grounded modes (Summarize/Rewrite)
+// run cool; Draft is allowed slightly more latitude. MaxTokens is ALWAYS set —
+// never nil/unbounded in production (Pitfall 6).
+const (
+	summarizeMaxTokens   = 1024
+	rewriteMaxTokens     = 2048 // a rewritten span can be longer than the answer to a question.
+	draftMaxTokens       = 4096 // a full new page body.
+	summarizeTemperature = 0.2
+	rewriteTemperature   = 0.2
+	draftTemperature     = 0.4
+)
+
+// maxSingleShotInput caps the page/attachment/selection text spliced into a
+// single-shot prompt so an oversized body can't blow the context window
+// (T-04-14). Bodies over the cap are truncated to a head+tail window
+// (truncateForBudget) rather than overflowing. ~24k chars ≈ a generous page.
+const maxSingleShotInput = 24000
+
+// generateOnce runs one single-shot ChatModel.Generate with the per-call timeout
+// and the given sampling, returning the model's text content. It is the single
+// choke point that guarantees every single-shot call is bounded (timeout +
+// MaxTokens). The ctx handed to Generate carries the ~60s deadline asserted by
+// TestDispatch.
+func (s *Service) generateOnce(ctx context.Context, msgs []*schema.Message, maxTokens int, temperature float32) (string, error) {
+	if s.cm == nil {
+		return "", ErrAgentDisabled
+	}
+	ctx, cancel := context.WithTimeout(ctx, singleShotTimeout)
+	defer cancel()
+	out, err := s.cm.Generate(ctx, msgs,
+		model.WithMaxTokens(maxTokens),
+		model.WithTemperature(temperature),
+	)
+	if err != nil {
+		return "", err
+	}
+	if out == nil {
+		return "", errors.New("agent: empty model response")
+	}
+	return out.Content, nil
+}
+
+// SummarizePage returns a grounded summary of the page at path. The body is
+// fetched via the role-scoped pages reader (never os.ReadFile) and truncated to
+// the input budget if oversized. Single-shot, read-only — it produces an answer,
+// not a candidate body, so it does NOT go through validateProposedBody.
+func (s *Service) SummarizePage(ctx context.Context, path string) (string, error) {
+	if s.cm == nil {
+		return "", ErrAgentDisabled
+	}
+	if s.deps.Pages == nil {
+		return "", errors.New("agent: page reader not configured")
+	}
+	pg, err := s.deps.Pages.Get(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	content := truncateForBudget(pg.Body, maxSingleShotInput)
+	msgs := buildSummarizeMessages(summarizeKindPage, path, content)
+	return s.generateOnce(ctx, msgs, summarizeMaxTokens, summarizeTemperature)
+}
+
+// SummarizeAttachment returns a grounded summary of an attachment's extracted
+// text. Extraction may be pending/empty (never an error) — an empty extraction
+// yields a structured "nothing to summarize" error rather than a hallucinated
+// summary. Single-shot, read-only.
+func (s *Service) SummarizeAttachment(ctx context.Context, id string) (string, error) {
+	if s.cm == nil {
+		return "", ErrAgentDisabled
+	}
+	if s.deps.Attachments == nil {
+		return "", errors.New("agent: attachment reader not configured")
+	}
+	text, err := s.deps.Attachments.ExtractedText(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", ErrNoExtractedText
+	}
+	content := truncateForBudget(text, maxSingleShotInput)
+	msgs := buildSummarizeMessages(summarizeKindAttachment, id, content)
+	return s.generateOnce(ctx, msgs, summarizeMaxTokens, summarizeTemperature)
+}
+
+// Rewrite rewrites the selected span per the user's instruction and returns the
+// rewritten text as a PROPOSAL (the server diffs old-selection↔new in slice 5/6
+// — this never auto-applies). The output passes validateProposedBody + retry
+// before return: a fenced/empty body is rejected and retried, never surfaced. The
+// selection has no frontmatter, so validation enforces the empty/fenced rules.
+func (s *Service) Rewrite(ctx context.Context, selection, instruction string) (string, error) {
+	if s.cm == nil {
+		return "", ErrAgentDisabled
+	}
+	gen := func(ctx context.Context, attempt int) (string, error) {
+		msgs := buildRewriteMessages(selection, instruction, attempt)
+		return s.generateOnce(ctx, msgs, rewriteMaxTokens, rewriteTemperature)
+	}
+	// The rewritten span is compared against the selection (no frontmatter to
+	// preserve) — validateProposedBody enforces the empty/fenced rules.
+	return proposeWithRetry(ctx, selection, gen)
+}
+
+// Draft drafts a full new-page Markdown body from the user's instruction and
+// returns it to OPEN IN THE EDITOR pending an explicit save (never auto-written).
+// The output passes validateProposedBody + retry before return. A draft has no
+// source document to preserve frontmatter against, so the empty/fenced rules
+// apply.
+func (s *Service) Draft(ctx context.Context, instruction string) (string, error) {
+	if s.cm == nil {
+		return "", ErrAgentDisabled
+	}
+	gen := func(ctx context.Context, attempt int) (string, error) {
+		msgs := buildDraftMessages(instruction, attempt)
+		return s.generateOnce(ctx, msgs, draftMaxTokens, draftTemperature)
+	}
+	return proposeWithRetry(ctx, "", gen)
+}
+
+// truncateForBudget caps text to a head+tail window of about max chars so an
+// oversized body fits the context budget without dropping the document's start
+// AND end (the parts a summary most needs). A body within budget is returned
+// unchanged.
+func truncateForBudget(text string, max int) string {
+	if len(text) <= max {
+		return text
+	}
+	half := max / 2
+	const marker = "\n\n…[content truncated to fit]…\n\n"
+	return text[:half] + marker + text[len(text)-half:]
 }
