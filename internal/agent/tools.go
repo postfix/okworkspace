@@ -230,22 +230,32 @@ func runSearch(ctx context.Context, deps Deps, trace *scopeTrace, query, kind st
 	return out
 }
 
+// maxTreeDepth bounds flattenPagePaths' recursion (IN-02). The tree is derived from
+// on-disk folder structure (operator-controlled, shallow in practice), but a
+// pathologically deep tree must never blow the stack — past this depth recursion
+// stops and returns what was collected.
+const maxTreeDepth = 64
+
 // flattenPagePaths walks the nested page/folder tree and collects the workspace-
 // relative path of every page node (folders are skipped — only readable pages
-// are surfaced to the model). Always returns a non-nil slice.
+// are surfaced to the model). Recursion is depth-capped at maxTreeDepth (IN-02).
+// Always returns a non-nil slice.
 func flattenPagePaths(nodes []pages.Node) []string {
 	paths := []string{}
-	var walk func([]pages.Node)
-	walk = func(ns []pages.Node) {
+	var walk func([]pages.Node, int)
+	walk = func(ns []pages.Node, depth int) {
+		if depth > maxTreeDepth {
+			return // stop recursing past the cap; return what was collected.
+		}
 		for _, n := range ns {
 			if n.Type == "page" {
 				paths = append(paths, n.Path)
 			}
 			if len(n.Children) > 0 {
-				walk(n.Children)
+				walk(n.Children, depth+1)
 			}
 		}
 	}
-	walk(nodes)
+	walk(nodes, 0)
 	return paths
 }

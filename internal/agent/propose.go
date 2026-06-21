@@ -305,6 +305,12 @@ func (s *Service) ProposePatch(ctx context.Context, path, instruction string) (n
 // Detail and the D4 over-eager-reformat threshold — NEVER to apply or render a
 // patch (the browser diffs the two strings; apply ships the whole new body). A
 // whole-body reformat trends toward 1.0; a one-line change stays near 0.
+//
+// go-udiff's Edit.Start/End are byte offsets into oldBody (the first argument), so
+// oldBody[e.Start:e.End] is the removed region. The offsets are bounds-checked
+// defensively (IN-01): this metric feeds a non-critical audit Detail and must NEVER
+// panic the propose handler, even if a future go-udiff change returned an offset
+// outside oldBody.
 func churnRatio(oldBody, newBody string) float64 {
 	edits := udiff.Lines(oldBody, newBody)
 	if len(edits) == 0 {
@@ -312,6 +318,12 @@ func churnRatio(oldBody, newBody string) float64 {
 	}
 	changed := 0
 	for _, e := range edits {
+		if e.Start < 0 || e.End > len(oldBody) || e.Start > e.End {
+			// An out-of-range edit can't be sliced safely; count only the added
+			// lines and skip the removed-region slice rather than panic.
+			changed += countLines(e.New)
+			continue
+		}
 		changed += countLines(oldBody[e.Start:e.End]) // removed lines
 		changed += countLines(e.New)                  // added lines
 	}
