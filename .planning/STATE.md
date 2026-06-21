@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 07
 current_phase_name: obsidian-style-file-tree-folder-operations-tree-ux
 status: executing
-stopped_at: Completed 07-01-PLAN.md; Phase 7 plan 2 of 4 next
-last_updated: "2026-06-21T13:23:15.596Z"
+stopped_at: Completed 07-04-PLAN.md; Phase 7 (4 of 4 plans) complete — folder ops + optimistic tree UX
+last_updated: "2026-06-21T13:36:00.000Z"
 last_activity: 2026-06-21
-last_activity_desc: Completed 07-01-PLAN.md (atomic folder rename/move + ErrFolderExists collision reject)
+last_activity_desc: Completed 07-04-PLAN.md (folder DnD + optimistic tree updates + DeleteFolderDialog + grouped TrashView restore)
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 25
-  completed_plans: 24
-  percent: 63
+  completed_plans: 25
+  percent: 65
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 07 (obsidian-style-file-tree-folder-operations-tree-ux) — EXECUTING
-Plan: 3 of 4 — COMPLETE
-Status: 07-01 executed (atomic folder rename/move backend + collision reject); plan 2 of 4 next
-Last activity: 2026-06-21 -- Completed 07-01-PLAN.md (atomic folder rename/move + ErrFolderExists collision reject)
+Phase: 07 (obsidian-style-file-tree-folder-operations-tree-ux) — ALL PLANS COMPLETE
+Plan: 4 of 4 — COMPLETE
+Status: 07-04 executed (folder DnD + optimistic ["tree"] updates + DeleteFolderDialog + grouped TrashView restore); Phase 7 complete pending human verification
+Last activity: 2026-06-21 -- Completed 07-04-PLAN.md (folder operations + optimistic tree UX, 240 frontend tests green)
 
-Progress: [██░░░░░░░░] 25%
+Progress: [██████████] 100% (4 of 4 plans)
 
 ## Quick Tasks Completed
 
@@ -131,6 +131,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 07-02 grouped folder delete/restore loops the existing per-page Delete/Restore over descendantPages under one crypto/rand delete_group_id (nullable migration 0008); per-page-looped per the RESOLVED atomicity decision, partial progress recoverable; solo delete stays NULL; all group-id SQL parameterized
 - [Phase ?]: 07-03: Clean tree-UX rebuild guarded by a regression-net-first contract — treeBehaviors.test.tsx pins every shipped LeftTree/TreeContextMenu/RenameModal/MoveDialog behavior GREEN against the un-rebuilt code, then the rebuild keeps it GREEN (no user-visible regression)
 - [Phase ?]: 07-03: RenameModal/MoveDialog parameterized by NodeKind with a per-kind copy map; the folder branch (renameFolder/moveFolder + 409 collision copy) is implemented but UNREACHED from LeftTree until Plan 04; MoveDialog folder kind excludes self+subtree from destinations
+- [Phase 7 P04]: Optimistic ["tree"] updates via useTreeMutations — onMutate cancel+snapshot+applyMove → onError rollback → onSettled invalidate; pure applyMove does the literal prefix swap identical to server relocateFolder (Pitfall 6) so the reconcile refetch never jumps the node
+- [Phase 7 P04]: Folder DnD drop-validity guard runs DURING dragover by reading the dragged path from a module-level activeDragPath ref (HTML5 dataTransfer.getData() returns '' mid-drag); invalid drops (self/descendant/same-parent) skip preventDefault → native cursor:not-allowed, no highlight (TREE-06 client)
+- [Phase 7 P04]: Grouped TrashView folds ["trash"] by delete_group_id into one "Folder '{name}' · N pages" row per group (folder name from common-ancestor index.md path) with a Restore folder action calling restoreFolderGroup; batched (restored)-suffix notice on collision (TREE-05 UI)
 
 ### Pending Todos
 
@@ -156,6 +159,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-21T13:23:00.933Z
-Stopped at: Phase 7 planned (4 plans verified); executing
-Resume file: .planning/phases/07-obsidian-style-file-tree-folder-operations-tree-ux/07-01-PLAN.md
+Last session: 2026-06-21T13:36:00.000Z
+Stopped at: Completed 07-04-PLAN.md — Phase 7 all 4 plans complete; awaiting phase-level human verification (DnD feel)
+Resume file: None
