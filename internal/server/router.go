@@ -136,6 +136,15 @@ func New(deps Deps) (http.Handler, error) {
 				// Attachment upload — editor-gated (RBAC from the session, never
 				// client input — T-02-05/SEC §V4), mirroring the page-mutation gate.
 				editor.Post("/attachments", h.handleUploadAttachment)
+				// Attachment replace (PUT, ATT-05) and remove (DELETE, ATT-06/07) —
+				// editor-gated from the session (T-02-14). Registered on the SAME
+				// `/attachments/*` catch-all as the GET reads (the id is the
+				// wildcard): a `{id}` sibling route cannot coexist with the
+				// slash-bearing list wildcard the GET uses (the sibling-wildcard
+				// conflict the page routes also hit), so PUT/DELETE reuse the
+				// catch-all and read the id via chi.URLParam(r, "*").
+				editor.Put("/attachments/*", h.handleReplaceAttachment)
+				editor.Delete("/attachments/*", h.handleDeleteAttachment)
 				// Restore a trashed page to its original folder (auto-suffix on a
 				// live-page collision, D-10). {id} is the trash row id, not a path,
 				// so this does not collide with the /pages/* wildcard.

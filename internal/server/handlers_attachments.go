@@ -95,6 +95,100 @@ func (h *authHandlers) handleUploadAttachment(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusCreated, meta)
 }
 
+// handleReplaceAttachment swaps an attachment's bytes in place, reusing the SAME id
+// (ATT-05, editor only). Like upload, the body is hard-capped with MaxBytesReader
+// BEFORE multipart parsing (Pitfall 1) and the real type is re-sniffed server-side
+// (the filename is never trusted, SEC-02/ATT-09). The id is taken from the URL
+// param; the new file from the "file" form field. On success it records an
+// ActionAttachReplace audit event and returns the updated meta. The route is
+// editor-gated from the SESSION (RequireRole), never client input (T-02-14).
+func (h *authHandlers) handleReplaceAttachment(w http.ResponseWriter, r *http.Request) {
+	if h.attachments == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+
+	id := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	if id == "" || strings.ContainsAny(id, "/\x00") {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+
+	// HARD server-side cap before parsing (the real DoS guard — Pitfall 1 / T-02-16),
+	// identical to upload.
+	maxBytes := int64(h.config.Storage.MaxUploadMB) << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes+(1<<20))
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "That file is too large.")
+		return
+	}
+
+	file, hdr, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Choose a file to upload.")
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "That file is too large.")
+		return
+	}
+
+	meta, err := h.attachments.Replace(r.Context(), id, hdr.Filename, data, h.actorUsername(r.Context()))
+	if err != nil {
+		writeAttachmentError(w, err)
+		return
+	}
+
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionAttachReplace,
+		Actor:  h.actorUsername(r.Context()),
+		Target: meta.PagePath + "/" + meta.ID,
+		Source: auditSourceWeb,
+	})
+	writeJSON(w, http.StatusOK, meta)
+}
+
+// handleDeleteAttachment removes an attachment's link from a page and, when that was
+// the LAST reference across all pages, deletes the binary + meta + txt in ONE commit
+// (ATT-06/ATT-07, editor only). The id is the URL param; the page to unlink is read
+// from the "page_path" query parameter (the canonical link to drop lives on that
+// page). On success it records an ActionAttachDelete audit event and returns
+// {deleted_orphan: bool}. Editor-gated from the SESSION (T-02-14).
+func (h *authHandlers) handleDeleteAttachment(w http.ResponseWriter, r *http.Request) {
+	if h.attachments == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+
+	id := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	if id == "" || strings.ContainsAny(id, "/\x00") {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+
+	pagePath, ok := cleanPathString(w, r.URL.Query().Get("page_path"))
+	if !ok {
+		return
+	}
+
+	deletedOrphan, err := h.attachments.Remove(r.Context(), id, pagePath, h.actorUsername(r.Context()))
+	if err != nil {
+		writeAttachmentError(w, err)
+		return
+	}
+
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionAttachDelete,
+		Actor:  h.actorUsername(r.Context()),
+		Target: pagePath + "/" + id,
+		Source: auditSourceWeb,
+	})
+	writeJSON(w, http.StatusOK, map[string]bool{"deleted_orphan": deletedOrphan})
+}
+
 // handleGetAttachment dispatches the GET /attachments/* catch-all: a download iff
 // the wildcard is "{id}/download", otherwise a per-page attachment list keyed on
 // the wildcard as a page path. chi cannot host a `{id}/download` route next to the

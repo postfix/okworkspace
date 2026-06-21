@@ -56,8 +56,12 @@ func CommitHandler(r *repo.Repo, g *gitstore.GitStore) jobs.Handler {
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
 			return fmt.Errorf("pages: commit payload: %w", err)
 		}
-		if len(p.Writes) == 0 {
-			return fmt.Errorf("pages: commit requires at least one write")
+		// A commit must touch SOMETHING: at least one write or one remove. A
+		// writes-only payload is the common page-save case; a removes-only payload
+		// is a pure deletion (the attachment orphan-delete in ATT-07 removes the
+		// binary + meta + txt sidecars in ONE commit with no accompanying write).
+		if len(p.Writes) == 0 && len(p.Removes) == 0 {
+			return fmt.Errorf("pages: commit requires at least one write or remove")
 		}
 
 		// Materialize each file through the resolver-gated writer. The .md is
