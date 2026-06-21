@@ -151,6 +151,217 @@ func scopeKindFromRequest(s string) agent.ScopeKind {
 	}
 }
 
+// ─── Single-shot modes: Summarize / Rewrite / Draft (AGNT-05/06/07/08) ───────
+//
+// Unlike Ask, these are AWAITED (full JSON response, not streamed): a Summarize
+// answer is whole, and a Rewrite/Draft body must be validated as a whole before
+// it can be diffed/opened (a half-streamed body cannot — AI-SPEC §4b). All four
+// are read/proposal operations: Summarize is read-only; Rewrite returns a
+// proposal for the diff dialog and Draft a body that opens in the editor —
+// NEITHER auto-writes (the apply path is a separate gated endpoint, slice 5).
+//
+// Each fails closed when the agent is off/unreachable and audits via
+// ActionAgentPrompt with the non-secret mode in Detail (never the prompt text).
+
+// summarizePageRequest is the POST /agent/summarize-page body. page_path is the
+// page to summarize (read via the role-scoped pages service).
+type summarizePageRequest struct {
+	PagePath string `json:"page_path"`
+}
+
+// summarizeAttachmentRequest is the POST /agent/summarize-attachment body.
+type summarizeAttachmentRequest struct {
+	AttachmentID string `json:"attachment_id"`
+}
+
+// rewriteRequest is the POST /agent/rewrite body. selection is the UNTRUSTED span
+// to rewrite; instruction is how to change it. The server diffs the returned text
+// against selection in slice 5/6 — this endpoint returns a proposal only.
+type rewriteRequest struct {
+	Selection   string `json:"selection"`
+	Instruction string `json:"instruction"`
+}
+
+// draftRequest is the POST /agent/draft body. instruction describes the page to
+// draft; the returned body opens in the editor pending an explicit save.
+type draftRequest struct {
+	Instruction string `json:"instruction"`
+}
+
+// handleSummarizePage summarizes the requested page (AGNT-05). Read-only,
+// any-authed; the page is fetched via the role-scoped pages service, never a
+// client path read. Returns the summary as JSON (awaited, not streamed).
+func (h *authHandlers) handleSummarizePage(w http.ResponseWriter, r *http.Request) {
+	if h.agent == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req summarizePageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	path := strings.TrimSpace(req.PagePath)
+	if path == "" || strings.ContainsRune(path, '\x00') {
+		writeError(w, http.StatusBadRequest, "Choose a page to summarize.")
+		return
+	}
+
+	h.auditAgentMode(r, "summarize-page", path)
+
+	summary, err := h.agent.SummarizePage(r.Context(), path)
+	if err != nil {
+		writeAgentModeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"summary": summary})
+}
+
+// handleSummarizeAttachment summarizes an attachment's extracted text (AGNT-06).
+// An attachment with no extracted text yet (extraction pending / no text layer)
+// returns a structured 422 rather than a hallucinated summary.
+func (h *authHandlers) handleSummarizeAttachment(w http.ResponseWriter, r *http.Request) {
+	if h.agent == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req summarizeAttachmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	id := strings.TrimSpace(req.AttachmentID)
+	if id == "" || strings.ContainsRune(id, '\x00') {
+		writeError(w, http.StatusBadRequest, "Choose an attachment to summarize.")
+		return
+	}
+
+	h.auditAgentMode(r, "summarize-attachment", id)
+
+	summary, err := h.agent.SummarizeAttachment(r.Context(), id)
+	if errors.Is(err, agent.ErrNoExtractedText) {
+		writeError(w, http.StatusUnprocessableEntity, "This attachment has no readable text to summarize yet.")
+		return
+	}
+	if err != nil {
+		writeAgentModeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"summary": summary})
+}
+
+// handleRewrite rewrites a selected span (AGNT-07) and returns the rewritten text
+// as a PROPOSAL — it never auto-applies. The frontend routes the result to the
+// diff dialog (old selection ↔ new). The selection is UNTRUSTED and length-/NUL-
+// capped like the Ask selection.
+func (h *authHandlers) handleRewrite(w http.ResponseWriter, r *http.Request) {
+	if h.agent == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req rewriteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	selection := req.Selection
+	instruction := strings.TrimSpace(req.Instruction)
+	if strings.TrimSpace(selection) == "" {
+		writeError(w, http.StatusBadRequest, "Select some text to rewrite.")
+		return
+	}
+	if instruction == "" {
+		writeError(w, http.StatusBadRequest, "Describe how you'd like the selection rewritten.")
+		return
+	}
+	if strings.ContainsRune(selection, '\x00') || strings.ContainsRune(instruction, '\x00') {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	if len(selection) > maxSelectionLen {
+		writeError(w, http.StatusBadRequest, "That selection is too long. Select less text and try again.")
+		return
+	}
+	if len(instruction) > maxPromptLen {
+		writeError(w, http.StatusBadRequest, "That instruction is too long. Please shorten it and try again.")
+		return
+	}
+
+	h.auditAgentMode(r, "rewrite", "")
+
+	rewritten, err := h.agent.Rewrite(r.Context(), selection, instruction)
+	if err != nil {
+		writeAgentModeError(w, err)
+		return
+	}
+	// A proposal — the frontend diffs old↔new and routes to the review dialog.
+	writeJSON(w, http.StatusOK, map[string]string{"rewritten": rewritten})
+}
+
+// handleDraft drafts a full new-page body (AGNT-08) and returns it for the editor
+// to open pending an explicit save — it never auto-writes a page.
+func (h *authHandlers) handleDraft(w http.ResponseWriter, r *http.Request) {
+	if h.agent == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req draftRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	instruction := strings.TrimSpace(req.Instruction)
+	if instruction == "" {
+		writeError(w, http.StatusBadRequest, "Describe the page you'd like to draft.")
+		return
+	}
+	if strings.ContainsRune(instruction, '\x00') {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	if len(instruction) > maxPromptLen {
+		writeError(w, http.StatusBadRequest, "That instruction is too long. Please shorten it and try again.")
+		return
+	}
+
+	h.auditAgentMode(r, "draft", "")
+
+	body, err := h.agent.Draft(r.Context(), instruction)
+	if err != nil {
+		writeAgentModeError(w, err)
+		return
+	}
+	// The draft opens in the editor pending an explicit save — never auto-written.
+	writeJSON(w, http.StatusOK, map[string]string{"body": body})
+}
+
+// auditAgentMode records a single-shot mode invocation (non-fatal). The Detail
+// carries only the non-secret mode; the prompt/selection/draft text NEVER enters
+// the audit. Target is the page/attachment id where one exists (provenance only).
+func (h *authHandlers) auditAgentMode(r *http.Request, mode, target string) {
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionAgentPrompt,
+		Actor:  h.actorUsername(r.Context()),
+		Target: target,
+		Detail: "mode=" + mode + " role=" + h.actorRole(r.Context()),
+		Source: auditSourceWeb,
+	})
+}
+
+// writeAgentModeError maps a single-shot mode error to a structured JSON status,
+// failing CLOSED on a disabled/unreachable agent and on a validation-exhaustion
+// (the model could not produce a usable body) — never a malformed body or a hang.
+func writeAgentModeError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, agent.ErrAgentDisabled):
+		writeError(w, http.StatusServiceUnavailable, "The assistant is turned off. Ask an administrator to enable it.")
+	case errors.Is(err, agent.ErrProposalInvalid):
+		writeError(w, http.StatusUnprocessableEntity, "The assistant couldn't produce a clean result. Try rephrasing your request.")
+	default:
+		writeError(w, http.StatusBadGateway, "The assistant is unavailable right now. Try again in a moment.")
+	}
+}
+
 // actorRole resolves the session-bound user's role for the audit Detail. It
 // reads ONLY from the request context (the session-loaded user), never from the
 // request body — the role that bounds retrieval is server-derived (T-04-08).

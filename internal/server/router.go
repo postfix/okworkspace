@@ -145,6 +145,16 @@ func New(deps Deps) (http.Handler, error) {
 			// is reachable, and authorization/scope are read from the SESSION.
 			authed.Post("/agent/chat", h.handleAgentChat)
 
+			// Single-shot agent modes (AGNT-05/06/07/08) — any-authed, awaited
+			// (JSON, not SSE). Summarize is read-only; Rewrite returns a proposal
+			// for the diff dialog and Draft a body for the editor — NEITHER writes
+			// (the apply path is a separate gated endpoint). They reach the
+			// workspace only through the role-scoped pages/attachments services.
+			authed.Post("/agent/summarize-page", h.handleSummarizePage)
+			authed.Post("/agent/summarize-attachment", h.handleSummarizeAttachment)
+			authed.Post("/agent/rewrite", h.handleRewrite)
+			authed.Post("/agent/draft", h.handleDraft)
+
 			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin
 			// subgroup). Authorization is read from the session role via
 			// RequireRole, never client input (T-02-02). Admin passes the editor
