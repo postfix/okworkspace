@@ -13,6 +13,25 @@
   min-height: var(--editor-min-height);
 }
 
+/*
+ * Accent focus ring on the focused CM6 surface (UI-SPEC Color §3). Matches the
+ * project focus-ring convention — a literal 2px accent outline, as in tokens.css
+ * `:focus-visible`, controls.css, and SearchPalette.css (no ring-width token
+ * exists). CM6 paints its own outline by default; override it with the accent ring.
+ */
 .livepreview-editor .cm-editor.cm-focused {
-  outline: none;
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Centre the prose content column (the theme caps .cm-content at
+ * --prose-max-width; centring it mirrors read mode's centred `.markdown-prose`).
+ * Vertical rhythm for heading lines lives in the CM6 theme line decorations and
+ * is layout-neutral with respect to marker reveal (a heading line is a heading
+ * line whether or not its "# " marker shows), so neighbours never reflow.
+ */
+.livepreview-editor .cm-content {
+  margin-left: auto;
+  margin-right: auto;
 }

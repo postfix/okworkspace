@@ -1,10 +1,28 @@
 // theme — the CM6 EditorView theme for the live-preview surface. Every value is a
 // tokens.css `var(--…)` reference (NO hard-coded hex/px) so the editor inherits the
-// Phase 0 design contract and a future dark theme needs no edits here. Visual
-// parity target is MarkdownProse.css (UI-SPEC Typography/Color): the content column
-// is capped at --prose-max-width, the surface has a minimum height, body text uses
-// the UI font at body size, code/source uses the mono font, and the focus ring uses
-// the accent color.
+// Phase 0 design contract and a future dark theme needs no edits here.
+//
+// Visual parity target is MarkdownProse.css (UI-SPEC Typography/Color): the content
+// column is capped at --prose-max-width, body text uses the UI font at body size,
+// the live-preview decoration classes emitted by livePreview.ts render at the EXACT
+// UI-SPEC token values so Live mode looks byte-for-byte like read mode:
+//
+//   .cm-strong       → semibold, body size (WEIGHT ONLY — no size change, so the
+//                      active-line marker reveal stays layout-neutral, Pitfall 2).
+//   .cm-em           → italic, regular weight.
+//   .cm-inline-code  → mono, code-bg, radius-sm, xs horizontal padding (mirrors
+//                      `.markdown-prose code`).
+//   .cm-code-block   → mono, code-bg block, radius-md, md padding (mirrors
+//                      `.markdown-prose pre`).
+//   .cm-heading-1    → display size/line-height, semibold (mirrors `h1`).
+//   .cm-heading-2    → heading size/line-height, semibold (mirrors `h2`).
+//   .cm-heading-3..6 → body size, semibold (mirrors `h3..h6`).
+//   .cm-md-link      → accent text, underline-on-hover (mirrors `.prose-link`).
+//
+// CRITICAL (Pitfall 2 — layout-neutral reveal): none of these classes change
+// line-height. Headings use the heading line-heights but a heading line is a
+// heading line whether or not its "# " marker is revealed, so neighbors never
+// reflow when the cursor enters/leaves. Bold is weight-only on body text.
 import { EditorView } from "@codemirror/view";
 
 export const theme = EditorView.theme({
@@ -23,16 +41,60 @@ export const theme = EditorView.theme({
     caretColor: "var(--color-text)",
     minHeight: "var(--editor-min-height)",
   },
-  "&.cm-focused": {
-    outline: "2px solid var(--color-accent)",
-    outlineOffset: "2px",
+  // NOTE: the accent focus ring lives in LivePreviewEditor.css (the project's
+  // focus-ring convention is a literal accent outline in CSS — tokens.css
+  // `:focus-visible`, controls.css, SearchPalette.css; there is no ring-width
+  // token). Keeping it out of this JS theme object keeps every value here a pure
+  // token reference, matching the tokens-only contract.
+
+  // Inline emphasis — weight/style only, body size (layout-neutral reveal).
+  ".cm-strong": {
+    fontWeight: "var(--font-weight-semibold)",
   },
-  // Inline code + fenced code use the mono font and code background, matching
-  // MarkdownProse's `code`/`pre` styling.
-  ".cm-md-code, .cm-md-codeblock": {
+  ".cm-em": {
+    fontStyle: "italic",
+    fontWeight: "var(--font-weight-regular)",
+  },
+
+  // Inline code — mono span on the code background (mirrors `.markdown-prose code`).
+  ".cm-inline-code": {
     fontFamily: "var(--font-family-mono)",
     backgroundColor: "var(--color-code-bg)",
     borderRadius: "var(--radius-sm)",
+    padding: "0 var(--space-xs)",
+  },
+  // Fenced code block — mono block on the code background (mirrors `pre`).
+  ".cm-code-block": {
+    fontFamily: "var(--font-family-mono)",
+    backgroundColor: "var(--color-code-bg)",
+    borderRadius: "var(--radius-md)",
+    padding: "0 var(--space-md)",
+  },
+
+  // Heading lines — sizes/weights/line-heights mirror `.markdown-prose h1..h6`.
+  ".cm-heading-1": {
+    fontSize: "var(--font-size-display)",
+    fontWeight: "var(--font-weight-semibold)",
+    lineHeight: "var(--line-height-display)",
+  },
+  ".cm-heading-2": {
+    fontSize: "var(--font-size-heading)",
+    fontWeight: "var(--font-weight-semibold)",
+    lineHeight: "var(--line-height-heading)",
+  },
+  ".cm-heading-3, .cm-heading-4, .cm-heading-5, .cm-heading-6": {
+    fontSize: "var(--font-size-body)",
+    fontWeight: "var(--font-weight-semibold)",
+    lineHeight: "var(--line-height-label)",
+  },
+
+  // Rendered Markdown links — accent text, underline on hover (`.prose-link`).
+  ".cm-md-link": {
+    color: "var(--color-accent)",
+    textDecoration: "none",
+  },
+  ".cm-md-link:hover": {
+    textDecoration: "underline",
   },
 });
 
