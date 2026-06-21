@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 0: Skeleton, Auth & Foundations** - Single binary serves the React shell behind a login; RBAC, sessions, safe-path resolver, and Git repo init are in place
 - [x] **Phase 1: OKF Pages, Navigation & Hidden Git** - Users create, edit, organize, and version pages with automatic hidden Git history and restore (completed 2026-06-18)
 - [x] **Phase 2: Attachments & Text Extraction** - Users upload, preview, download, and manage original-fidelity attachments with searchable extracted text (completed 2026-06-21; 11/11 verified, code review resolved incl. stored-XSS + worker-stall fixes; 4 browser-only checks deferred)
-- [ ] **Phase 3: Search** - Users find pages, headings, and attachments across titles, body, tags, filenames, and extracted text
+- [x] **Phase 3: Search** - Users find pages, headings, and attachments across titles, body, tags, filenames, and extracted text (completed 2026-06-21; 13/13 verified, code review resolved incl. drift-detection + heading-deep-link fixes; 13 browser checks deferred)
 - [ ] **Phase 4: Eino Agent** - Users get approval-gated AI help over pages, selections, attachments, and the workspace
 - [ ] **Phase 5: Collaboration** - Users see presence, soft locks, and conflict resolution so concurrent edits never silently lose work
 - [ ] **Phase 6: Live-Preview Editor (Obsidian-style)** - Editors get an Obsidian-style live-preview Markdown editor (inline rendering as you type, source toggle) while keeping the byte-stable Markdown round-trip
