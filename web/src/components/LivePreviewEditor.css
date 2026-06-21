@@ -1,0 +1,18 @@
+/*
+ * LivePreviewEditor surface styling. Token-var only (mirrors MarkdownProse.css /
+ * the tokens.css design contract) — no hard-coded hex/px so a future dark theme
+ * needs no edits here. The CM6 EditorView theme (web/src/lib/cm/theme.ts) handles
+ * the inner content typography; this file styles the host wrapper.
+ */
+.livepreview-editor {
+  min-height: var(--editor-min-height);
+  background: var(--color-bg);
+}
+
+.livepreview-editor .cm-editor {
+  min-height: var(--editor-min-height);
+}
+
+.livepreview-editor .cm-editor.cm-focused {
+  outline: none;
+}

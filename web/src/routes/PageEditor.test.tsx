@@ -16,15 +16,18 @@ vi.mock("../api/client", async (importOriginal) => {
   };
 });
 
-// Mock the heavy markdown editor with a plain textarea so the test stays fast
-// and deterministic (the editor's exact rendering is not under test here).
-vi.mock("@uiw/react-md-editor", () => ({
+// Mock the CM6 LivePreviewEditor with a plain textarea so the test stays fast and
+// deterministic (the editor's exact rendering is covered by LivePreviewEditor.test;
+// here we only exercise PageEditor's save machinery via the value/onChange seam).
+vi.mock("../components/LivePreviewEditor", () => ({
   default: ({
     value,
     onChange,
   }: {
     value: string;
-    onChange: (v?: string) => void;
+    onChange: (v: string) => void;
+    currentPath: string;
+    mode: "live" | "source";
   }) => (
     <textarea
       aria-label="body"

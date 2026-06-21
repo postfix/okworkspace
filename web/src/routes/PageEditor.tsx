@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import MDEditor from "@uiw/react-md-editor";
 
 import { getPage, savePage, type Page } from "../api/client";
 import { readField, setField } from "../lib/frontmatter";
 import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
 import LinkPicker from "../components/LinkPicker";
+import LivePreviewEditor from "../components/LivePreviewEditor";
+import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
 
 // Debounce interval (RESEARCH Open Q2: client-driven idle save). A keystroke
@@ -25,6 +26,13 @@ export default function PageEditor() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const path = params["*"] ?? "";
+
+  // Live/Source editor mode — a persisted per-device UI preference (default Live).
+  // The CM6 surface reads `mode`; the toolbar toggle and the Cmd/Ctrl-E shortcut
+  // (mode.ts toggleKeymap) both drive this single store. Switching modes never
+  // touches the document bytes (EDIT-02).
+  const mode = useEditorMode((s) => s.mode);
+  const setMode = useEditorMode((s) => s.setMode);
 
   const { data, isLoading } = useQuery<Page>({
     queryKey: ["page", path],
@@ -242,10 +250,38 @@ export default function PageEditor() {
 
       <div className="pageeditor-toolbar">
         <LinkPicker fromPath={path} onInsert={insertLink} />
+        <div
+          className="pageeditor-mode"
+          role="group"
+          aria-label="Editor mode"
+          title="Toggle live preview (⌘E / Ctrl+E)"
+        >
+          <button
+            type="button"
+            className="btn btn-secondary pageeditor-mode-btn"
+            aria-pressed={mode === "live"}
+            onClick={() => setMode("live")}
+          >
+            Live
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary pageeditor-mode-btn"
+            aria-pressed={mode === "source"}
+            onClick={() => setMode("source")}
+          >
+            Source
+          </button>
+        </div>
       </div>
 
-      <div className="pageeditor-surface" data-color-mode="light">
-        <MDEditor value={body} onChange={onBodyChange} height={480} />
+      <div className="pageeditor-surface">
+        <LivePreviewEditor
+          value={body}
+          onChange={onBodyChange}
+          currentPath={path}
+          mode={mode}
+        />
       </div>
 
       <div className="pageeditor-actions">

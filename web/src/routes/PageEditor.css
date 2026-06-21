@@ -29,6 +29,19 @@
   margin-bottom: var(--space-sm);
 }
 
+.pageeditor-mode {
+  display: inline-flex;
+  margin-left: auto;
+  gap: var(--space-xs);
+}
+
+/* The active segment reads as pressed via aria-pressed (accent fill). */
+.pageeditor-mode-btn[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  border-color: var(--color-accent);
+}
+
 .pageeditor-actions {
   display: flex;
   align-items: center;
