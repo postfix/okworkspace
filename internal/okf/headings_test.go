@@ -2,6 +2,7 @@ package okf
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +60,37 @@ func TestScanHeadings_Slug(t *testing.T) {
 		}
 		if got[0].Anchor != c.want {
 			t.Fatalf("slug for %q = %q, want %q", c.text, got[0].Anchor, c.want)
+		}
+	}
+}
+
+// TestScanHeadings_AnchorMatchesElementID is the CR-02 regression: the scanner
+// stores the anchor WITH a leading '#' (URL-hash form), but the rendered element
+// id (rehype-slug / github-slugger) has NO '#'. The SPA must strip the '#' before
+// document.getElementById, so the anchor-sans-'#' MUST equal the bare slug. This
+// asserts that parity so a heading deep-link lands on the section, not the page
+// top.
+func TestScanHeadings_AnchorMatchesElementID(t *testing.T) {
+	cases := []struct {
+		text   string
+		wantID string // the element id rehype-slug assigns (no '#')
+	}{
+		{"Deploy Runbook", "deploy-runbook"},
+		{"My Section!", "my-section"},
+		{"100% Done", "100-done"},
+	}
+	for _, c := range cases {
+		got := ScanHeadings([]byte("# " + c.text + "\n"))
+		if len(got) != 1 {
+			t.Fatalf("text %q: expected 1 heading, got %d", c.text, len(got))
+		}
+		anchor := got[0].Anchor
+		if !strings.HasPrefix(anchor, "#") {
+			t.Fatalf("text %q: anchor %q is not '#'-prefixed (stored form changed)", c.text, anchor)
+		}
+		bare := strings.TrimPrefix(anchor, "#")
+		if bare != c.wantID {
+			t.Fatalf("text %q: anchor-sans-'#' = %q, want element id %q", c.text, bare, c.wantID)
 		}
 	}
 }

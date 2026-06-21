@@ -18,6 +18,15 @@ const GROUP_ORDER: { kind: SearchResultKind; label: string }[] = [
 const LIST_ID = "search-palette-listbox";
 const optionId = (i: number) => `search-option-${i}`;
 
+// stripAnchorHash converts a server-stored heading anchor (URL-hash form, e.g.
+// "#deploy-runbook") into the bare element id rehype-slug assigns (e.g.
+// "deploy-runbook"). document.getElementById must receive the bare id; passing
+// the '#'-prefixed form matches nothing, leaving every heading deep-link at the
+// page top (CR-02). Exported for the parity test against the Go scanner.
+export function stripAnchorHash(anchor: string): string {
+  return anchor.replace(/^#/, "");
+}
+
 // SearchPalette gates on the zustand open state and mounts a fresh PaletteInner
 // each time it opens (the `key` forces a remount), so all transient state —
 // query text, active row, loading flag — resets cleanly without a reset effect.
@@ -121,15 +130,19 @@ function PaletteInner() {
   // owning page (SRCH-05).
   function openResult(r: SearchResult) {
     setOpen(false);
-    navigate(`/app/page/${r.path}`);
     if (r.kind === "heading" && r.anchor) {
-      // The heading id lands once 03-03 adds anchors to the renderer; until then
-      // this is a no-op deep-link, the page still opens correctly.
-      const anchor = r.anchor;
+      // The server stores the anchor WITH a leading '#' (URL-hash form), but
+      // rehype-slug assigns element ids WITHOUT it. Strip the '#' for the DOM
+      // lookup (CR-02) and keep it for the route hash so a copied/deep link is
+      // valid.
+      const id = stripAnchorHash(r.anchor);
+      navigate(`/app/page/${r.path}#${id}`);
       window.requestAnimationFrame(() => {
-        document.getElementById(anchor)?.scrollIntoView();
+        document.getElementById(id)?.scrollIntoView();
       });
+      return;
     }
+    navigate(`/app/page/${r.path}`);
   }
 
   // Keyboard nav within the input: ↑/↓ move the active row, Enter opens it.

@@ -23,7 +23,7 @@ vi.mock("../../api/client", async (importOriginal) => {
 import * as client from "../../api/client";
 import type { SearchResult } from "../../api/client";
 import { useSearchStore } from "../../store/searchStore";
-import SearchPalette from "./SearchPalette";
+import SearchPalette, { stripAnchorHash } from "./SearchPalette";
 
 // jsdom does not implement scrollIntoView; the palette calls it for auto-scroll.
 beforeEach(() => {
@@ -145,5 +145,52 @@ describe("SearchPalette", () => {
     renderPalette();
     // The palette is open (combobox present) because the store said so.
     expect(await screen.findByRole("combobox")).toBeInTheDocument();
+  });
+
+  // CR-02: heading deep-links must target the BARE element id (no '#'), since
+  // rehype-slug ids carry no '#'. The server stores the anchor '#'-prefixed.
+  it("opens a heading result at the bare element id, not the '#'-prefixed anchor", async () => {
+    const getByIdSpy = vi.spyOn(document, "getElementById");
+    const results: SearchResult[] = [
+      {
+        kind: "heading",
+        title: "Deploy Runbook",
+        path: "runbooks/deploy.md",
+        snippet: "deploy",
+        anchor: "#deploy-runbook",
+        page_title: "Deploy",
+      },
+    ];
+    vi.mocked(client.search).mockResolvedValue(results);
+    renderPalette();
+    const input = await typeQuery("deploy");
+    await screen.findByRole("option");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    // Navigation carries the bare id as the URL hash (valid deep link).
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/app/page/runbooks/deploy.md#deploy-runbook",
+    );
+    // The DOM scroll lookup uses the bare id, NEVER the '#'-prefixed form.
+    await waitFor(() =>
+      expect(getByIdSpy).toHaveBeenCalledWith("deploy-runbook"),
+    );
+    expect(getByIdSpy).not.toHaveBeenCalledWith("#deploy-runbook");
+    getByIdSpy.mockRestore();
+  });
+});
+
+describe("stripAnchorHash", () => {
+  // The Go scanner (okf.ScanHeadings) stores anchors '#'-prefixed; rehype-slug
+  // element ids are bare. stripAnchorHash must yield the bare slug so they match.
+  it("strips a single leading '#' to match the rehype-slug element id", () => {
+    expect(stripAnchorHash("#deploy-runbook")).toBe("deploy-runbook");
+    expect(stripAnchorHash("#my-section")).toBe("my-section");
+    expect(stripAnchorHash("#100-done")).toBe("100-done");
+  });
+
+  it("is a no-op when there is no leading '#'", () => {
+    expect(stripAnchorHash("already-bare")).toBe("already-bare");
   });
 });
