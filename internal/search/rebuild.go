@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -61,9 +62,13 @@ func (s *Index) RebuildIndex(ctx context.Context) error {
 		}
 		raw, rerr := s.repo.Read(it.Path)
 		if rerr != nil {
-			_ = tmpIdx.Close()
-			_ = os.RemoveAll(tmp)
-			return fmt.Errorf("search: read %q: %w", it.Path, rerr)
+			// A transient/IO read error on ONE file must not abort the whole rebuild
+			// (WR-06): the rebuild is the correctness backstop, so one unreadable file
+			// can't be allowed to make search permanently un-rebuildable. Skip it,
+			// like the malformed-parse case below.
+			slog.WarnContext(ctx, "search: skipping unreadable page during rebuild",
+				slog.String("path", it.Path), slog.String("error", rerr.Error()))
+			continue
 		}
 		doc, perr := okf.Parse(raw)
 		if perr != nil {
@@ -75,17 +80,19 @@ func (s *Index) RebuildIndex(ctx context.Context) error {
 		if berr := batch.Index(pageDocID(it.Path), pageDoc(
 			it.Path, title, string(doc.Body), readTags(doc),
 		)); berr != nil {
-			_ = tmpIdx.Close()
-			_ = os.RemoveAll(tmp)
-			return fmt.Errorf("search: batch index %q: %w", it.Path, berr)
+			// A single bad doc must not nuke the whole index build (WR-06): skip it.
+			slog.WarnContext(ctx, "search: skipping page that failed to batch-index during rebuild",
+				slog.String("path", it.Path), slog.String("error", berr.Error()))
+			continue
 		}
 		// Heading sub-docs for the page (deep-link targets).
 		for _, hd := range okf.ScanHeadings(doc.Body) {
 			id := headingDocID(it.Path, hd.Anchor)
 			if berr := batch.Index(id, headingDoc(it.Path, title, hd.Text, hd.Anchor)); berr != nil {
-				_ = tmpIdx.Close()
-				_ = os.RemoveAll(tmp)
-				return fmt.Errorf("search: batch index heading %q: %w", id, berr)
+				// Skip the one bad heading doc, keep the rest of the rebuild (WR-06).
+				slog.WarnContext(ctx, "search: skipping heading that failed to batch-index during rebuild",
+					slog.String("heading_id", id), slog.String("error", berr.Error()))
+				continue
 			}
 			headingRows[it.Path] = append(headingRows[it.Path], id)
 		}
@@ -109,9 +116,10 @@ func (s *Index) RebuildIndex(ctx context.Context) error {
 		pageTitle := s.pageTitle(meta.PagePath)
 		if berr := batch.Index(attachmentDocID(id),
 			attachmentDoc(meta.OriginalName, extracted, meta.PagePath, pageTitle)); berr != nil {
-			_ = tmpIdx.Close()
-			_ = os.RemoveAll(tmp)
-			return fmt.Errorf("search: batch index attachment %q: %w", id, berr)
+			// Skip the one bad attachment doc, keep the rest of the rebuild (WR-06).
+			slog.WarnContext(ctx, "search: skipping attachment that failed to batch-index during rebuild",
+				slog.String("attachment_id", id), slog.String("error", berr.Error()))
+			continue
 		}
 	}
 

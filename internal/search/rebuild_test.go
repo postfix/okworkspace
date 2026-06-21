@@ -2,6 +2,8 @@ package search
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -58,6 +60,36 @@ func TestRebuild_ExcludesTrash(t *testing.T) {
 		if r.Path == ".okf-workspace/trash/20260101T000000-gone.md" {
 			t.Fatalf("trashed page leaked into results: %+v", r)
 		}
+	}
+}
+
+// TestRebuild_TolerantOfUnreadableFile is the WR-06 regression: a single
+// unreadable .md file (a broken symlink that Tree lists but repo.Read fails on)
+// must be logged-and-skipped, NOT abort the whole rebuild — otherwise one bad file
+// makes search permanently un-rebuildable. The readable page must still be indexed.
+func TestRebuild_TolerantOfUnreadableFile(t *testing.T) {
+	h := newHarness(t)
+	h.writePage(t, "good.md", "Good Page", nil, "findableword content")
+
+	// Create a broken symlink at a .md path: WalkDir lists it as a non-dir entry,
+	// but os.ReadFile (repo.Read) fails — exactly the single-file IO error case.
+	broken := filepath.Join(h.repo.Root(), "broken.md")
+	if err := os.Symlink(filepath.Join(h.repo.Root(), "does-not-exist-target"), broken); err != nil {
+		t.Skipf("cannot create symlink (filesystem unsupported): %v", err)
+	}
+
+	// Rebuild must succeed despite the unreadable file.
+	if err := h.idx.RebuildIndex(context.Background()); err != nil {
+		t.Fatalf("RebuildIndex aborted on a single unreadable file (WR-06): %v", err)
+	}
+
+	// The good page is still indexed.
+	results, err := h.idx.Query(context.Background(), "findableword")
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if !containsPath(results, "good.md") {
+		t.Fatalf("readable page missing after rebuild that skipped a bad file: %+v", results)
 	}
 }
 
