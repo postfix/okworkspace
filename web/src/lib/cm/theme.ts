@@ -63,29 +63,34 @@ export const theme = EditorView.theme({
     borderRadius: "var(--radius-sm)",
     padding: "0 var(--space-xs)",
   },
-  // Fenced code block — mono block on the code background (mirrors `pre`).
+  // Fenced code block — mono block on the code background (mirrors `pre`,
+  // which uses full md padding on all sides — not just horizontal).
   ".cm-code-block": {
     fontFamily: "var(--font-family-mono)",
     backgroundColor: "var(--color-code-bg)",
     borderRadius: "var(--radius-md)",
-    padding: "0 var(--space-md)",
+    padding: "var(--space-md)",
   },
 
-  // Heading lines — sizes/weights/line-heights mirror `.markdown-prose h1..h6`.
+  // Heading lines — sizes/weights/line-heights AND vertical rhythm mirror
+  // `.markdown-prose h1..h6` so edit Live mode matches the read surface.
   ".cm-heading-1": {
     fontSize: "var(--font-size-display)",
     fontWeight: "var(--font-weight-semibold)",
     lineHeight: "var(--line-height-display)",
+    margin: "var(--space-xl) 0 var(--space-md)",
   },
   ".cm-heading-2": {
     fontSize: "var(--font-size-heading)",
     fontWeight: "var(--font-weight-semibold)",
     lineHeight: "var(--line-height-heading)",
+    margin: "var(--space-lg) 0 var(--space-sm)",
   },
   ".cm-heading-3, .cm-heading-4, .cm-heading-5, .cm-heading-6": {
     fontSize: "var(--font-size-body)",
     fontWeight: "var(--font-weight-semibold)",
     lineHeight: "var(--line-height-label)",
+    margin: "var(--space-md) 0 var(--space-sm)",
   },
 
   // Rendered Markdown links — accent text, underline on hover (`.prose-link`).

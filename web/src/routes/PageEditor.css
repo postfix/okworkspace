@@ -35,11 +35,13 @@
   gap: var(--space-xs);
 }
 
-/* The active segment reads as pressed via aria-pressed (accent fill). */
+/* The active segment reads as pressed via aria-pressed: accent text + a 2px
+   accent underline (NOT a full accent fill — UI-SPEC reserves accent fill for
+   the single "Save page" CTA). */
 .pageeditor-mode-btn[aria-pressed="true"] {
-  background: var(--color-accent);
-  color: var(--color-accent-fg);
-  border-color: var(--color-accent);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+  border-bottom: 2px solid var(--color-accent);
 }
 
 .pageeditor-actions {
