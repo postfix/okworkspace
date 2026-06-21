@@ -116,18 +116,17 @@ func ExtractHandler(r binaryReader, w enqueuer, db *sql.DB, pushOnCommit bool) j
 		if merr != nil {
 			return fmt.Errorf("attachments: marshal extract commit payload: %w", merr)
 		}
-		if cerr := w.EnqueueAndWait(ctx, kindCommit, string(raw), commitWaitTimeout); cerr != nil {
-			// A commit failure must surface so the worker retries — the .txt is the
-			// durable artifact. (A timeout is treated as a soft success by the upload
-			// path, but here we want the retry to ensure the sidecar lands.)
-			if cerr == jobs.ErrJobTimeout {
-				// The commit job is queued and will still complete; do not fail the
-				// extract over a slow drain — mirror the upload-path policy.
-				cerr = nil
-			}
-			if cerr != nil {
-				return fmt.Errorf("attachments: commit extracted text %q: %w", p.AttachmentID, cerr)
-			}
+		// FIRE-AND-FORGET enqueue (NOT EnqueueAndWait): this handler runs ON the
+		// single worker drain goroutine, so the KindCommit job it queues can only be
+		// drained AFTER this handler returns. Waiting here would deadlock the worker
+		// until commitWaitTimeout and stall every queued page-save/upload behind it
+		// (CR-01). Enqueue returns once the job row is persisted; the commit lands on
+		// the very next drain iteration (FIFO), through the single-writer KindCommit
+		// spine (ATT-10). Status is set optimistically — the .txt is durably queued.
+		if cerr := w.Enqueue(ctx, kindCommit, string(raw)); cerr != nil {
+			// Only a failure to PERSIST the commit job reaches here; surface it so the
+			// worker retries the extraction (the .txt is the durable artifact).
+			return fmt.Errorf("attachments: enqueue extracted-text commit %q: %w", p.AttachmentID, cerr)
 		}
 
 		status := ExtractionDone
