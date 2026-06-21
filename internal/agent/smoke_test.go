@@ -157,7 +157,7 @@ func TestSmokeReActAskStream(t *testing.T) {
 	defer cancel()
 
 	rec := httptest.NewRecorder()
-	err := svc.AskStream(ctx, rec, "What is the launch code phrase? Read the page to find out.", "notes/launch.md")
+	_, err := svc.AskStream(ctx, rec, "What is the launch code phrase? Read the page to find out.", Scope{Kind: ScopePage, Path: "notes/launch.md"})
 	if err != nil {
 		if isProviderUnreachable(err) {
 			t.Skipf("DeepSeek unreachable (non-code failure): %v", err)

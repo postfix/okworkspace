@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
@@ -25,6 +26,100 @@ var ErrAgentDisabled = errors.New("agent: disabled in configuration")
 // calling is less consistent than GPT-4-class, so a tight cap plus a structured
 // step-exhaustion error (never an infinite retry) is required (RESEARCH §Item 5).
 const maxReActStep = 12
+
+// ScopeKind identifies which slice of the workspace an Ask is bounded to. The
+// kind decides the system prompt and how the question's context is assembled
+// (AGNT-02/03/04) — the SAME read-only ReAct agent serves all four.
+type ScopeKind string
+
+const (
+	// ScopePage answers grounded in the page the user is viewing (slice 2).
+	ScopePage ScopeKind = "page"
+	// ScopeSelection answers about a span of selected text passed in the user
+	// turn (AGNT-02) — no tool fetch needed for the selection itself.
+	ScopeSelection ScopeKind = "selection"
+	// ScopeAttachment answers from an attachment's extracted text, which the
+	// agent reads via read_attachment_text (AGNT-03).
+	ScopeAttachment ScopeKind = "attachment"
+	// ScopeWorkspace answers over the whole (role-readable) workspace via
+	// search-backed RAG — top-K via search_pages/search_attachments, never a
+	// workspace dump (AGNT-04). Carries tool-trace-derived citations (D3).
+	ScopeWorkspace ScopeKind = "workspace"
+)
+
+// Scope is the resolved, server-side Ask scope. It is built from the request by
+// the handler: the KIND and any path/id/selection come from the body, but the
+// ROLE that bounds retrieval is taken from the server session (never the client)
+// and is applied when the handler constructs the role-scoped Deps.Search. The
+// agent code here only varies prompting + which tools the model is steered to —
+// it never widens the content the role-scoped services already permit.
+type Scope struct {
+	Kind ScopeKind
+	// Path is the page path (page scope) or the attachment's owning page used as
+	// a provenance hint; empty for selection/workspace.
+	Path string
+	// AttachmentID is the attachment whose extracted text answers an attachment
+	// Ask (read_attachment_text); empty otherwise.
+	AttachmentID string
+	// Selection is the user-selected span answered about in selection scope. It
+	// is UNTRUSTED and is delimited into the USER turn, never the system prompt.
+	Selection string
+}
+
+// normalize fills in a safe default kind so an empty/unknown scope falls back to
+// the read-only page Ask (the slice-2 behaviour) rather than misrouting.
+func (sc Scope) normalize() Scope {
+	switch sc.Kind {
+	case ScopePage, ScopeSelection, ScopeAttachment, ScopeWorkspace:
+		return sc
+	default:
+		sc.Kind = ScopePage
+		return sc
+	}
+}
+
+// scopeTrace collects the workspace-relative page paths the agent actually
+// retrieved during a single Ask turn (from read_page / search_pages /
+// search_attachments). It backs the workspace "Reasoned over:" citation (D3):
+// citations come from this REAL tool-call trace, not from trusting the model to
+// name its sources. It is per-request and goroutine-safe because the ReAct
+// tools node may run tool calls concurrently. A nil *scopeTrace is a no-op, so
+// non-workspace scopes (and the allow-list test) pay nothing.
+type scopeTrace struct {
+	mu    sync.Mutex
+	paths []string
+	seen  map[string]bool
+}
+
+func newScopeTrace() *scopeTrace { return &scopeTrace{seen: map[string]bool{}} }
+
+// add records a retrieved page path once (dedup, insertion-ordered). Nil-safe
+// and empty-path-safe.
+func (t *scopeTrace) add(path string) {
+	if t == nil || path == "" {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.seen[path] {
+		return
+	}
+	t.seen[path] = true
+	t.paths = append(t.paths, path)
+}
+
+// retrieved returns a copy of the unique retrieved page paths in the order they
+// were first seen. Always non-nil. Used to render the citation line.
+func (t *scopeTrace) retrieved() []string {
+	if t == nil {
+		return []string{}
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]string, len(t.paths))
+	copy(out, t.paths)
+	return out
+}
 
 // Narrow consumer interfaces over the existing services. They are declared here
 // (and left unwired in slice 1) so later slices inject fakes in tests without
@@ -138,11 +233,11 @@ func (s *Service) Enabled() bool { return s.cm != nil }
 // readTools' read-only allow-list; no write/apply tool is reachable from here.
 // MaxStep is capped at maxReActStep and UnknownToolsHandler absorbs DeepSeek's
 // hallucinated tool names instead of erroring the whole turn (RESEARCH §Item 5).
-func (s *Service) buildReActAgent(ctx context.Context) (*react.Agent, error) {
+func (s *Service) buildReActAgent(ctx context.Context, trace *scopeTrace) (*react.Agent, error) {
 	if s.cm == nil {
 		return nil, ErrAgentDisabled
 	}
-	tools, _, err := readTools(s.deps)
+	tools, _, err := readTools(s.deps, trace)
 	if err != nil {
 		return nil, err
 	}

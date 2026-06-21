@@ -29,8 +29,10 @@ func TestToolSetIsExactlyReadOnlyAllowList(t *testing.T) {
 		"read_attachment_text": true,
 	}
 
-	// nil Deps: construction must not touch any service (key-free, offline).
-	tools, names, err := readTools(Deps{})
+	// nil Deps + nil trace: construction must not touch any service (key-free,
+	// offline). The nil *scopeTrace also proves the citation trace is a no-op for
+	// the non-workspace path.
+	tools, names, err := readTools(Deps{}, nil)
 	if err != nil {
 		t.Fatalf("readTools returned an unexpected error: %v", err)
 	}

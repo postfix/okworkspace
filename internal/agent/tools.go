@@ -91,7 +91,13 @@ var readToolNames = []string{
 // returns Found:false (not a hard error) so the ReAct agent can recover instead
 // of aborting the turn, and a path/id supplied by the model can never escape the
 // resolver or leak raw bytes off an arbitrary path (T-04-04).
-func readTools(deps Deps) ([]tool.BaseTool, []string, error) {
+//
+// trace (optional, nil-safe) records the workspace-relative page paths the agent
+// actually retrieved via read_page / search_pages / search_attachments. It backs
+// the workspace-Ask "Reasoned over:" citation (D3 / RESEARCH Q2) — citations are
+// derived from the real tool-call trace, never from trusting the model to cite.
+// nil trace (the allow-list test, page/selection/attachment scopes) is a no-op.
+func readTools(deps Deps, trace *scopeTrace) ([]tool.BaseTool, []string, error) {
 	listTree, err := utils.InferTool(
 		"list_tree",
 		"List the workspace-relative paths of all readable pages.",
@@ -123,6 +129,7 @@ func readTools(deps Deps) ([]tool.BaseTool, []string, error) {
 			if gerr != nil {
 				return readPageOut{Found: false}, nil // soft-miss
 			}
+			trace.add(in.Path) // citation: a page the agent actually read.
 			return readPageOut{Found: true, Body: p.Body}, nil
 		},
 	)
@@ -134,7 +141,7 @@ func readTools(deps Deps) ([]tool.BaseTool, []string, error) {
 		"search_pages",
 		"Search workspace pages for a query; returns up to five page matches.",
 		func(ctx context.Context, in searchIn) (searchOut, error) {
-			return runSearch(ctx, deps, in.Query, "page"), nil
+			return runSearch(ctx, deps, trace, in.Query, "page"), nil
 		},
 	)
 	if err != nil {
@@ -145,7 +152,7 @@ func readTools(deps Deps) ([]tool.BaseTool, []string, error) {
 		"search_attachments",
 		"Search workspace attachments for a query; returns up to five attachment matches.",
 		func(ctx context.Context, in searchIn) (searchOut, error) {
-			return runSearch(ctx, deps, in.Query, "attachment"), nil
+			return runSearch(ctx, deps, trace, in.Query, "attachment"), nil
 		},
 	)
 	if err != nil {
@@ -186,7 +193,13 @@ func readTools(deps Deps) ([]tool.BaseTool, []string, error) {
 // runSearch runs the role-scoped query and maps the kind-filtered hits to the
 // flat searchHit DTO (top readToolMaxResults). A nil searcher or query error
 // returns an empty (non-nil) hit list — soft-miss, never a hard tool error.
-func runSearch(ctx context.Context, deps Deps, query, kind string) searchOut {
+//
+// Every surfaced hit's page path is recorded on the (nil-safe) trace so the
+// workspace-Ask citation line names exactly the pages RAG actually drew from
+// (D3 / RESEARCH Q2). deps.Search is constructed role-scoped from the server
+// session by the caller, so a hit can only be a page the session role may read
+// — out-of-role pages never enter the hit list, the prompt, or the citation.
+func runSearch(ctx context.Context, deps Deps, trace *scopeTrace, query, kind string) searchOut {
 	out := searchOut{Hits: []searchHit{}}
 	if deps.Search == nil {
 		return out
@@ -200,6 +213,7 @@ func runSearch(ctx context.Context, deps Deps, query, kind string) searchOut {
 			continue
 		}
 		out.Hits = append(out.Hits, searchHit{Path: r.Path, Title: r.Title, Snippet: r.Snippet})
+		trace.add(r.Path) // citation: a page RAG surfaced into the answer context.
 		if len(out.Hits) >= readToolMaxResults {
 			break
 		}
