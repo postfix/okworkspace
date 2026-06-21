@@ -37,7 +37,7 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 
 ### File Tree (folder operations & tree UX)
 
-- [ ] **TREE-01**: Right-clicking a folder or page in the tree opens a context menu with the relevant actions (folder: New page here, New folder here, Rename, Move, Delete; page: Rename, Move, Delete, Version history)
+- [x] **TREE-01**: Right-clicking a folder or page in the tree opens a context menu with the relevant actions (folder: New page here, New folder here, Rename, Move, Delete; page: Rename, Move, Delete, Version history)
 - [ ] **TREE-02**: A folder can be renamed, moved into another folder, and deleted as a unit — every contained page relocates and all inbound links are rewritten in the SAME commit, with no corruption (the okf byte-stable round-trip still holds)
 - [ ] **TREE-03**: Folders and pages can be reorganized by drag-and-drop (drop onto a folder or root to move), with optimistic tree updates that appear immediately and reconcile with the server (no manual refresh)
 - [x] **TREE-04**: Deleting a folder is recoverable — its pages go to trash and can be restored; there is no permanent delete in this phase
@@ -213,7 +213,7 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | EDIT-02 | Phase 6 | Complete |
 | EDIT-03 | Phase 6 | Complete |
 | EDIT-04 | Phase 6 | Complete |
-| TREE-01 | Phase 7 | Pending |
+| TREE-01 | Phase 7 | Complete |
 | TREE-02 | Phase 7 | Pending |
 | TREE-03 | Phase 7 | Pending |
 | TREE-04 | Phase 7 | Complete |

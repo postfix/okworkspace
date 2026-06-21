@@ -245,7 +245,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Folders and pages can be reorganized by drag-and-drop (drop onto a folder or root to move), and the tree updates immediately with no manual refresh
   4. Deleting a folder is recoverable — its pages go to trash and can be restored; there is no permanent delete in this phase
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 **Wave 1**
 
@@ -257,7 +257,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 07-03-PLAN.md — Frontend regression-net pin (Clean-Rebuild Behavior Inventory) + clean rebuild of LeftTree/TreeContextMenu/RenameModal/MoveDialog, no new features, no regression (TREE-01 page side) (wave 3)
+- [x] 07-03-PLAN.md — Frontend regression-net pin (Clean-Rebuild Behavior Inventory) + clean rebuild of LeftTree/TreeContextMenu/RenameModal/MoveDialog, no new features, no regression (TREE-01 page side) (wave 3)
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -280,4 +280,4 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Eino Agent | 0/TBD | Not started | - |
 | 5. Collaboration | 0/TBD | Not started | - |
 | 6. Live-Preview Editor (Obsidian-style) | 4/4 | Complete   | 2026-06-21 |
-| 7. Obsidian-style File Tree (folder operations & tree UX) | 2/4 | In Progress|  |
+| 7. Obsidian-style File Tree (folder operations & tree UX) | 3/4 | In Progress|  |
