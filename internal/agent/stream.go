@@ -49,10 +49,12 @@ var ErrStreamAlreadyCommitted = errors.New("agent: SSE stream already committed;
 // For workspace scope the answer is search-backed RAG (top-K, never a dump): the
 // page paths the agent actually retrieved are captured from the tool-call trace
 // and emitted as a terminal `event: citation` SSE frame BEFORE `event: done` so
-// the frontend can render the "Reasoned over:" line (D3 / RESEARCH Q2). Only
-// role-readable pages can appear there because Deps.Search is role-scoped by the
-// caller. The returned []string is the same retrieved path set (empty for non-
-// workspace scopes / when nothing was retrieved) for the caller's audit/use.
+// the frontend can render the "Reasoned over:" line (D3 / RESEARCH Q2). NOTE
+// (WR-02): retrieval is NOT role-scoped at the MVP — Deps.Search is process-wide
+// and every authed user reads every page, so any indexed page may appear here;
+// see agent.runSearch's TODO for the per-page-ACL gate. The returned []string is
+// the same retrieved path set (empty for non-workspace scopes / when nothing was
+// retrieved) for the caller's audit/use.
 //
 // Once streaming has begun, a mid-stream provider error or a client disconnect
 // ends the loop cleanly: the request context (passed straight to ag.Stream)

@@ -49,18 +49,25 @@ const (
 	// ScopeAttachment answers from an attachment's extracted text, which the
 	// agent reads via read_attachment_text (AGNT-03).
 	ScopeAttachment ScopeKind = "attachment"
-	// ScopeWorkspace answers over the whole (role-readable) workspace via
-	// search-backed RAG — top-K via search_pages/search_attachments, never a
-	// workspace dump (AGNT-04). Carries tool-trace-derived citations (D3).
+	// ScopeWorkspace answers over the whole workspace via search-backed RAG —
+	// top-K via search_pages/search_attachments, never a workspace dump (AGNT-04).
+	// Carries tool-trace-derived citations (D3). Retrieval is NOT role-scoped at
+	// the MVP (WR-02): every authed user can read every page, so RAG can surface
+	// any indexed page. See runSearch's TODO for the per-page-ACL gate.
 	ScopeWorkspace ScopeKind = "workspace"
 )
 
 // Scope is the resolved, server-side Ask scope. It is built from the request by
-// the handler: the KIND and any path/id/selection come from the body, but the
-// ROLE that bounds retrieval is taken from the server session (never the client)
-// and is applied when the handler constructs the role-scoped Deps.Search. The
-// agent code here only varies prompting + which tools the model is steered to —
-// it never widens the content the role-scoped services already permit.
+// the handler: the KIND and any path/id/selection come from the body.
+//
+// NOTE (WR-02): retrieval is NOT role-scoped at the MVP. Deps.Search is a single
+// process-wide index (search.Index.Query takes no role argument), and the page-read
+// model is "any authenticated user reads everything" (no per-page ACL yet), so
+// every authed user can retrieve every page. This is not a leak today (nothing is
+// private) but the moment per-page ACLs land the workspace Ask + its citation frame
+// will surface out-of-role pages — see runSearch's TODO. The agent code here only
+// varies prompting + which tools the model is steered to; it does NOT itself
+// enforce any role boundary.
 type Scope struct {
 	Kind ScopeKind
 	// Path is the page path (page scope) or the attachment's owning page used as
@@ -142,9 +149,13 @@ type pageWriter interface {
 	Save(ctx context.Context, path, body string, frontmatter map[string]any, baseRevision, user string) error
 }
 
-// searcher backs the workspace-RAG tools (slice 2). Role-scoped at the call
-// site; never the client. *search.Index satisfies it (Query is repo.Resolve-
-// backed via the Bleve index built from on-disk files).
+// searcher backs the workspace-RAG tools (slice 2). *search.Index satisfies it
+// (Query is repo.Resolve-backed via the Bleve index built from on-disk files).
+//
+// NOTE (WR-02): Query takes NO role argument and the injected index is process-
+// wide — retrieval is NOT role-scoped at the MVP. This is acceptable only while
+// the page-read model is "any authenticated user reads everything"; when per-page
+// ACLs land, retrieval must filter to a role-readable set (see runSearch's TODO).
 type searcher interface {
 	Query(ctx context.Context, q string) ([]search.Result, error)
 }

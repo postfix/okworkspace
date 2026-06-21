@@ -196,9 +196,18 @@ func readTools(deps Deps, trace *scopeTrace) ([]tool.BaseTool, []string, error) 
 //
 // Every surfaced hit's page path is recorded on the (nil-safe) trace so the
 // workspace-Ask citation line names exactly the pages RAG actually drew from
-// (D3 / RESEARCH Q2). deps.Search is constructed role-scoped from the server
-// session by the caller, so a hit can only be a page the session role may read
-// — out-of-role pages never enter the hit list, the prompt, or the citation.
+// (D3 / RESEARCH Q2).
+//
+// NOTE (WR-02): retrieval is NOT role-scoped at the MVP. search.Index.Query takes
+// no role/identity argument and a single process-wide index is injected, so every
+// hit the index returns is surfaced. This is NOT a leak today because the page-read
+// model is "any authenticated user reads everything" (rbac has no per-page ACL and
+// page reads are mounted in the any-authed group) — there is nothing private to
+// leak. TODO: when per-page ACLs land (rbac.go "editor/reader content gating"),
+// this MUST post-filter hits against a role-readable set (or thread the role into
+// Query); until then an out-of-role page WOULD reach the hit list, the prompt, and
+// the citation. Gate the agent on that ACL work so this gap is caught when ACLs
+// arrive (§1b silent scope leak).
 func runSearch(ctx context.Context, deps Deps, trace *scopeTrace, query, kind string) searchOut {
 	out := searchOut{Hits: []searchHit{}}
 	if deps.Search == nil {

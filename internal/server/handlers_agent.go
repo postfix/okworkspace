@@ -15,10 +15,15 @@ import (
 	"github.com/postfix/okworkspace/internal/pages"
 )
 
-// agentChatRequest is the POST /agent/chat body. The actor and the ROLE that
-// bounds retrieval are NEVER read from the body — they come from the session.
-// Only the SCOPE (which slice of the workspace) and the prompt are client-
-// supplied; the server enforces what that scope is allowed to read.
+// agentChatRequest is the POST /agent/chat body. The actor is NEVER read from the
+// body — it comes from the session. Only the SCOPE (which slice of the workspace)
+// and the prompt are client-supplied.
+//
+// NOTE (WR-02): retrieval is NOT role-scoped at the MVP. The role is derived from
+// the session and recorded in the audit, but search.Index.Query takes no role
+// argument and every authed user can read every page today (no per-page ACL), so
+// a workspace Ask can retrieve any indexed page. This is not a leak now (nothing
+// is private); it becomes one when per-page ACLs land — see agent.runSearch's TODO.
 //
 //   - Scope selects page | selection | attachment | workspace (default page).
 //   - PagePath is the page the user is viewing (page scope) or the selection's
@@ -88,10 +93,11 @@ func (h *authHandlers) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve the scope KIND from the body but bound it server-side. The ROLE
-	// that scopes retrieval is taken from the SESSION (never the client) so a
-	// workspace Ask can only retrieve pages the session role may read; the role
-	// is derived here and recorded in the audit, not trusted from req.
+	// Resolve the scope KIND from the body but bound it server-side. The role is
+	// derived from the SESSION (never the client) and recorded in the audit for
+	// traceability. NOTE (WR-02): the role does NOT currently scope retrieval —
+	// search is process-wide and every authed user reads every page at the MVP; the
+	// role is captured here so the audit is accurate when per-page ACLs land.
 	kind := scopeKindFromRequest(req.Scope)
 	role := h.actorRole(r.Context())
 	sc := agent.Scope{

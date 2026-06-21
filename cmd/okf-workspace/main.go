@@ -244,6 +244,12 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	// inside the service and never logged. When cfg.Agent.Enabled is false the
 	// service still constructs (disabled) so the handler can return the off-state
 	// rather than a hang.
+	//
+	// NOTE (WR-02): searchIdx is a SINGLE process-wide index injected here — agent
+	// retrieval is NOT role-scoped. This is acceptable only while the page-read
+	// model is "any authenticated user reads everything" (no per-page ACL). When
+	// per-page ACLs land, a role-scoped Search must be threaded per request (see
+	// agent.runSearch's TODO) before the workspace Ask can be trusted not to leak.
 	agentSvc := agent.NewService(cfg.Agent, &agent.Deps{
 		Pages:       pagesSvc,
 		Search:      searchIdx,
