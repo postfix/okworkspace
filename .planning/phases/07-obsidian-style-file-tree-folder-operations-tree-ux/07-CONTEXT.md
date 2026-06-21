@@ -82,6 +82,16 @@ Excluded (Obsidian-only / other phases): canvas/base doc types, search-in-folder
   criteria + the context menu + drag-and-drop) before planning — done by the
   orchestrator, mirroring the EDIT-01..04 formalization in Phase 6.
 
+### Folder Delete/Restore Atomicity — RESOLVED (2026-06-21, post-research)
+- Folder **rename/move IS atomic** — one commit relocates `index.md` + all `dir/`
+  descendants + rewrites all inbound links (the byte-stability-critical path).
+- Folder **delete/restore is per-page-looped under a shared group id** and is NOT
+  strictly all-or-nothing across commits — this matches the existing `ReconcileTrash`
+  (WR-01) stance and is recoverable by design (trash). A `TestDeleteFolder_PartialProgress`
+  test asserts graceful partial-progress behavior. Strict all-or-nothing folder
+  delete was considered and rejected as gold-plating that diverges from the shipped
+  trash pattern. Grouped restore restores `index.md` first so the folder exists.
+
 ### Claude's Discretion
 - Exact trash group-id schema and the grouped-restore query.
 - Optimistic-update cache-shape details and rollback granularity.
