@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/postfix/okworkspace/internal/agent"
 	"github.com/postfix/okworkspace/internal/audit"
@@ -47,6 +48,24 @@ const maxPromptLen = 4000
 // or two, not a whole document; the cap bounds the prompt the model sees.
 const maxSelectionLen = 16000
 
+// maxIdentifierLen caps an untrusted page_path / attachment_id (WR-04). A repo-
+// relative page path or an opaque attachment id is short; a few hundred bytes is
+// far above any real value. These identifiers are spliced into the user turn
+// (prompts.buildScopedMessages writes page_path into the prompt hint), so an
+// unbounded one is an asymmetric input the focus contract calls out — cap it like
+// the prompt/selection and reject non-UTF-8 before building the scope.
+const maxIdentifierLen = 512
+
+// validIdentifier reports whether an untrusted page_path / attachment_id is safe
+// to splice into a prompt scope: non-NUL, valid UTF-8, and within maxIdentifierLen
+// (WR-04). An empty value passes here (presence is checked separately where
+// required); only a too-long, NUL-bearing, or non-UTF-8 value is rejected.
+func validIdentifier(s string) bool {
+	return len(s) <= maxIdentifierLen &&
+		!strings.ContainsRune(s, '\x00') &&
+		utf8.ValidString(s)
+}
+
 // handleAgentChat answers an Ask question grounded in the current page and
 // streams the answer token-by-token as SSE (AGNT-01). It is any-authed (mounted
 // in the authed group) and read-only — the agent reaches the workspace only
@@ -79,12 +98,13 @@ func (h *authHandlers) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "That question is too long. Please shorten it and try again.")
 		return
 	}
-	// page_path is a scope hint the agent reads via read_page; reject control
-	// characters defensively (the read tools resolve it server-side, but keep
-	// obvious garbage out of the prompt and the audit target).
-	if strings.ContainsAny(req.PagePath, "\x00") ||
-		strings.ContainsAny(req.AttachmentID, "\x00") ||
-		strings.Contains(req.Selection, "\x00") {
+	// page_path / attachment_id are scope hints spliced into the user turn (a multi-
+	// megabyte or non-UTF-8 value is an asymmetric unbounded input — WR-04). Cap
+	// their length + require valid UTF-8 + reject NUL before building the scope; the
+	// read tools resolve them server-side, but obvious garbage must not reach the
+	// prompt or the audit target.
+	if !validIdentifier(req.PagePath) || !validIdentifier(req.AttachmentID) ||
+		strings.ContainsRune(req.Selection, '\x00') {
 		writeError(w, http.StatusBadRequest, "Invalid request.")
 		return
 	}
@@ -215,7 +235,7 @@ func (h *authHandlers) handleSummarizePage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	path := strings.TrimSpace(req.PagePath)
-	if path == "" || strings.ContainsRune(path, '\x00') {
+	if path == "" || !validIdentifier(path) {
 		writeError(w, http.StatusBadRequest, "Choose a page to summarize.")
 		return
 	}
@@ -244,7 +264,7 @@ func (h *authHandlers) handleSummarizeAttachment(w http.ResponseWriter, r *http.
 		return
 	}
 	id := strings.TrimSpace(req.AttachmentID)
-	if id == "" || strings.ContainsRune(id, '\x00') {
+	if id == "" || !validIdentifier(id) {
 		writeError(w, http.StatusBadRequest, "Choose an attachment to summarize.")
 		return
 	}
@@ -433,7 +453,7 @@ func (h *authHandlers) handleProposePatch(w http.ResponseWriter, r *http.Request
 	}
 	path := strings.TrimSpace(req.PagePath)
 	instruction := strings.TrimSpace(req.Instruction)
-	if path == "" || strings.ContainsRune(path, '\x00') {
+	if path == "" || !validIdentifier(path) {
 		writeError(w, http.StatusBadRequest, "Choose a page to patch.")
 		return
 	}
@@ -510,7 +530,7 @@ func (h *authHandlers) handleApplyPatch(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	path := strings.TrimSpace(req.PagePath)
-	if path == "" || strings.ContainsRune(path, '\x00') {
+	if path == "" || !validIdentifier(path) {
 		writeError(w, http.StatusBadRequest, "Invalid request.")
 		return
 	}
