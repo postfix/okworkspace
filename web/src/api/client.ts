@@ -478,6 +478,216 @@ export function subscribeExtractionStatus(
   return () => es.close();
 }
 
+// --- Agent (AGNT-01..AGNT-10) ---
+
+// AgentScope is the retrieval scope the PromptBar sends with each Ask/stream
+// request. It mirrors the backend scopeKindFromRequest mapping: an unknown value
+// falls back server-side to the safe read-only page Ask, never widening access.
+export type AgentScope = "page" | "selection" | "attachment" | "workspace";
+
+// AgentChatRequest is the POST body for the streamed Ask endpoint. The actor and
+// the role that scopes retrieval are taken from the SESSION server-side — never
+// from this body — so a workspace Ask can only reach pages the role may read.
+export interface AgentChatRequest {
+  prompt: string;
+  scope: AgentScope;
+  page_path?: string;
+  selection?: string;
+  attachment_id?: string;
+}
+
+// AgentStreamHandlers are the callbacks the fetch-stream consumer invokes as it
+// decodes SSE frames. onToken fires per answer delta (append to the live answer);
+// onCitation fires once on the workspace "Reasoned over:" frame (page paths);
+// onDone fires on clean end-of-stream; onError fires on a mid-stream `event:
+// error` frame OR a pre-stream structured HTTP error (e.g. agent off → 503,
+// provider unreachable → 502). disabled distinguishes the agent-off 503 so the
+// PromptBar can render its dedicated "turned off" copy vs. a transient failure.
+export interface AgentStreamHandlers {
+  onToken: (delta: string) => void;
+  onCitation?: (paths: string[]) => void;
+  onDone?: () => void;
+  onError?: (message: string, opts: { disabled: boolean; unreachable: boolean }) => void;
+}
+
+// subscribeAgentChat opens the streamed Ask (AGNT-01). Unlike
+// subscribeExtractionStatus (an EventSource GET), the agent chat is an
+// authenticated POST-with-body token stream — EventSource cannot send a body or
+// the CSRF header — so this uses a fetch + ReadableStream reader. It returns an
+// unsubscribe function that aborts the in-flight fetch (which cancels the
+// server's request context and tears the stream down cleanly). It is fail-closed:
+// a 503 (agent off) or 502 (provider unreachable) JSON error is surfaced via
+// onError BEFORE any token, never a silent hang.
+//
+// The SSE wire format (internal/agent/stream.go) is: `data: <delta>` answer
+// frames (multi-line deltas continue across `data:` lines within one event),
+// `event: citation\ndata: [paths]`, a mid-stream `event: error\ndata: <msg>`,
+// and a terminal `event: done\ndata: {}`.
+export function subscribeAgentChat(
+  req: AgentChatRequest,
+  handlers: AgentStreamHandlers,
+): () => void {
+  const controller = new AbortController();
+
+  void (async () => {
+    let token: string;
+    try {
+      token = await ensureCSRF();
+    } catch {
+      handlers.onError?.("Could not initialize the session.", {
+        disabled: false,
+        unreachable: false,
+      });
+      return;
+    }
+
+    let res: Response;
+    try {
+      res = await fetch("/api/v1/agent/chat", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          [CSRF_HEADER]: token,
+        },
+        body: JSON.stringify(req),
+        signal: controller.signal,
+      });
+    } catch {
+      if (controller.signal.aborted) return; // caller cancelled — silent
+      handlers.onError?.(
+        "That didn't go through — check your connection and try again.",
+        { disabled: false, unreachable: false },
+      );
+      return;
+    }
+
+    // A non-2xx response is a structured JSON error emitted BEFORE the first SSE
+    // byte (fail-closed): 503 = agent off, 502 = provider unreachable. Surface
+    // the dedicated copy so the PromptBar never hangs.
+    if (!res.ok || !res.body) {
+      const disabled = res.status === 503;
+      const unreachable = res.status === 502;
+      let message = unreachable
+        ? "The assistant is unavailable right now. Try again in a moment."
+        : disabled
+          ? "The assistant is turned off."
+          : "That didn't go through — check your connection and try again.";
+      try {
+        const data = (await res.json()) as { error?: string };
+        if (data.error) message = data.error;
+      } catch {
+        // keep the status-derived message
+      }
+      handlers.onError?.(message, { disabled, unreachable });
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    // Parse one complete SSE event (frames are separated by a blank line). An
+    // event may carry an `event:` name and one or more `data:` lines; multi-line
+    // answer deltas arrive as consecutive `data:` continuation lines (joined with
+    // newlines, mirroring the server's escapeSSE).
+    function handleEvent(raw: string) {
+      let name = "message";
+      const dataLines: string[] = [];
+      for (const line of raw.split("\n")) {
+        if (line.startsWith("event:")) {
+          name = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          // Preserve the single space after "data:" semantics: strip exactly one
+          // leading space if present (SSE convention) without trimming content.
+          dataLines.push(line.slice(5).replace(/^ /, ""));
+        }
+      }
+      const data = dataLines.join("\n");
+      if (name === "citation") {
+        try {
+          const paths = JSON.parse(data) as string[];
+          if (Array.isArray(paths)) handlers.onCitation?.(paths);
+        } catch {
+          // ignore a malformed citation frame — the answer already streamed
+        }
+      } else if (name === "error") {
+        handlers.onError?.(data || "The assistant could not finish this answer.", {
+          disabled: false,
+          unreachable: false,
+        });
+      } else if (name === "done") {
+        handlers.onDone?.();
+      } else if (data) {
+        handlers.onToken(data);
+      }
+    }
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sep: number;
+        // SSE events are delimited by a blank line ("\n\n").
+        while ((sep = buffer.indexOf("\n\n")) !== -1) {
+          const rawEvent = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          if (rawEvent.trim() !== "") handleEvent(rawEvent);
+        }
+      }
+      // Flush any trailing event without a final blank line.
+      if (buffer.trim() !== "") handleEvent(buffer);
+      handlers.onDone?.();
+    } catch {
+      if (controller.signal.aborted) return; // caller cancelled — silent
+      handlers.onError?.(
+        "Something went wrong while answering. Your prompt is kept — try again.",
+        { disabled: false, unreachable: false },
+      );
+    }
+  })();
+
+  return () => controller.abort();
+}
+
+// ProposePatchResult mirrors POST /agent/propose-patch (editor). The client
+// renders a REAL diff from old_body ↔ new_body — the server never returns a prose
+// summary. base_revision is the optimistic-concurrency token captured at proposal
+// time, echoed back to applyPatch so a moved revision 409s instead of overwriting.
+export interface ProposePatchResult {
+  page_path: string;
+  old_body: string;
+  new_body: string;
+  base_revision: string;
+}
+
+// proposePatch asks the assistant to propose a whole-body change to a page
+// (AGNT-09, editor-gated server-side). It returns the old + new body for the
+// DiffReviewDialog; it NEVER writes — apply is the separate gated endpoint below.
+export async function proposePatch(
+  pagePath: string,
+  instruction: string,
+): Promise<ProposePatchResult> {
+  return mutate<ProposePatchResult>("/api/v1/agent/propose-patch", {
+    page_path: pagePath,
+    instruction,
+  });
+}
+
+// applyPatch applies an approved patch (AGNT-10, editor + CSRF). base_revision is
+// the token proposePatch captured; a stale value (the page moved while the user
+// reviewed) surfaces as a 409 (err.status === 409) so the DiffReviewDialog shows
+// its "page changed — re-run" stale state and never overwrites a concurrent edit.
+export async function applyPatch(payload: {
+  page_path: string;
+  new_body: string;
+  frontmatter: string;
+  base_revision: string;
+}): Promise<void> {
+  await mutate<void>("/api/v1/agent/apply-patch", payload);
+}
+
 // humanFileSize formats a byte count as a short, human-friendly string using the
 // DECIMAL (SI, 1000-based) convention so "1.4 MB" reads the way the UI-SPEC shows
 // it (matches what most users and OS file managers display). Sub-KB values are
