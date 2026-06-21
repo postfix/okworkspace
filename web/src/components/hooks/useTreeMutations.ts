@@ -179,17 +179,23 @@ export function applyMove(
   return insertInto(without, destFolder, moved);
 }
 
-// countFolderPages counts the page descendants of the folder at dirPath in the
-// cached tree (excludes the folder's own index.md is NOT special-cased — the tree
-// never surfaces index.md as a page node, so every page child is a real page).
-// Drives the DeleteFolderDialog's "{N} pages" copy.
+// countFolderPages estimates how many Markdown files the folder at dirPath moves
+// to Trash, for the DeleteFolderDialog's "{N} pages" copy. Each page descendant
+// is one .md file; each DESCENDANT FOLDER node also contributes its own index.md
+// (the tree never surfaces a folder's index.md as a page node — it is represented
+// by the folder node itself), so descendant folders are counted too (IN-01). The
+// dirPath folder's OWN index.md is implicit in the "This folder and …" copy and
+// is not double-counted here. This stays a best-effort UI estimate; the backend
+// DeleteFolder is authoritative for what actually moves to trash.
 export function countFolderPages(tree: TreeNode[], dirPath: string): number {
   const folder = findNode(tree, dirPath);
   if (!folder) return 0;
   let n = 0;
   function walk(node: TreeNode) {
     for (const c of node.children ?? []) {
-      if (c.type === "page") n++;
+      // A page child is one .md file; a descendant folder child contributes its
+      // own index.md (not surfaced as a page node) — both add one trashed file.
+      n++;
       if (c.children) walk(c);
     }
   }

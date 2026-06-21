@@ -151,9 +151,10 @@ describe("applyMove (mirrors server prefix swap, Pitfall 6)", () => {
 });
 
 describe("countFolderPages", () => {
-  it("counts page descendants of a folder", () => {
-    // runbooks → deploy.md + aws/ec2.md = 2 pages.
-    expect(countFolderPages(TREE, "runbooks")).toBe(2);
+  it("counts every descendant .md file (pages + each subfolder's index.md)", () => {
+    // runbooks → deploy.md (page) + aws (subfolder index.md) + aws/ec2.md (page)
+    // = 3 files actually moved to trash (IN-01: subfolder index.md files count).
+    expect(countFolderPages(TREE, "runbooks")).toBe(3);
     expect(countFolderPages(TREE, "runbooks/aws")).toBe(1);
     expect(countFolderPages(TREE, "archive")).toBe(0);
     expect(countFolderPages(TREE, "missing")).toBe(0);
