@@ -68,6 +68,17 @@ In scope: ATT-01..ATT-09, SEC-02. Out of scope: search indexing (Phase 3), agent
 ### Claude's Discretion
 - Exact id scheme (ULID vs content-hash), sidecar JSON field names, SSE endpoint shape,
   and component file layout are at Claude's discretion, consistent with Phase 0/1 patterns.
+
+### Post-review decisions (code review 2026-06-21)
+- **Attachment read authorization (WR-06 — ACCEPTED, no code change):** any authenticated
+  user may list and download any attachment by id, regardless of which page owns it. This is
+  a CONSCIOUS decision: it mirrors the existing "any authenticated user reads any page"
+  authorization model — attachments inherit the same shared-read scope as page text. We do
+  NOT add per-resource/per-page auth scoping for attachments in this phase. If per-page or
+  per-role attachment confidentiality is ever required later, gate
+  `handleDownloadAttachment`/`handleListAttachments` on the same authority used for the owning
+  page (the id is time-ordered, so targeted guessing is feasible — revisit if the threat model
+  changes).
 </decisions>
 
 <code_context>

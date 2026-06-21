@@ -34,9 +34,23 @@ findings:
   warning: 6
   info: 5
   total: 12
-status: issues_found
+status: resolved
 ---
-> **CR-01 RESOLVED** (commit after review): extract job now uses fire-and-forget `Enqueue` for the `.txt` commit instead of `EnqueueAndWait`, eliminating the single-drain-goroutine reentrant stall. Build + extraction/server tests green. Warnings WR-01..06 remain open (logged for follow-up).
+> **CR-01 RESOLVED** (commit after review): extract job now uses fire-and-forget `Enqueue` for the `.txt` commit instead of `EnqueueAndWait`, eliminating the single-drain-goroutine reentrant stall. Build + extraction/server tests green.
+>
+> **WARNINGS RESOLVED** (code-review --fix, 2026-06-21): WR-01, WR-02, WR-03, WR-04, WR-05 fixed with regression tests; WR-06 consciously ACCEPTED and documented in 02-CONTEXT.md. Info items IN-01 and IN-04 also addressed. `CGO_ENABLED=0 go build/test ./...` green; `web` build + `tsc --noEmit` green. See resolution log below.
+>
+> ## Resolution log (2026-06-21)
+> - **CR-01** — Resolved pre-fix (fire-and-forget enqueue). Verified.
+> - **WR-01** — FIXED. Upload/Replace now insert/upsert the DB row BEFORE enqueuing the commit and roll the row back (Upload: `deleteRow`; Replace: restore prev meta) on a real (non-timeout) commit-enqueue error, so a DB failure can never leave a committed-but-unlisted orphan. Added `TestUploadRollsBackRowOnCommitError`, `TestReplaceRevertsRowOnCommitError`.
+> - **WR-02** — FIXED. Added `PageReferencesExcluding`; `Remove` excludes the just-unlinked `pagePath` from the orphan recount instead of re-reading a possibly-stale working tree. Added `TestPageReferencesExcluding`, `TestRemoveOrphansEvenIfUnlinkCommitNotLanded`.
+> - **WR-03** — FIXED. SSE extraction stream now has a 10-minute absolute max-duration cap that emits a terminal `failed` event and closes, so a wedged extraction can't pin a goroutine forever.
+> - **WR-04 / IN-05** — VERIFIED + HARDENED. CR-01 already makes the commit fire-and-forget and sets terminal status only after a successful enqueue (durable-by-queue). Closed the remaining gap: on a persistent enqueue failure the handler now records `status=failed` before returning so the chip can't stick on "Extracting…". Added `TestExtractJobEnqueueFailureSetsTerminalStatus`.
+> - **WR-05** — FIXED. Dropped the `mt.Is(a)` branch in `allowedExt`; the allow-list is now matched by extension only (one semantics). Existing upload-validation tests (png/jpg/svg/pdf/docx/txt allowed; ELF rejected) stay green.
+> - **WR-06** — ACCEPTED (no code change). "All authenticated users may read/download any attachment by id" is the intended model, matching "any authenticated user reads any page". Documented as a conscious decision in `02-CONTEXT.md` under `<decisions>`.
+> - **IN-01** — FIXED. Corrected the `ResolveBin` doc comment (it resolves a path; it reads nothing).
+> - **IN-04** — FIXED. Extended `humanFileSize` units with `PB`/`EB`.
+> - **IN-02 / IN-03** — NOT addressed (cross-layer list-centralization / config-sourcing refactors; out of scope for this fix pass).
 
 
 # Phase 2: Code Review Report
