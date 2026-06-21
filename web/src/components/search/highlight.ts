@@ -19,6 +19,26 @@ import { createElement, Fragment, type ReactNode } from "react";
 // falls through and is rendered as escaped text.
 const MARKER = /(<strong>|<\/strong>|<span class="search-hl">|<\/span>)/g;
 
+// The server formatter HTML-escapes the surrounding fragment text (the XSS guard
+// — T-03-01), so a snippet arrives as e.g. `config &lt;value&gt;`. React renders
+// text nodes verbatim, so without decoding the user would see the literal
+// characters `&lt;value&gt;` instead of `<value>` (WR-03 double-escape). We decode
+// the known named entities BACK to their characters before pushing the text node;
+// React then re-escapes them safely on render, so the snippet reads correctly AND
+// stays safe (no dangerouslySetInnerHTML, no raw-HTML parsing). Only the fixed set
+// the server's html.EscapeString can emit is decoded — &amp; LAST so an escaped
+// `&amp;lt;` does not collapse to `<`.
+function decodeEntities(text: string): string {
+  return text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#34;/g, '"')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
 export function renderHighlight(fragment: string): ReactNode {
   if (!fragment) return null;
 
@@ -41,12 +61,15 @@ export function renderHighlight(fragment: string): ReactNode {
       if (depth > 0) depth--;
       continue;
     }
-    // Plain text segment. React escapes it on render, so any stray angle-bracket
-    // content arrives as literal characters, never as parsed HTML.
+    // Plain text segment. Decode the server's HTML entities back to characters so
+    // the snippet reads correctly (WR-03); React then re-escapes the resulting
+    // string on render, so any stray angle-bracket content is still inserted as
+    // literal text, never parsed HTML.
+    const text = decodeEntities(part);
     if (depth > 0) {
-      nodes.push(createElement("strong", { key: key++ }, part));
+      nodes.push(createElement("strong", { key: key++ }, text));
     } else {
-      nodes.push(part);
+      nodes.push(text);
     }
   }
 
