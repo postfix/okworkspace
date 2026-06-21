@@ -212,6 +212,7 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	defer func() { _ = searchIdx.Close() }()
 	searchIdx.SetRepo(contentRepo)
 	searchIdx.SetDB(st.DB())
+	searchIdx.SetGit(gs)
 	worker.Register(search.KindIndex, search.IndexHandler(searchIdx, contentRepo))
 
 	worker.Start(ctx)

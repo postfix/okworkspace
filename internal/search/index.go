@@ -28,6 +28,7 @@ type Index struct {
 
 	repo *repo.Repo
 	db   *sql.DB
+	gs   headProvider
 }
 
 // OpenOrCreate opens the on-disk scorch index at dir, creating it (with the typed
@@ -61,6 +62,12 @@ func (s *Index) SetRepo(r *repo.Repo) { s.repo = r }
 
 // SetDB attaches the SQLite db used for last_indexed_head bookkeeping.
 func (s *Index) SetDB(db *sql.DB) { s.db = db }
+
+// SetGit attaches the Git HEAD accessor used to record last_indexed_head after a
+// successful rebuild (the drift-detection backstop — CR-01). Without it,
+// RebuildIndex cannot persist the HEAD it indexed against and DriftCheck would
+// always report drift on startup.
+func (s *Index) SetGit(gs headProvider) { s.gs = gs }
 
 // Close closes the underlying index. Call on shutdown AFTER the worker has
 // stopped (no more writes) so no in-flight Index/Delete races the close.

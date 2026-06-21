@@ -56,6 +56,7 @@ func newHarness(t *testing.T) *testHarness {
 	}
 	idx.SetRepo(r)
 	idx.SetDB(st.DB())
+	idx.SetGit(gs)
 	t.Cleanup(func() { _ = idx.Close() })
 
 	return &testHarness{idx: idx, repo: r, gs: gs}

@@ -156,3 +156,54 @@ func TestDrift_HeadMismatchRebuilds(t *testing.T) {
 		t.Fatal("DriftCheck returned false after HEAD advanced out-of-band")
 	}
 }
+
+// TestRebuild_PersistsHead is the CR-01 regression: RebuildIndex itself (via the
+// attached gitstore handle, SetGit) must persist last_indexed_head, so a
+// subsequent startup with an UNCHANGED HEAD reports DriftCheck == false. Before
+// the fix StoreHead was never called from the rebuild path, last_indexed_head
+// stayed empty, and every startup mis-fired a full rebuild.
+func TestRebuild_PersistsHead(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+	h.writePage(t, "p.md", "Head Page", nil, "body")
+	h.commit(t, "add p", "p.md")
+
+	// The harness wires SetGit, so RebuildIndex alone must record the HEAD —
+	// no manual StoreHead call here (that is exactly the regression).
+	h.rebuild(t)
+
+	stored, err := h.idx.readMeta(ctx, metaKeyLastIndexedHead)
+	if err != nil {
+		t.Fatalf("readMeta: %v", err)
+	}
+	if stored == "" {
+		t.Fatal("last_indexed_head is empty after rebuild — RebuildIndex did not persist HEAD (CR-01)")
+	}
+	head, err := h.gs.HeadSHA(ctx)
+	if err != nil {
+		t.Fatalf("HeadSHA: %v", err)
+	}
+	if stored != head {
+		t.Fatalf("last_indexed_head %q != current HEAD %q after rebuild", stored, head)
+	}
+
+	// A second startup with an unchanged HEAD must see NO drift.
+	drifted, err := h.idx.DriftCheck(ctx, h.gs)
+	if err != nil {
+		t.Fatalf("DriftCheck (unchanged HEAD): %v", err)
+	}
+	if drifted {
+		t.Fatal("DriftCheck reported drift after a rebuild that persisted the current HEAD (CR-01)")
+	}
+
+	// After HEAD advances out-of-band, drift is detected again.
+	h.writePage(t, "q.md", "Another", nil, "more")
+	h.commit(t, "add q", "q.md")
+	drifted, err = h.idx.DriftCheck(ctx, h.gs)
+	if err != nil {
+		t.Fatalf("DriftCheck (advanced HEAD): %v", err)
+	}
+	if !drifted {
+		t.Fatal("DriftCheck did not detect drift after HEAD advanced out-of-band")
+	}
+}

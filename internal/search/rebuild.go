@@ -135,6 +135,17 @@ func (s *Index) RebuildIndex(ctx context.Context) error {
 	if err := s.rewriteAllHeadingRows(ctx, headingRows); err != nil {
 		return err
 	}
+
+	// Record the HEAD this rebuild indexed against so the startup DriftCheck can
+	// compare stored vs current and only rebuild on a real mismatch (CR-01).
+	// Without this the stored value stays empty forever and every startup
+	// mis-fires a full rebuild. Done LAST so a partial rebuild never claims an
+	// in-sync HEAD it did not fully index.
+	if s.gs != nil {
+		if err := s.StoreHead(ctx, s.gs); err != nil {
+			return fmt.Errorf("search: record last-indexed head: %w", err)
+		}
+	}
 	return nil
 }
 
