@@ -121,9 +121,15 @@ func (h *authHandlers) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 	// over:" line); the returned slice is the same set (unused here beyond the
 	// stream — kept for a future audit of cited paths).
 	_, err := h.agent.AskStream(r.Context(), w, prompt, sc)
-	if err == nil {
+	if err == nil || errors.Is(err, agent.ErrStreamAlreadyCommitted) {
+		// Clean end-of-stream, OR a post-commit failure for which AskStream already
+		// emitted a terminal SSE `event: error` frame. In the committed case the
+		// headers are sent, so calling writeError here would log a "superfluous
+		// WriteHeader" and append a JSON error into the event-stream body (WR-03).
 		return
 	}
+	// Only PRE-stream errors reach here (nothing has been written to w yet), so a
+	// structured HTTP error is safe and correct — never a silent hang.
 	switch {
 	case errors.Is(err, agent.ErrAgentDisabled):
 		writeError(w, http.StatusServiceUnavailable, "The assistant is turned off. Ask an administrator to enable it.")
@@ -131,9 +137,7 @@ func (h *authHandlers) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Streaming is not supported.")
 	default:
 		// A build/connect error before streaming (provider unreachable) — fail
-		// closed with a structured error, never a hang. A mid-stream error is
-		// already surfaced as an SSE error frame inside AskStream, in which case
-		// headers are sent and writeError is a no-op on the status (still safe).
+		// closed with a structured error.
 		writeError(w, http.StatusBadGateway, "The assistant is unavailable right now. Try again in a moment.")
 	}
 }

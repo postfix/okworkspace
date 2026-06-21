@@ -24,6 +24,15 @@ import (
 // any stream bytes are written.
 var ErrStreamingUnsupported = errors.New("agent: streaming not supported by the response writer")
 
+// ErrStreamAlreadyCommitted is returned by AskStream when a failure occurred
+// AFTER the SSE headers were committed and AskStream has already emitted its own
+// terminal `event: error` frame (or the client disconnected mid-stream). The
+// handler MUST NOT call writeError in this case — the headers are sent, so a
+// second WriteHeader logs a "superfluous WriteHeader" warning and a JSON error
+// body would be appended into the committed text/event-stream. The handler
+// errors.Is-checks this sentinel and simply returns (WR-03).
+var ErrStreamAlreadyCommitted = errors.New("agent: SSE stream already committed; terminal error frame emitted")
+
 // AskStream runs a scope-aware Ask turn for question and streams the answer
 // token-by-token as SSE into w. The scope (page | selection | attachment |
 // workspace) selects the system prompt and how context is assembled (AGNT-02/
@@ -32,6 +41,10 @@ var ErrStreamingUnsupported = errors.New("agent: streaming not supported by the 
 // It returns ErrAgentDisabled when the agent is off, ErrStreamingUnsupported
 // when w cannot flush, and any provider/build error BEFORE the first byte is
 // written so the caller can emit a clean structured error (never a silent hang).
+// A failure AFTER the SSE headers commit (mid-stream provider error or client
+// disconnect) returns an error wrapping ErrStreamAlreadyCommitted — AskStream has
+// already emitted its own terminal `event: error` frame, so the handler MUST NOT
+// call writeError (a second WriteHeader + JSON body would corrupt the stream).
 //
 // For workspace scope the answer is search-backed RAG (top-K, never a dump): the
 // page paths the agent actually retrieved are captured from the tool-call trace
@@ -88,17 +101,20 @@ func (s *Service) AskStream(ctx context.Context, w http.ResponseWriter, question
 		if rerr != nil {
 			// Mid-stream provider error: the headers are already sent, so emit a
 			// terminal SSE error frame rather than a (now-impossible) HTTP status.
+			// Wrap the sentinel so the handler skips writeError (the stream is
+			// committed; a second WriteHeader + JSON body would corrupt it — WR-03).
 			fmt.Fprintf(w, "event: error\ndata: %s\n\n", escapeSSE("the assistant could not finish this answer"))
 			flusher.Flush()
-			return trace.retrieved(), rerr
+			return trace.retrieved(), fmt.Errorf("%w: %v", ErrStreamAlreadyCommitted, rerr)
 		}
 		if chunk == nil || chunk.Content == "" {
 			continue
 		}
 		if _, werr := fmt.Fprintf(w, "data: %s\n\n", escapeSSE(chunk.Content)); werr != nil {
 			// Client disconnect: the request context cancels Recv on the next
-			// loop; returning here lets defer sr.Close() reap the goroutine.
-			return trace.retrieved(), werr
+			// loop; returning here lets defer sr.Close() reap the goroutine. The
+			// stream is committed, so signal the handler to NOT writeError (WR-03).
+			return trace.retrieved(), fmt.Errorf("%w: %v", ErrStreamAlreadyCommitted, werr)
 		}
 		flusher.Flush()
 	}
