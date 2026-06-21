@@ -105,15 +105,31 @@ func (s *Service) Replace(ctx context.Context, id, filename string, data []byte,
 		},
 		Push: s.pushOnCommit,
 	}
-	if err := s.enqueueCommit(ctx, p); err != nil {
-		return AttachmentMeta{}, err
-	}
-
-	// Refresh the operational row (size/sha/mime/name change; reset extract status
-	// to pending so the chip transitions live again on re-extraction).
+	// Refresh the operational row BEFORE enqueuing the commit (WR-01), mirroring
+	// Upload's ordering. The row already exists (Replace is in place under the same
+	// id), so insertRow upserts the new size/sha/mime/name. If the commit then
+	// fails for real (non-timeout), the row would be ahead of the on-disk bytes;
+	// we re-sync the row back to the previous meta so List never advertises a
+	// replace that did not durably land. The prior binary is untouched on disk in
+	// that case (the new write never committed), so reverting the row keeps the
+	// row and disk consistent.
 	if err := s.insertRow(ctx, meta); err != nil {
 		return AttachmentMeta{}, err
 	}
+	if err := s.enqueueCommit(ctx, p); err != nil {
+		// Real (non-timeout) commit failure: the new bytes never landed. Restore
+		// the row to the previous meta so it does not claim a size/sha that is not
+		// on disk. Best-effort — log if the revert itself fails.
+		if rerr := s.insertRow(ctx, prev); rerr != nil {
+			slog.WarnContext(ctx, "attachments: failed to revert row after replace commit-enqueue error",
+				slog.String("attachment_id", id), slog.String("error", rerr.Error()))
+		}
+		return AttachmentMeta{}, err
+	}
+
+	// Reset extract status to pending so the chip transitions live again on
+	// re-extraction (insertRow's upsert does not touch extract_status for an
+	// existing row).
 	if err := setExtractStatus(ctx, s.db, id, ExtractionPending, ""); err != nil {
 		// Non-fatal: the row update above already wrote pending via the upsert path
 		// for new rows; this is a defensive reset for the in-place replace.

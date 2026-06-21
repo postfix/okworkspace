@@ -180,15 +180,27 @@ func (s *Service) Upload(ctx context.Context, pagePath, filename string, data []
 		},
 		Push: s.pushOnCommit,
 	}
-	if err := s.enqueueCommit(ctx, p); err != nil {
+
+	// Record the operational row BEFORE enqueuing the commit (WR-01). Ordering
+	// matters because List reads only the DB: if the commit landed first and the
+	// row insert then failed, the bytes would be committed-but-unlisted — an
+	// orphan invisible to List, un-downloadable, never extracted, never
+	// orphan-deletable. By inserting the row first we get a clean abort with
+	// nothing committed on a DB failure; the only residual window is a row that
+	// briefly exists without the file, which is reconcilable (and the commit
+	// enqueue below rolls the row back on a real failure).
+	if err := s.insertRow(ctx, meta); err != nil {
 		return AttachmentMeta{}, err
 	}
-
-	// Record the operational row (best-effort mirror of the on-disk meta). A DB
-	// error must not undo a durable commit, but it is surfaced so the handler can
-	// 500 if the row is essential to the response — here the meta is already on
-	// disk, so we treat a row failure as fatal to keep the list consistent.
-	if err := s.insertRow(ctx, meta); err != nil {
+	if err := s.enqueueCommit(ctx, p); err != nil {
+		// The commit enqueue returned a real (non-timeout) error — enqueueCommit
+		// swallows ErrJobTimeout as success, so reaching here means the commit
+		// will never land. Roll the row back so we never leave a listed row whose
+		// file does not exist.
+		if derr := s.deleteRow(ctx, meta.ID); derr != nil {
+			slog.WarnContext(ctx, "attachments: failed to roll back row after commit-enqueue error",
+				slog.String("attachment_id", meta.ID), slog.String("error", derr.Error()))
+		}
 		return AttachmentMeta{}, err
 	}
 

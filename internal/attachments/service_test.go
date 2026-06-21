@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -23,6 +24,11 @@ type fakeEnqueuer struct {
 	payloads []commitPayload
 	rawJSON  []string
 	kinds    []string
+	// failCommit, when set, makes EnqueueAndWait return this error for kindCommit
+	// jobs WITHOUT applying the payload to the repo — simulating a real
+	// (non-timeout) commit-enqueue failure so the WR-01 row-rollback path is
+	// exercised.
+	failCommit error
 }
 
 func (f *fakeEnqueuer) Enqueue(ctx context.Context, kind, payload string) error {
@@ -33,11 +39,17 @@ func (f *fakeEnqueuer) Enqueue(ctx context.Context, kind, payload string) error 
 	if kind != kindCommit {
 		return nil
 	}
+	if f.failCommit != nil {
+		return f.failCommit
+	}
 	return f.apply(payload)
 }
 
 func (f *fakeEnqueuer) EnqueueAndWait(ctx context.Context, kind, payload string, _ time.Duration) error {
 	f.kinds = append(f.kinds, kind)
+	if kind == kindCommit && f.failCommit != nil {
+		return f.failCommit
+	}
 	return f.apply(payload)
 }
 
@@ -419,5 +431,73 @@ func TestUploadRejectsBadType(t *testing.T) {
 	// Neither rejected upload should have produced a commit.
 	if len(fe.payloads) != 0 {
 		t.Fatalf("rejected uploads produced %d commits, want 0", len(fe.payloads))
+	}
+}
+
+// TestUploadRollsBackRowOnCommitError (WR-01): when the commit enqueue returns a
+// real (non-timeout) error AFTER the operational row was inserted, Upload must
+// delete the row again so List never advertises a row whose file does not exist.
+func TestUploadRollsBackRowOnCommitError(t *testing.T) {
+	svc, fe, db := newTestService(t, []string{"txt"}, 100)
+	fe.failCommit = errors.New("commit drain exploded")
+
+	data := []byte("payload that will fail to commit")
+	if _, err := svc.Upload(context.Background(), "p.md", "doc.txt", data, "alice"); err == nil {
+		t.Fatalf("Upload succeeded, want a commit error surfaced")
+	}
+
+	// No commit should have applied (the fake fails before apply).
+	if len(fe.payloads) != 0 {
+		t.Fatalf("commit payloads = %d, want 0 (commit failed)", len(fe.payloads))
+	}
+	// The row must NOT linger: List sees nothing and the page has zero rows.
+	items, err := svc.List(context.Background(), "p.md")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("List = %+v, want 0 rows (row rolled back after commit failure)", items)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM attachments`).Scan(&n); err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("attachments rows = %d, want 0 (orphan row rolled back)", n)
+	}
+}
+
+// TestReplaceRevertsRowOnCommitError (WR-01): a real (non-timeout) commit failure
+// on Replace must restore the operational row to the PREVIOUS meta so List never
+// advertises a size/sha that did not durably land.
+func TestReplaceRevertsRowOnCommitError(t *testing.T) {
+	svc, fe, _ := newTestService(t, []string{"txt"}, 100)
+
+	orig := []byte("the original body")
+	up, err := svc.Upload(context.Background(), "p.md", "notes.txt", orig, "alice")
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	// Now make the replace commit fail and attempt a replace with new bytes.
+	fe.failCommit = errors.New("replace commit drain exploded")
+	newBytes := []byte("the replaced body, longer than before")
+	if _, err := svc.Replace(context.Background(), up.ID, "notes-v2.txt", newBytes, "bob"); err == nil {
+		t.Fatalf("Replace succeeded, want a commit error surfaced")
+	}
+
+	// The row must still describe the ORIGINAL upload, not the failed replace.
+	items, err := svc.List(context.Background(), "p.md")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("List = %d rows, want 1", len(items))
+	}
+	if items[0].OriginalName != "notes.txt" {
+		t.Fatalf("row name = %q, want %q (reverted to pre-replace meta)", items[0].OriginalName, "notes.txt")
+	}
+	if items[0].SizeBytes != int64(len(orig)) {
+		t.Fatalf("row size = %d, want %d (reverted to original size)", items[0].SizeBytes, len(orig))
 	}
 }
