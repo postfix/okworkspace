@@ -6,14 +6,14 @@ current_phase: 07
 current_phase_name: obsidian-style-file-tree-folder-operations-tree-ux
 status: executing
 stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-06-21T20:20:12.016Z"
+last_updated: "2026-06-21T20:30:04.325Z"
 last_activity: 2026-06-21
 last_activity_desc: Completed 07-04-PLAN.md (folder operations + optimistic tree UX, 240 frontend tests green)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 31
-  completed_plans: 29
+  completed_plans: 30
   percent: 75
 ---
 
@@ -81,6 +81,7 @@ Progress: [██████████] 100% (4 of 4 plans)
 | Phase 04 P02 | 14 | 3 tasks | 11 files |
 | Phase 04 P03 | 18 | 2 tasks | 6 files |
 | Phase 04 P04 | 7 | 4 tasks | 7 files |
+| Phase 04 P05 | 5min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -140,6 +141,8 @@ Recent decisions affecting current work:
 - [Phase 7 P04]: Grouped TrashView folds ["trash"] by delete_group_id into one "Folder '{name}' · N pages" row per group (folder name from common-ancestor index.md path) with a Restore folder action calling restoreFolderGroup; batched (restored)-suffix notice on collision (TREE-05 UI)
 - [Phase ?]: Pinned eino-ext openai as real semver v0.1.13 (not pseudo-version); anchored go-udiff via blank import so the pin survives go mod tidy.
 - [Phase ?]: Agent read-only tool boundary is build-gated by a set-equality test (D5/AGNT-11); a 6th/mutating tool fails the build. Apply is a non-tool HTTP endpoint.
+- [Phase ?]: Propose-patch returns the FULL new body + base revision captured at proposal time; the server diffs old↔new (go-udiff for the churn metric only) — never a prose summary (AGNT-09).
+- [Phase ?]: Apply is a NON-tool editor-gated CSRF HTTP endpoint reusing pages.Save(baseRevision) → single-writer gitstore.Commit(approved_agent_patch); a moved revision 409s, never a silent overwrite (AGNT-10/11).
 
 ### Pending Todos
 
@@ -165,6 +168,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-21T20:19:42.726Z
+Last session: 2026-06-21T20:29:40.177Z
 Stopped at: Completed 04-04-PLAN.md
 Resume file: None
