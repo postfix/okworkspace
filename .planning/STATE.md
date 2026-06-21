@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
-status: phase_3_complete
-stopped_at: Phase 3 complete (autonomous); next Phase 6 (Live-Preview Editor)
-last_updated: "2026-06-21T00:00:00.000Z"
-last_activity: 2026-06-21 -- Phase 3 (Search) executed autonomously end-to-end (discuss→ui-spec→research→plan→plan-check+revision→4 plans/3 waves→verify→code-review→fix). 13/13 requirements verified; code review resolved (2 critical: drift-detection inoperative + heading-deep-link broken; 6 warnings all fixed). Bleve index, ⌘K palette, typed results, XSS-safe highlight. 13 browser checks deferred. Next: autonomous Phase 6, then 7 (4 and 5 skipped per user).
+status: executing
+stopped_at: Phase 6 planned (4 plans verified); executing
+last_updated: "2026-06-21T10:43:36.427Z"
+last_activity: 2026-06-21 -- Phase 06 execution started
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 21
+  completed_plans: 18
   percent: 50
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** A non-technical teammate can create, edit, and find knowledge — and get useful AI help on it — while every byte stays as plain Markdown + original files on disk, versioned in Git, with no proprietary store to escape.
-**Current focus:** Phase 01 — okf-pages-navigation-hidden-git
+**Current focus:** Phase 06 — live-preview-editor-obsidian-style
 
 ## Current Position
 
-Phase: 01 (okf-pages-navigation-hidden-git) — EXECUTING
-Plan: 5 of 5
-Status: Phase complete — ready for verification
-Last activity: 2026-06-18 -- Completed 01-04-PLAN.md (delete-to-trash via recoverable git mv with provenance; restore with collision auto-suffix; DeleteConfirmDialog + TrashView)
+Phase: 06 (live-preview-editor-obsidian-style) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-21 -- Phase 06 execution started
 
 Progress: [████████░░] 80%
 
@@ -67,6 +67,7 @@ Progress: [████████░░] 80%
 | Phase 01 P02 | 70 | 4 tasks | 42 files |
 | Phase 01 P03 | 75 | 2 tasks | 25 files |
 | Phase 01 P05 | 13m | 2 tasks | 21 files |
+| Phase 06 P01 | 17min | 4 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,8 @@ Recent decisions affecting current work:
 - [Phase ?]: VER-03 restore is a forward commit through the single-writer path (RestoreVersion); history is never rewritten
 - [Phase ?]: VER-02 history hides the SHA in an opaque version token; no Git-named field is serialized to the UI
 - [Phase ?]: VER-04 push is config-gated and ff-aware: non-ff sets diverged and alerts, never force/auto-merge
+- [Phase ?]: 06-01: CM6 editor swap — CRLF is LF-normalized by CM6 (as a textarea); EDIT-02 toggle invariance asserted against the doc's own bytes, CRLF on-disk round-trip stays a backend gate
+- [Phase ?]: 06-01: external value seeds are externalSeed-annotated so they don't echo through onChange (avoids controlled-input feedback loop)
 
 ### Pending Todos
 
@@ -129,6 +132,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-18T20:59:31.421Z
-Stopped at: Completed 01-03-PLAN.md
-Resume file: .planning/phases/01-okf-pages-navigation-hidden-git/01-04-PLAN.md
+Last session: 2026-06-21T10:43:23.899Z
+Stopped at: Phase 6 planned (4 plans verified); executing
+Resume file: .planning/phases/06-live-preview-editor-obsidian-style/06-01-PLAN.md

@@ -31,9 +31,9 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 ### Editing (Live-Preview Editor)
 
 - [ ] **EDIT-01**: While editing, Markdown formatting (headings, bold/italic, lists, links, inline code, code blocks, inline images, and GFM tables) renders inline in the editor as the user types — not only in a separate preview pane
-- [ ] **EDIT-02**: User can toggle between live-preview and raw-source modes, and switching modes never alters the underlying Markdown bytes
-- [ ] **EDIT-03**: Saving from the live-preview editor produces byte-identical Markdown to the source-mode round-trip — the okf golden-corpus exit gate still holds (no lossy block model)
-- [ ] **EDIT-04**: Existing editor guarantees are preserved — autosave drafts, optimistic-concurrency save, and sanitized rendering (no raw HTML rendered from page content)
+- [x] **EDIT-02**: User can toggle between live-preview and raw-source modes, and switching modes never alters the underlying Markdown bytes
+- [x] **EDIT-03**: Saving from the live-preview editor produces byte-identical Markdown to the source-mode round-trip — the okf golden-corpus exit gate still holds (no lossy block model)
+- [x] **EDIT-04**: Existing editor guarantees are preserved — autosave drafts, optimistic-concurrency save, and sanitized rendering (no raw HTML rendered from page content)
 
 ### Navigation
 
@@ -201,9 +201,9 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | COLL-03 | Phase 5 | Pending |
 | COLL-04 | Phase 5 | Pending |
 | EDIT-01 | Phase 6 | Pending |
-| EDIT-02 | Phase 6 | Pending |
-| EDIT-03 | Phase 6 | Pending |
-| EDIT-04 | Phase 6 | Pending |
+| EDIT-02 | Phase 6 | Complete |
+| EDIT-03 | Phase 6 | Complete |
+| EDIT-04 | Phase 6 | Complete |
 
 **Coverage:**
 

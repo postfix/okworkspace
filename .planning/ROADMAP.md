@@ -215,7 +215,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — CM6 editor swap slice: add CM6/Lezer deps + all Wave-0 test stubs + persisted Live/Source mode store + minimal LivePreviewEditor swapped into PageEditor (verbatim save, Compartment toggle, Cmd/Ctrl-E) (EDIT-02/03/04) (wave 1)
+- [x] 06-01-PLAN.md — CM6 editor swap slice: add CM6/Lezer deps + all Wave-0 test stubs + persisted Live/Source mode store + minimal LivePreviewEditor swapped into PageEditor (verbatim save, Compartment toggle, Cmd/Ctrl-E) (EDIT-02/03/04) (wave 1)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -262,5 +262,5 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 0/TBD | Not started | - |
 | 5. Collaboration | 0/TBD | Not started | - |
-| 6. Live-Preview Editor (Obsidian-style) | 0/4 | Planned | - |
+| 6. Live-Preview Editor (Obsidian-style) | 1/4 | In Progress|  |
 | 7. Obsidian-style File Tree (folder operations & tree UX) | 0/TBD | Not started | - |
