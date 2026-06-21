@@ -566,6 +566,42 @@ export async function removeAttachment(
   );
 }
 
+// --- Search (SRCH-01/02/03/06) ---
+
+// SearchResultKind is the typed kind of a search hit. Page results are live now;
+// heading/attachment kinds render the moment 03-03 starts returning them (the
+// SPA needs no further change).
+export type SearchResultKind = "page" | "heading" | "attachment";
+
+// SearchResult mirrors one item of the GET /api/v1/search response. snippet is a
+// server fragment carrying ONLY weight-only highlight markers (<strong>) — it is
+// sanitized client-side in highlight.ts and never injected as raw HTML (the XSS
+// chokepoint, Phase 1 stored-XSS guard). path is the page to navigate to (the
+// owning page for heading/attachment); anchor deep-links a heading section.
+export interface SearchResult {
+  kind: SearchResultKind;
+  title: string;
+  path: string;
+  snippet: string;
+  anchor?: string;
+  page_title?: string;
+}
+
+// search runs a full-text query against GET /api/v1/search (a GET — no CSRF).
+// A blank query short-circuits to [] with no network call (matches the server's
+// empty-query fast path and keeps the palette quiet until the user types). A
+// non-ok response throws a generic, internals-free message (T-03-09).
+export async function search(q: string): Promise<SearchResult[]> {
+  if (!q.trim()) return [];
+  const res = await fetch(`/api/v1/search?q=${encodeURIComponent(q)}`, {
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    throw new Error("Search is unavailable. Try again in a moment.");
+  }
+  return (await res.json()) as SearchResult[];
+}
+
 // relativeMdLink computes a relative `.md` link destination from the page at
 // fromPath to the page at toPath (both repo-relative slash paths), matching the
 // canonical on-disk link format (D-05). Used by the LinkPicker so an inserted
