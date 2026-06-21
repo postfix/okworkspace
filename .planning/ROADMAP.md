@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Eino Agent** - Users get approval-gated AI help over pages, selections, attachments, and the workspace
 - [ ] **Phase 5: Collaboration** - Users see presence, soft locks, and conflict resolution so concurrent edits never silently lose work
 - [x] **Phase 6: Live-Preview Editor (Obsidian-style)** - Editors get an Obsidian-style live-preview Markdown editor (inline rendering as you type, source toggle) while keeping the byte-stable Markdown round-trip (completed 2026-06-21)
-- [ ] **Phase 7: Obsidian-style File Tree (folder operations & tree UX)** - Users manage folders and files directly in the tree (right-click menus, drag-and-drop, folder rename/move/delete) the way they would in Obsidian
+- [x] **Phase 7: Obsidian-style File Tree (folder operations & tree UX)** - Users manage folders and files directly in the tree (right-click menus, drag-and-drop, folder rename/move/delete) the way they would in Obsidian (completed 2026-06-21)
 
 ## Phase Details
 
@@ -280,4 +280,4 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Eino Agent | 0/TBD | Not started | - |
 | 5. Collaboration | 0/TBD | Not started | - |
 | 6. Live-Preview Editor (Obsidian-style) | 4/4 | Complete   | 2026-06-21 |
-| 7. Obsidian-style File Tree (folder operations & tree UX) | 3/4 | In Progress|  |
+| 7. Obsidian-style File Tree (folder operations & tree UX) | 4/4 | Complete   | 2026-06-21 |
