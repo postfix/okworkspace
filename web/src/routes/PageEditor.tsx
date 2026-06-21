@@ -128,7 +128,22 @@ export default function PageEditor() {
           }
           // Read back the advanced revision (and any frontmatter repair) so the
           // next loop iteration saves against fresh state — never a stale 409.
-          const fresh = await getPage(path);
+          // The save already succeeded; if this read-back fails (transient error,
+          // server restart, timeout) we must NOT leave the UI stuck on "Saving…"
+          // nor advance lastSavedBody/lastSavedFrontmatter or baseRevision past
+          // what was confirmed — a stale baseRevision would 409-falsely on the
+          // next autosave. Surface the same recoverable save-error and bail; the
+          // `finally` below still releases the single-flight `saving` guard.
+          let fresh: Awaited<ReturnType<typeof getPage>>;
+          try {
+            fresh = await getPage(path);
+          } catch {
+            setSaveError(
+              "We couldn't save your page just now. Your changes are kept here — check your connection and try Save again.",
+            );
+            setSaveState("idle");
+            return;
+          }
           baseRevision.current = fresh.revision;
           lastSavedBody.current = sentBody;
           lastSavedFrontmatter.current = sentFrontmatter;
