@@ -35,6 +35,15 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 - [x] **EDIT-03**: Saving from the live-preview editor produces byte-identical Markdown to the source-mode round-trip — the okf golden-corpus exit gate still holds (no lossy block model)
 - [x] **EDIT-04**: Existing editor guarantees are preserved — autosave drafts, optimistic-concurrency save, and sanitized rendering (no raw HTML rendered from page content)
 
+### File Tree (folder operations & tree UX)
+
+- [ ] **TREE-01**: Right-clicking a folder or page in the tree opens a context menu with the relevant actions (folder: New page here, New folder here, Rename, Move, Delete; page: Rename, Move, Delete, Version history)
+- [ ] **TREE-02**: A folder can be renamed, moved into another folder, and deleted as a unit — every contained page relocates and all inbound links are rewritten in the SAME commit, with no corruption (the okf byte-stable round-trip still holds)
+- [ ] **TREE-03**: Folders and pages can be reorganized by drag-and-drop (drop onto a folder or root to move), with optimistic tree updates that appear immediately and reconcile with the server (no manual refresh)
+- [ ] **TREE-04**: Deleting a folder is recoverable — its pages go to trash and can be restored; there is no permanent delete in this phase
+- [ ] **TREE-05**: A deleted folder can be restored as a unit (grouped restore / undo folder delete), recreating its structure, in addition to per-page restore
+- [ ] **TREE-06**: Folder move/rename rejects cleanly on a target/name collision (no silent merge), and an invalid drag (a folder onto itself or a descendant) is prevented
+
 ### Navigation
 
 - [x] **NAV-01**: User can browse pages in a left-side tree
@@ -204,14 +213,20 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | EDIT-02 | Phase 6 | Complete |
 | EDIT-03 | Phase 6 | Complete |
 | EDIT-04 | Phase 6 | Complete |
+| TREE-01 | Phase 7 | Pending |
+| TREE-02 | Phase 7 | Pending |
+| TREE-03 | Phase 7 | Pending |
+| TREE-04 | Phase 7 | Pending |
+| TREE-05 | Phase 7 | Pending |
+| TREE-06 | Phase 7 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 64 total (60 original + 4 EDIT added with Phase 6, 2026-06-21)
-- Mapped to phases: 64 ✓
+- v1 requirements: 70 total (60 original + 4 EDIT with Phase 6 + 6 TREE with Phase 7, 2026-06-21)
+- Mapped to phases: 70 ✓
 - Unmapped: 0 ✓
 
-**Per-phase counts:** Phase 0 = 10 · Phase 1 = 18 · Phase 2 = 11 · Phase 3 = 6 · Phase 4 = 11 · Phase 5 = 4 · Phase 6 = 4 (total 64). Phase 7 (Obsidian-style File Tree) requirements to be formalized at its plan time.
+**Per-phase counts:** Phase 0 = 10 · Phase 1 = 18 · Phase 2 = 11 · Phase 3 = 6 · Phase 4 = 11 · Phase 5 = 4 · Phase 6 = 4 · Phase 7 = 6 (total 70).
 
 ---
 *Requirements defined: 2026-06-17*
