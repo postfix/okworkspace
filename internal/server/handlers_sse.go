@@ -14,6 +14,15 @@ import (
 // that the chip feels live, long enough to stay cheap at this scale (5 users).
 const sseTick = 500 * time.Millisecond
 
+// sseMaxDuration is a generous absolute cap on how long a single extraction-status
+// stream may stay open (WR-03). A wedged extraction (status stuck at
+// pending/extracting because the worker stalled or the row never advances) would
+// otherwise pin a goroutine + a 500ms DB query forever for every tab left open. On
+// the deadline we emit one terminal "failed" event and close, so a stuck stream
+// cannot leak a goroutine indefinitely. It is far longer than any real extraction
+// so it never truncates a healthy in-flight stream.
+const sseMaxDuration = 10 * time.Minute
+
 // handleExtractionStatus streams an attachment's text-extraction status as
 // Server-Sent Events so the card chip transitions live (extracting → done/empty/
 // failed) without polling from the client. It is dispatched on the GET
@@ -85,9 +94,19 @@ func (h *authHandlers) handleExtractionStatus(w http.ResponseWriter, r *http.Req
 
 	ticker := time.NewTicker(sseTick)
 	defer ticker.Stop()
+	// Absolute max-duration cap (WR-03): a wedged extraction must not pin this
+	// goroutine forever. On the deadline, emit a terminal "failed" event and close.
+	deadline := time.NewTimer(sseMaxDuration)
+	defer deadline.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-deadline.C:
+			// Stream has been open too long without reaching a terminal status —
+			// tell the client to stop waiting and close (WR-03).
+			_, _ = fmt.Fprintf(w, "data: {\"status\":%q}\n\n", "failed")
+			flusher.Flush()
 			return
 		case <-ticker.C:
 			if terminal, err := emit(); err != nil || terminal {
