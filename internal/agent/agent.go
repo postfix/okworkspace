@@ -9,6 +9,7 @@ import (
 
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/config"
+	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
 )
 
@@ -30,15 +31,30 @@ type pageWriter interface {
 	Save(ctx context.Context, path, body string, frontmatter map[string]any, baseRevision, user string) error
 }
 
-// searcher backs the workspace-RAG tools (slice 3). Role-scoped at the call
-// site; never the client.
+// searcher backs the workspace-RAG tools (slice 2). Role-scoped at the call
+// site; never the client. *search.Index satisfies it (Query is repo.Resolve-
+// backed via the Bleve index built from on-disk files).
 type searcher interface {
 	Query(ctx context.Context, q string) ([]search.Result, error)
 }
 
-// attachmentReader backs read_attachment_text (slice 3).
+// pageReader backs read_page + list_tree (slice 2). Both methods read through
+// the repo.Resolve-backed pages.Service (never os.ReadFile). *pages.Service
+// satisfies it (Get returns pages.Page; Tree returns the nested page/folder
+// tree). Declared as an interface so tools_test can inject a fake without
+// standing up git/db.
+type pageReader interface {
+	Get(ctx context.Context, path string) (pages.Page, error)
+	Tree(ctx context.Context) ([]pages.Node, error)
+}
+
+// attachmentReader backs read_attachment_text (slice 2). ExtractedText returns
+// the repo.Resolve-backed `.txt` extraction sidecar for an attachment id (empty
+// when extraction is pending/absent — never an error, never raw bytes off a
+// client-supplied path). Routed through repo.Read (SEC-01 resolver), NOT
+// os.ReadFile.
 type attachmentReader interface {
-	GetPlainText(ctx context.Context, id string) (string, error)
+	ExtractedText(ctx context.Context, id string) (string, error)
 }
 
 // auditRecorder records prompt/proposal/approval events (non-fatal). The API
@@ -54,6 +70,7 @@ type auditRecorder interface {
 // asserts non-nil at its call site.
 type Deps struct {
 	PageWriter  pageWriter
+	Pages       pageReader
 	Search      searcher
 	Attachments attachmentReader
 	Audit       auditRecorder
