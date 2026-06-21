@@ -145,6 +145,10 @@ func New(deps Deps) (http.Handler, error) {
 				// yield a 405 (the same sibling-wildcard issue Plan 02 hit). So
 				// rename is registered on the SAME `/pages/*` catch-all under POST,
 				// and the handler strips the trailing `/rename` from the wildcard.
+				// Folder rename/move (`/rename-folder`, `/move-folder`) share this same
+				// catch-all dispatch (a folder is a dir/index.md page, so no sibling
+				// wildcard route) and inherit this editor RBAC gate (TREE-02/06,
+				// authorization read from the SESSION role, never client input).
 				editor.Post("/pages/*", h.handleRenamePage)
 				editor.Delete("/pages/*", h.handleDeletePage)
 				editor.Post("/folders", h.handleCreateFolder)

@@ -281,6 +281,32 @@ export async function movePage(
   });
 }
 
+// renameFolder renames a folder (its index.md + every descendant page) in ONE
+// commit, rewriting all inbound links (TREE-02). The backend slugs the new dir name
+// and returns the new folder path to navigate to. A target-dir collision rejects
+// with HTTP 409 (TREE-06); the thrown error carries err.status === 409 so the dialog
+// can surface the collision copy.
+export async function renameFolder(
+  dir: string,
+  newName: string,
+): Promise<{ path: string }> {
+  return mutate<{ path: string }>(`/api/v1/pages/${dir}/rename-folder`, {
+    new_name: newName,
+  });
+}
+
+// moveFolder relocates a folder subtree into newParent ("" = root) in ONE commit,
+// rewriting all inbound links (TREE-02). Returns the new folder path. A destination
+// collision rejects with HTTP 409 (TREE-06, err.status === 409).
+export async function moveFolder(
+  dir: string,
+  newParent: string,
+): Promise<{ path: string }> {
+  return mutate<{ path: string }>(`/api/v1/pages/${dir}/move-folder`, {
+    new_parent: newParent,
+  });
+}
+
 // --- Trash: delete-to-trash & restore (PAGE-06/07) ---
 
 // TrashEntry mirrors a deleted-page record (GET /trash). It carries provenance

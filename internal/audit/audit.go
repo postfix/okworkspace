@@ -43,6 +43,8 @@ const (
 	ActionPageTrash         = "trash"
 	ActionPageRestore       = "restore"
 	ActionFolderCreate      = "folder_create"
+	ActionFolderRename      = "folder_rename"
+	ActionFolderMove        = "folder_move"
 	ActionAttachUpload      = "attach_upload"
 	ActionAttachReplace     = "attach_replace"
 	ActionAttachDelete      = "attach_delete"

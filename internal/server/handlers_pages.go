@@ -244,6 +244,18 @@ func (h *authHandlers) handleRenamePage(w http.ResponseWriter, r *http.Request) 
 		h.handleRestoreVersion(w, r, path, rreq.Version)
 		return
 	}
+	// Folder rename/move share the SAME /pages/* catch-all by suffix (a folder is a
+	// dir/index.md page, so a sibling {path:.*} route would 405 against the wildcard —
+	// the sibling-wildcard conflict Plans 02-04 hit). These branches MUST precede the
+	// plain /rename branch so a "/rename-folder" wildcard is not swallowed by it.
+	if strings.HasSuffix(wild, "/rename-folder") {
+		h.handleRenameFolder(w, r, strings.TrimSuffix(wild, "/rename-folder"))
+		return
+	}
+	if strings.HasSuffix(wild, "/move-folder") {
+		h.handleMoveFolder(w, r, strings.TrimSuffix(wild, "/move-folder"))
+		return
+	}
 	if !strings.HasSuffix(wild, "/rename") {
 		writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
 		return
@@ -309,6 +321,101 @@ func (h *authHandlers) handleRenamePage(w http.ResponseWriter, r *http.Request) 
 		Source: auditSourceWeb,
 	})
 	writeJSON(w, http.StatusOK, renamePageResponse{Path: newPath})
+}
+
+// renameFolderRequest is the POST /pages/{dir}/rename-folder body.
+type renameFolderRequest struct {
+	NewName string `json:"new_name"`
+}
+
+// moveFolderRequest is the POST /pages/{dir}/move-folder body. NewParent is the
+// destination folder ("" = root) and is attacker-controlled, so it is re-validated
+// via cleanPathString before the service builds the move target (WR-08).
+type moveFolderRequest struct {
+	NewParent string `json:"new_parent"`
+}
+
+// handleRenameFolder renames a folder (its index.md + every descendant page) in ONE
+// commit, rewriting all inbound links (TREE-02). A target-dir collision returns 409
+// with the UI-SPEC copy and touches no disk (TREE-06). Editor-gated via the router
+// subgroup (auth.RequireRole from the session role — never client input).
+func (h *authHandlers) handleRenameFolder(w http.ResponseWriter, r *http.Request, rawDir string) {
+	dir, ok := cleanPathString(w, rawDir)
+	if !ok {
+		return
+	}
+	var req renameFolderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	user := h.actorUsername(r.Context())
+	newDir, err := h.pages.RenameFolder(r.Context(), dir, req.NewName, user)
+	if err != nil {
+		h.writeFolderError(w, err)
+		return
+	}
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionFolderRename,
+		Actor:  user,
+		Target: newDir,
+		Source: auditSourceWeb,
+	})
+	writeJSON(w, http.StatusOK, renamePageResponse{Path: newDir})
+}
+
+// handleMoveFolder moves a folder subtree into a new parent in ONE commit, with the
+// same atomicity, collision (409), and RBAC guarantees as handleRenameFolder. The
+// attacker-controlled new_parent is re-validated via cleanPathString (WR-08).
+func (h *authHandlers) handleMoveFolder(w http.ResponseWriter, r *http.Request, rawDir string) {
+	dir, ok := cleanPathString(w, rawDir)
+	if !ok {
+		return
+	}
+	var req moveFolderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	// new_parent "" means root (a valid destination); only validate when non-empty so
+	// a root move is not rejected by cleanPathString's empty-path guard.
+	newParent := strings.TrimSpace(req.NewParent)
+	if newParent != "" {
+		cleaned, okParent := cleanPathString(w, newParent)
+		if !okParent {
+			return
+		}
+		newParent = cleaned
+	}
+	user := h.actorUsername(r.Context())
+	newDir, err := h.pages.MoveFolder(r.Context(), dir, newParent, user)
+	if err != nil {
+		h.writeFolderError(w, err)
+		return
+	}
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionFolderMove,
+		Actor:  user,
+		Target: newDir,
+		Source: auditSourceWeb,
+	})
+	writeJSON(w, http.StatusOK, renamePageResponse{Path: newDir})
+}
+
+// writeFolderError maps a folder rename/move service error to its HTTP status:
+// ErrFolderExists -> 409 (TREE-06, with the exact UI-SPEC collision copy),
+// ErrPageNotFound -> 404, ErrTitleRequired -> 400, anything else -> 500.
+func (h *authHandlers) writeFolderError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, pages.ErrFolderExists):
+		writeError(w, http.StatusConflict, "A folder with that name already exists there. Pick a different name or destination.")
+	case errors.Is(err, pages.ErrPageNotFound):
+		writeError(w, http.StatusNotFound, "This folder no longer exists. It may have been moved or deleted.")
+	case errors.Is(err, pages.ErrTitleRequired):
+		writeError(w, http.StatusBadRequest, "Give the folder a name.")
+	default:
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+	}
 }
 
 // handleCreateFolder creates a folder (seeded with a blank index.md, editor
