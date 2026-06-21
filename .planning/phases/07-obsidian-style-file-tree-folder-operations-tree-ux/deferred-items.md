@@ -36,3 +36,21 @@ in this phase.
   `--color-overlay` token is correct, but `Dialog.css` is a SHARED, pre-existing
   component NOT created/modified by Phase 7 — changing it is out of this phase's
   scope. Deferred to a tokens-tidy pass.
+
+## Optimistic-update vs slow/queued commit race (observed during browser validation)
+
+- **Found during:** Phase 7 browser validation (folder delete).
+- **Symptom:** When the single-writer git worker is SATURATED (cold start — the
+  startup search-index rebuild hogs the worker; server logs `WARN pages: commit wait
+  timed out; returning success, job stays queued timeout=5s`), an optimistic
+  folder-delete's `onSettled` tree refetch can beat the still-queued commit and
+  briefly RE-SHOW the deleted folder in the tree. The delete is correct on disk
+  (verified: the trash group + restore worked) and the tree self-corrects on the
+  next refetch.
+- **Assessment:** Not a correctness bug — it only manifests under worker saturation;
+  in steady state (fast commits) the refetch lands after the commit. It IS a visible
+  flicker-back of the optimistic update.
+- **Disposition:** Deferred. Future guard options: hold/skip the `["tree"]`
+  `onSettled` invalidate while a commit job for that path is still queued, or have the
+  tree endpoint read pending-but-uncommitted state, or lengthen the commit-wait under
+  load. Do NOT block Phase 7.

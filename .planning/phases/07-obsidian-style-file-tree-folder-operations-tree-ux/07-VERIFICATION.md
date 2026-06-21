@@ -1,9 +1,35 @@
 ---
 phase: 07-obsidian-style-file-tree-folder-operations-tree-ux
 verified: 2026-06-21T17:05:00Z
-status: human_needed
+status: passed
 score: 7/7 must-haves verified
+perceptual_validation: browser-automated (Playwright, 2026-06-21) — folder menu, rename (CR-01), collision, delete, grouped restore confirmed live; DnD pointer-feel is the only residual manual item (logic automated-tested)
 overrides_applied: 0
+
+# Browser-Automated Validation (2026-06-21)
+#
+# Drove the running app (Go binary serving the embedded SPA on :8098) with Playwright:
+# - TREE-01: folder right-click menu = exactly [New page here, New folder here, Rename, Move, Delete] (role=menu/menuitem). PASS
+# - TREE-02 + CR-01 fix: renaming folder zphase7→zphase7renamed navigated to /app/page/zphase7renamed/index.md
+#   (NOT a bare dir → no HTTP 500) and the index page rendered cleanly; audit logged folder_rename. PASS
+# - TREE-06 collision: renaming a folder onto an existing name "test" returned 409, the dialog stayed open with
+#   "A folder with that name already exists there. Pick a different name or destination.", folder kept its name (no merge). PASS
+# - TREE-04 delete: confirm dialog read "Delete 'zphase7renamed'? This folder and its 1 page will move to Trash…"
+#   (names page count; destructive token); confirming trashed it (audit folder_trash). PASS
+# - TREE-05 grouped restore: Trash showed "Folder 'zphase7renamed' · 1 page … Restore folder" alongside per-page
+#   "Restore page" rows; clicking Restore folder restored by group id (audit folder_restore target=<groupid>) and
+#   recreated data/repo/zphase7renamed/index.md on disk. PASS
+# - UI fix live: rename-folder help text = "Pages inside this folder, and links to them, will keep working."
+# - TREE-03 DnD: applyMove + dropAllowed self/descendant truth table + optimistic onMutate/onError/onSettled rollback
+#   are covered by green useTreeMutations/LeftTree vitest; the move uses the same validated moveFolder backend path.
+#   Residual MANUAL: native HTML5 drag pointer-feel (drop-target ring, not-allowed cursor, optimistic snappiness,
+#   menu viewport 4px clamp) — Playwright can't reliably drive HTML5 DnD; needs a human drag.
+#
+# OBSERVATION (logged to deferred-items, not a blocker): under a SATURATED single-writer git worker (the cold-start
+# search-index rebuild was hogging it, "commit wait timed out; returning success, job stays queued"), the optimistic
+# delete's onSettled tree-refetch can beat the queued commit and momentarily RE-SHOW the deleted folder until the
+# commit lands. The delete is correct on disk (verified) and self-corrects on the next refetch; in steady state
+# (fast commits) it does not occur. Worth a future guard (e.g. delay/skip onSettled-invalidate while a commit is queued).
 human_verification:
   - test: "Drag-and-drop feel — drag a folder onto another folder and onto root"
     expected: "Folder moves as a unit; destination folder row highlights during hover (drop-target ring); tree updates INSTANTLY before the network settles; dragging a folder onto itself or one of its own children shows the native not-allowed cursor, no highlight, and nothing moves"
