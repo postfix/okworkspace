@@ -122,19 +122,28 @@ func TestSmokeInferToolSchema(t *testing.T) {
 // it serves a single known page body so read_page returns grounded content the
 // model can answer from (no git/db needed).
 type fakePageReader struct {
-	body string
-	path string
+	body        string
+	frontmatter string
+	path        string
+	revision    string
 }
 
 func (f fakePageReader) Get(_ context.Context, path string) (pages.Page, error) {
 	if path == f.path {
-		return pages.Page{Body: f.body}, nil
+		return pages.Page{Frontmatter: f.frontmatter, Body: f.body, Revision: f.revision}, nil
 	}
 	return pages.Page{}, pages.ErrPageNotFound
 }
 
 func (f fakePageReader) Tree(_ context.Context) ([]pages.Node, error) {
 	return []pages.Node{{Type: "page", Path: f.path, Title: "Test"}}, nil
+}
+
+// Revision returns the configured static revision (the optimistic-concurrency token
+// ProposePatch captures). A test that exercises the stale-during-review path uses a
+// dedicated stub that returns a different revision on the second call.
+func (f fakePageReader) Revision(_ context.Context, _ string) (string, error) {
+	return f.revision, nil
 }
 
 // TestSmokeReActAskStream exercises the full slice-2 path end-to-end against the

@@ -157,6 +157,10 @@ type searcher interface {
 type pageReader interface {
 	Get(ctx context.Context, path string) (pages.Page, error)
 	Tree(ctx context.Context) ([]pages.Node, error)
+	// Revision returns the current committed blob revision of path — the optimistic-
+	// concurrency token ProposePatch captures at proposal time for the stale-during-
+	// review check (slice 5). *pages.Service satisfies it.
+	Revision(ctx context.Context, path string) (string, error)
 }
 
 // attachmentReader backs read_attachment_text (slice 2). ExtractedText returns
