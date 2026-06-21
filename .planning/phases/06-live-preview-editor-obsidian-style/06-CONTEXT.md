@@ -74,11 +74,24 @@ page content).
 - Remove the `@uiw/react-md-editor` dependency once the CM6 editor lands (smaller
   bundle). `LinkPicker` stays wired into edit mode (relative `.md` link insert, D-05).
 
+### Read-Mode Unification — RESOLVED (2026-06-21, post-research)
+- Decision: **fully unify** read + edit onto one live-preview surface. Read mode is a
+  read-only CodeMirror live-preview view (`EditorState.readOnly` / `EditorView.editable.of(false)`),
+  pixel-identical to edit mode's Live view.
+- The search→heading deep-link (SRCH-06 / T-03-15) MUST be preserved on the unified
+  read surface via a heading-anchor mechanism: stamp each heading line with a DOM
+  `id` (`Decoration.line({attributes:{id: slug}})`) whose slug is computed with the
+  SAME github-slugger algorithm `okf.ScanHeadings` uses on the backend, plus a
+  scroll-to-`#hash`-on-mount effect. A vitest MUST assert the rendered heading id
+  equals `slug(text)` for the okf corpus headings.
+- `MarkdownProse` is retired from the read path once the unified CM6 read surface
+  ships (kept only if a concrete blocker emerges during execution). Internal `.md`
+  link SPA navigation and the no-raw-HTML guard carry over to the unified surface.
+
 ### Claude's Discretion
 - Exact CM6 extension composition, decoration CSS class names, and theme tokens.
-- Whether read mode reuses `LivePreviewEditor` in a read-only configuration or a
-  thin shared rendering module — resolve in planning, bounded by the deep-link /
-  internal-nav / sanitize constraints above.
+- How the read-only Live view shares extensions/modules with the editable one (one
+  component in a read-only config vs a thin shared `web/src/lib/cm/` module).
 - How inline-image and table widgets coexist with active-line marker reveal.
 
 </decisions>
