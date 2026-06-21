@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import "./TreeContextMenu.css";
 
 // TreeContextMenuItem is a single actionable row. `danger` styles the item as
@@ -18,12 +25,77 @@ export interface TreeContextMenuProps {
   onClose: () => void;
 }
 
+// VIEWPORT_MARGIN keeps the menu this many px clear of every viewport edge when
+// clamped (Obsidian-style behaviour when right-clicking near a corner).
+const VIEWPORT_MARGIN = 4;
+
+// useViewportClamp positions the menu at (x, y), then — after the first paint —
+// measures it and nudges it back on-screen so it never overflows the viewport.
+function useViewportClamp(
+  ref: React.RefObject<HTMLElement | null>,
+  x: number,
+  y: number,
+) {
+  const [pos, setPos] = useState({ x, y });
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    let nx = x;
+    let ny = y;
+    if (x + rect.width + VIEWPORT_MARGIN > window.innerWidth) {
+      nx = Math.max(VIEWPORT_MARGIN, window.innerWidth - rect.width - VIEWPORT_MARGIN);
+    }
+    if (y + rect.height + VIEWPORT_MARGIN > window.innerHeight) {
+      ny = Math.max(VIEWPORT_MARGIN, window.innerHeight - rect.height - VIEWPORT_MARGIN);
+    }
+    setPos({ x: nx, y: ny });
+  }, [ref, x, y]);
+  return pos;
+}
+
+// useFocusOnOpen remembers the previously focused element on mount, moves focus
+// to the first menu item, and restores focus to the previous element on unmount.
+function useFocusOnOpen(firstItem: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    firstItem.current?.focus();
+    return () => {
+      previouslyFocused?.focus?.();
+    };
+  }, [firstItem]);
+}
+
+// useDismissOnOutside closes the menu on any outside interaction: outside-click,
+// scroll (capture, so the scrolling nav rail counts), or resize.
+function useDismissOnOutside(
+  ref: React.RefObject<HTMLElement | null>,
+  onClose: () => void,
+) {
+  useEffect(() => {
+    function onDocPointer(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    function onScrollOrResize() {
+      onClose();
+    }
+    document.addEventListener("mousedown", onDocPointer);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      document.removeEventListener("mousedown", onDocPointer);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [ref, onClose]);
+}
+
 // TreeContextMenu is a reusable cursor-anchored popup menu for the file tree. It
 // renders a passed list of items at (x, y), closes on outside-click / Escape /
 // scroll / resize, and is fully keyboard-navigable: arrow keys move focus
-// (wrapping), Home/End jump, Enter/Space select, Escape closes. Focus is trapped
-// within the menu while open and restored to the previously focused element on
-// close. Accessible: role="menu" / role="menuitem".
+// (wrapping), Home/End jump, Enter/Space select, Tab is trapped (wraps). Focus
+// moves to the first item on open and is restored on close. Accessible:
+// role="menu" / role="menuitem".
 export default function TreeContextMenu({
   x,
   y,
@@ -32,71 +104,29 @@ export default function TreeContextMenu({
 }: TreeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const previouslyFocused = useRef<Element | null>(null);
-  const [pos, setPos] = useState({ x, y });
+  const firstItemRef = useRef<HTMLButtonElement | null>(null);
 
-  // Keep the menu fully on-screen: after the first paint, measure it and clamp
-  // the position so it never overflows the viewport (Obsidian-style behaviour
-  // when right-clicking near an edge).
-  useLayoutEffect(() => {
-    const node = menuRef.current;
-    if (!node) return;
-    const rect = node.getBoundingClientRect();
-    const margin = 4;
-    let nx = x;
-    let ny = y;
-    if (x + rect.width + margin > window.innerWidth) {
-      nx = Math.max(margin, window.innerWidth - rect.width - margin);
-    }
-    if (y + rect.height + margin > window.innerHeight) {
-      ny = Math.max(margin, window.innerHeight - rect.height - margin);
-    }
-    setPos({ x: nx, y: ny });
-  }, [x, y]);
+  const pos = useViewportClamp(menuRef, x, y);
+  useFocusOnOpen(firstItemRef);
+  useDismissOnOutside(menuRef, onClose);
 
-  // On open, remember focus and move it to the first item.
-  useEffect(() => {
-    previouslyFocused.current = document.activeElement;
-    itemRefs.current[0]?.focus();
-    return () => {
-      (previouslyFocused.current as HTMLElement | null)?.focus?.();
-    };
-  }, []);
+  // focusItem moves focus to the item at `index`, wrapping past either end.
+  const focusItem = useCallback(
+    (index: number) => {
+      const count = items.length;
+      if (count === 0) return;
+      const next = ((index % count) + count) % count;
+      itemRefs.current[next]?.focus();
+    },
+    [items.length],
+  );
 
-  // Close on any outside interaction: outside-click, scroll, resize.
-  useEffect(() => {
-    function onDocPointer(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    function onScrollOrResize() {
-      onClose();
-    }
-    document.addEventListener("mousedown", onDocPointer);
-    // Capture scroll from any scroll container (the nav rail scrolls), not just
-    // the window — hence the capture phase.
-    window.addEventListener("scroll", onScrollOrResize, true);
-    window.addEventListener("resize", onScrollOrResize);
-    return () => {
-      document.removeEventListener("mousedown", onDocPointer);
-      window.removeEventListener("scroll", onScrollOrResize, true);
-      window.removeEventListener("resize", onScrollOrResize);
-    };
-  }, [onClose]);
+  const currentIndex = useCallback(
+    () => itemRefs.current.findIndex((el) => el === document.activeElement),
+    [],
+  );
 
-  function focusItem(index: number) {
-    const count = items.length;
-    if (count === 0) return;
-    const next = ((index % count) + count) % count;
-    itemRefs.current[next]?.focus();
-  }
-
-  function currentIndex(): number {
-    return itemRefs.current.findIndex((el) => el === document.activeElement);
-  }
-
-  function onKeyDown(e: React.KeyboardEvent) {
+  function onKeyDown(e: KeyboardEvent) {
     switch (e.key) {
       case "Escape":
         e.preventDefault();
@@ -150,8 +180,11 @@ export default function TreeContextMenu({
           tabIndex={i === 0 ? 0 : -1}
           ref={(el) => {
             itemRefs.current[i] = el;
+            if (i === 0) firstItemRef.current = el;
           }}
-          className={`treemenu-item${item.danger ? " treemenu-item-danger" : ""}`}
+          className={`treemenu-item${
+            item.danger ? " treemenu-item-danger" : ""
+          }`}
           onClick={() => run(item)}
         >
           {item.label}
