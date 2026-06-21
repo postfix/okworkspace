@@ -519,6 +519,53 @@ export async function uploadAttachment(
   return (await res.json()) as AttachmentMeta;
 }
 
+// replaceAttachment swaps an attachment's bytes in place, reusing the SAME id
+// (ATT-05). Like uploadAttachment it uses a raw multipart fetch (NOT mutate(),
+// which forces a JSON Content-Type) so the browser sets the boundary itself; the
+// CSRF token is echoed in the header (SEC-04). The server re-validates size/type
+// and returns the updated meta.
+export async function replaceAttachment(
+  id: string,
+  file: File,
+): Promise<AttachmentMeta> {
+  const token = await ensureCSRF();
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`/api/v1/attachments/${id}`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: { [CSRF_HEADER]: token },
+    body: form,
+  });
+  if (!res.ok) {
+    let message = "Replacing didn't finish. Check your connection and try again.";
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      // keep the generic message
+    }
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+  return (await res.json()) as AttachmentMeta;
+}
+
+// removeAttachment drops an attachment's link from a page and, when that was the
+// last reference, deletes the file (ATT-06/07). The page to unlink is passed via
+// the page_path query parameter. Returns whether the underlying file was deleted.
+export async function removeAttachment(
+  id: string,
+  pagePath: string,
+): Promise<{ deleted_orphan: boolean }> {
+  return mutate<{ deleted_orphan: boolean }>(
+    `/api/v1/attachments/${id}?page_path=${encodeURIComponent(pagePath)}`,
+    undefined,
+    "DELETE",
+  );
+}
+
 // relativeMdLink computes a relative `.md` link destination from the page at
 // fromPath to the page at toPath (both repo-relative slash paths), matching the
 // canonical on-disk link format (D-05). Used by the LinkPicker so an inserted

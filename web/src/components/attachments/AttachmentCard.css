@@ -90,3 +90,22 @@
 .attachment-card-download {
   flex-shrink: 0;
 }
+
+/* Right-side action cluster: Download + (editor-only) Replace/Remove. */
+.attachment-card-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* Icon-only lifecycle actions — 44px touch target (--hit-min-icon). */
+.attachment-card-action {
+  flex-shrink: 0;
+  min-width: var(--hit-min-icon);
+  min-height: var(--hit-min-icon);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}

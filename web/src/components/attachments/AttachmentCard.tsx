@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, FileText, File as FileIcon } from "lucide-react";
+import { Download, FileText, File as FileIcon, Undo2, Trash2 } from "lucide-react";
 
 import {
   downloadAttachmentUrl,
@@ -12,6 +12,8 @@ import {
 } from "../../api/client";
 import ExtractionStatus from "./ExtractionStatus";
 import ImagePreviewDialog from "./ImagePreviewDialog";
+import ReplaceAttachmentDialog from "./ReplaceAttachmentDialog";
+import RemoveAttachmentDialog from "./RemoveAttachmentDialog";
 import "./AttachmentCard.css";
 
 // extractableMediaTypes are the MIME types whose text the backend extracts (pdf /
@@ -59,10 +61,20 @@ function typeIconFor(meta: AttachmentMeta) {
 // Download affordance to the byte-exact original. The opaque on-disk id is never
 // shown and no version-control vocabulary appears (hidden-Git rule). The date and
 // size are always human-friendly.
-export default function AttachmentCard({ meta }: { meta: AttachmentMeta }) {
+export default function AttachmentCard({
+  meta,
+  pagePath,
+  canEdit = false,
+}: {
+  meta: AttachmentMeta;
+  pagePath: string;
+  canEdit?: boolean;
+}) {
   const previewable = isPreviewableImage(meta.mime_type);
   const Icon = typeIconFor(meta);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
 
   // Extraction status: only extractable types (pdf/docx/txt) show a chip. Seed
   // from the list item's stored status so a dropped/late stream still renders the
@@ -119,14 +131,39 @@ export default function AttachmentCard({ meta }: { meta: AttachmentMeta }) {
         )}
       </div>
 
-      <a
-        className="btn btn-ghost attachment-card-download"
-        href={downloadAttachmentUrl(meta.id)}
-        download={meta.original_name}
-      >
-        <Download size={16} aria-hidden="true" />
-        <span>Download</span>
-      </a>
+      <div className="attachment-card-actions">
+        <a
+          className="btn btn-ghost attachment-card-download"
+          href={downloadAttachmentUrl(meta.id)}
+          download={meta.original_name}
+        >
+          <Download size={16} aria-hidden="true" />
+          <span>Download</span>
+        </a>
+
+        {/* Editor-only lifecycle actions (ATT-05/06/07). Readers see only
+            Download. Each is a 44px icon-only ghost button (--hit-min-icon). */}
+        {canEdit && (
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost attachment-card-action"
+              aria-label="Replace attachment"
+              onClick={() => setReplaceOpen(true)}
+            >
+              <Undo2 size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost-destructive attachment-card-action"
+              aria-label="Remove attachment"
+              onClick={() => setRemoveOpen(true)}
+            >
+              <Trash2 size={16} aria-hidden="true" />
+            </button>
+          </>
+        )}
+      </div>
 
       {previewable && (
         <ImagePreviewDialog
@@ -134,6 +171,25 @@ export default function AttachmentCard({ meta }: { meta: AttachmentMeta }) {
           meta={meta}
           onClose={() => setPreviewOpen(false)}
         />
+      )}
+
+      {canEdit && (
+        <>
+          <ReplaceAttachmentDialog
+            open={replaceOpen}
+            id={meta.id}
+            filename={meta.original_name}
+            pagePath={pagePath}
+            onClose={() => setReplaceOpen(false)}
+          />
+          <RemoveAttachmentDialog
+            open={removeOpen}
+            id={meta.id}
+            filename={meta.original_name}
+            pagePath={pagePath}
+            onClose={() => setRemoveOpen(false)}
+          />
+        </>
       )}
     </div>
   );

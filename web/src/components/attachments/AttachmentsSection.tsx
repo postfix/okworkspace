@@ -68,7 +68,12 @@ export default function AttachmentsSection({
       ) : (
         <div className="attachments-list">
           {items.map((meta) => (
-            <AttachmentCard key={meta.id} meta={meta} />
+            <AttachmentCard
+              key={meta.id}
+              meta={meta}
+              pagePath={pagePath}
+              canEdit={canEdit}
+            />
           ))}
         </div>
       )}
