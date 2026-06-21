@@ -188,7 +188,9 @@ func (s *Service) descendantPages(dir string) ([]string, error) {
 		if d.IsDir() || !strings.HasSuffix(slashRel, ".md") {
 			return nil
 		}
-		if slashRel == prefix+"index.md" || strings.HasPrefix(slashRel, prefix) {
+		// prefix is dir+"/", so slashRel == prefix+"index.md" is always subsumed
+		// by HasPrefix(slashRel, prefix) — the explicit index.md clause was dead.
+		if strings.HasPrefix(slashRel, prefix) {
 			pages = append(pages, slashRel)
 		}
 		return nil
