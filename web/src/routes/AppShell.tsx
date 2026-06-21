@@ -1,12 +1,14 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus, FolderPlus, Shield, Trash2 } from "lucide-react";
+import { FilePlus, FolderPlus, Search, Shield, Trash2 } from "lucide-react";
 
 import { health, logout, me, type Me, type RepoHealth } from "../api/client";
 import UserMenu from "../components/UserMenu";
 import LeftTree, { type LeftTreeHandle } from "../components/LeftTree";
 import RecentList from "../components/RecentList";
+import SearchPalette from "../components/search/SearchPalette";
+import { useSearchStore } from "../store/searchStore";
 import "./AppShell.css";
 
 // AppShell is the authenticated chrome (top bar + nav rail + main pane). When
@@ -30,6 +32,21 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   // right-click menu); the top buttons drive root-scoped create through this
   // imperative handle.
   const treeRef = useRef<LeftTreeHandle>(null);
+  const setSearchOpen = useSearchStore((s) => s.setOpen);
+
+  // Global ⌘K / Ctrl K opens the search palette from anywhere (the primary
+  // path; the top-bar trigger is the discoverable fallback). preventDefault
+  // suppresses the browser default. Same document-keydown pattern as Dialog.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [setSearchOpen]);
 
   async function handleLogout() {
     await logout();
@@ -39,6 +56,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
 
   return (
     <div className="appshell">
+      <SearchPalette />
       <header className="topbar">
         <button
           type="button"
@@ -54,6 +72,16 @@ export default function AppShell({ children }: { children?: ReactNode }) {
               <span>Storage healthy</span>
             </span>
           )}
+          <button
+            type="button"
+            className="btn btn-ghost topbar-search"
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search workspace (⌘K)"
+          >
+            <Search size={16} aria-hidden="true" />
+            <span>Search</span>
+            <kbd className="keycap">⌘K</kbd>
+          </button>
           <UserMenu
             displayName={data?.display_name ?? ""}
             onProfile={() => navigate("/profile")}
