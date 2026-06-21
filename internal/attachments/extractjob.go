@@ -124,8 +124,13 @@ func ExtractHandler(r binaryReader, w enqueuer, db *sql.DB, pushOnCommit bool) j
 		// the very next drain iteration (FIFO), through the single-writer KindCommit
 		// spine (ATT-10). Status is set optimistically — the .txt is durably queued.
 		if cerr := w.Enqueue(ctx, kindCommit, string(raw)); cerr != nil {
-			// Only a failure to PERSIST the commit job reaches here; surface it so the
-			// worker retries the extraction (the .txt is the durable artifact).
+			// Only a failure to PERSIST the commit job reaches here. Record a terminal
+			// status BEFORE returning so a persistent enqueue failure does not leave the
+			// row stuck at pending forever — the chip would otherwise hang on
+			// "Extracting…" (WR-04). The error is surfaced so the worker still retries;
+			// a later successful attempt re-marks pending then done, flipping the chip
+			// back. The raw error is kept server-side only (T-02-12).
+			_ = setExtractStatus(ctx, db, p.AttachmentID, ExtractionFailed, cerr.Error())
 			return fmt.Errorf("attachments: enqueue extracted-text commit %q: %w", p.AttachmentID, cerr)
 		}
 

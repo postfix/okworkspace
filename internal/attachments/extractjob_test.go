@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -161,6 +162,32 @@ func TestExtractJobParseErrorFails(t *testing.T) {
 	}
 	if len(fe.payloads) != 0 {
 		t.Fatalf("commit payloads = %d on failure, want 0", len(fe.payloads))
+	}
+}
+
+// TestExtractJobEnqueueFailureSetsTerminalStatus (WR-04): when the .txt commit
+// enqueue itself fails (cannot persist the job), the handler records a terminal
+// status BEFORE returning the error so the chip does not stick on "Extracting…".
+func TestExtractJobEnqueueFailureSetsTerminalStatus(t *testing.T) {
+	r, fe, db := newExtractHarness(t)
+	fe.failCommit = errors.New("cannot persist commit job")
+
+	err := runExtract(t, r, fe, db, "01ENQFAIL", "txt", []byte("some extractable text"))
+	if err == nil {
+		t.Fatalf("ExtractHandler err = nil, want the enqueue error surfaced for retry")
+	}
+	// The row must NOT be left at pending — that is the stuck-chip hazard.
+	if got := statusOf(t, db, "01ENQFAIL"); got != ExtractionFailed {
+		t.Fatalf("status after enqueue failure = %q, want failed (not stuck pending)", got)
+	}
+	// extract_error is recorded server-side.
+	var extractErr string
+	if serr := db.QueryRowContext(context.Background(),
+		`SELECT extract_error FROM attachments WHERE id = ?`, "01ENQFAIL").Scan(&extractErr); serr != nil {
+		t.Fatalf("read extract_error: %v", serr)
+	}
+	if extractErr == "" {
+		t.Fatalf("extract_error empty, want the enqueue error recorded server-side")
 	}
 }
 
