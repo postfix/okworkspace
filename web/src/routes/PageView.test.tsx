@@ -60,6 +60,18 @@ describe("PageView", () => {
     expect(screen.getByText("Deploy Staging")).toBeInTheDocument();
   });
 
+  it("assigns GitHub-style heading ids matching the search anchor (SRCH-06)", async () => {
+    vi.mocked(client.getPage).mockResolvedValue({
+      frontmatter: "title: Guide\n",
+      body: "## Rollback Procedure\n\nsteps",
+      revision: "r1",
+    });
+    renderView("guide.md");
+    const heading = await screen.findByRole("heading", { name: "Rollback Procedure" });
+    // The rendered id must equal okf.ScanHeadings's anchor (no user-content- prefix).
+    expect(heading.id).toBe("rollback-procedure");
+  });
+
   it("does not render raw HTML (XSS-safe, rehype-raw off)", async () => {
     vi.mocked(client.getPage).mockResolvedValue({
       frontmatter: "title: X\n",
