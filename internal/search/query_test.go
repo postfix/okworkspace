@@ -101,6 +101,110 @@ func TestQuery_TypedResultsAndFacet(t *testing.T) {
 	}
 }
 
+// resultByKind returns the first result whose kind matches, or false.
+func resultByKind(results []Result, kind string) (Result, bool) {
+	for _, r := range results {
+		if r.Kind == kind {
+			return r, true
+		}
+	}
+	return Result{}, false
+}
+
+// TestQuery_Filename (SRCH-04): a query matching an attachment's original
+// filename returns a kind:"attachment" result.
+func TestQuery_Filename(t *testing.T) {
+	h := newHarness(t)
+	h.writePage(t, "host.md", "Host Page", nil, "owning page body")
+	h.writeAttachment(t, "att1", "quarterly-budget.pdf", "host.md", "irrelevant extracted prose")
+	h.rebuild(t)
+
+	results, err := h.idx.Query(context.Background(), "quarterly-budget")
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	r, ok := resultByKind(results, TypeAttachment)
+	if !ok {
+		t.Fatalf("no attachment result for filename query; results=%+v", results)
+	}
+	if r.Title != "quarterly-budget.pdf" {
+		t.Fatalf("attachment title = %q, want original filename", r.Title)
+	}
+	if r.Path != "host.md" {
+		t.Fatalf("attachment path = %q, want owning page host.md", r.Path)
+	}
+}
+
+// TestQuery_AttachmentOwningPage (SRCH-05): a word only in an attachment's
+// extracted text returns a kind:"attachment" result whose path is the OWNING
+// page (from AttachmentMeta.PagePath, no tree scan).
+func TestQuery_AttachmentOwningPage(t *testing.T) {
+	h := newHarness(t)
+	h.writePage(t, "owner.md", "Owner Page", nil, "page body has none of it")
+	h.writeAttachment(t, "att2", "report.pdf", "owner.md", "the hidden codeword is zorblax inside the document")
+	h.rebuild(t)
+
+	results, err := h.idx.Query(context.Background(), "zorblax")
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	r, ok := resultByKind(results, TypeAttachment)
+	if !ok {
+		t.Fatalf("no attachment result for extracted-text query; results=%+v", results)
+	}
+	if r.Path != "owner.md" {
+		t.Fatalf("attachment path = %q, want owning page owner.md", r.Path)
+	}
+	if r.PageTitle != "Owner Page" {
+		t.Fatalf("attachment page_title = %q, want %q", r.PageTitle, "Owner Page")
+	}
+}
+
+// TestQuery_HeadingDeepLink (SRCH-06 heading): a query matching a page heading
+// returns a kind:"heading" result with the right anchor and page_title.
+func TestQuery_HeadingDeepLink(t *testing.T) {
+	h := newHarness(t)
+	h.writePage(t, "guide.md", "Deploy Guide", nil, "intro\n\n## Rollback Procedure\n\nsteps here\n")
+	h.rebuild(t)
+
+	results, err := h.idx.Query(context.Background(), "rollback")
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	r, ok := resultByKind(results, TypeHeading)
+	if !ok {
+		t.Fatalf("no heading result for 'rollback'; results=%+v", results)
+	}
+	if r.Path != "guide.md" {
+		t.Fatalf("heading path = %q, want guide.md", r.Path)
+	}
+	if r.Anchor != "#rollback-procedure" {
+		t.Fatalf("heading anchor = %q, want #rollback-procedure", r.Anchor)
+	}
+	if r.PageTitle != "Deploy Guide" {
+		t.Fatalf("heading page_title = %q, want %q", r.PageTitle, "Deploy Guide")
+	}
+}
+
+// TestQuery_TypedResultsAndFacet_AllKinds (SRCH-06): the type facet reports
+// page/heading/attachment counts together.
+func TestQuery_TypedResultsAndFacet_AllKinds(t *testing.T) {
+	h := newHarness(t)
+	h.writePage(t, "facet.md", "Facetword Page", nil, "facetword body\n\n## Facetword Section\n\ndetail\n")
+	h.writeAttachment(t, "fa", "facetword-file.pdf", "facet.md", "facetword in the attachment text")
+	h.rebuild(t)
+
+	for _, typ := range []string{TypePage, TypeHeading, TypeAttachment} {
+		count, err := h.idx.typeFacetCount(context.Background(), "facetword", typ)
+		if err != nil {
+			t.Fatalf("typeFacetCount(%s): %v", typ, err)
+		}
+		if count < 1 {
+			t.Fatalf("type facet %s count = %d, want >=1", typ, count)
+		}
+	}
+}
+
 // TestQuery_EmptyFastPath: an empty/whitespace query returns an empty slice with
 // no error (no Bleve call).
 func TestQuery_EmptyFastPath(t *testing.T) {

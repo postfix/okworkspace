@@ -116,7 +116,9 @@ func (s *Index) Query(ctx context.Context, q string) ([]Result, error) {
 	results := make([]Result, 0, len(sr.Hits))
 	for _, hit := range sr.Hits {
 		r := mapHit(hit)
-		if r.Kind == TypePage && isTrashed(r.Path) {
+		// Defense in depth (T-03-02/T-03-12): drop any hit (page, heading, or
+		// attachment) whose owning page lives under the trash prefix.
+		if isTrashed(r.Path) {
 			continue
 		}
 		results = append(results, r)

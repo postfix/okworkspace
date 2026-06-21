@@ -26,7 +26,7 @@ type indexPayload struct {
 	Op   string `json:"op"`   // "upsert" | "delete" | "rebuild"
 	Kind string `json:"kind"` // "page" | "attachment"
 	Path string `json:"path"` // page path
-	ID   string `json:"id"`   // attachment id (for attachment ops)
+	ID   string `json:"id"`   // attachment id (for attachment ops) / page id (delete)
 }
 
 // RebuildPayload returns the JSON payload for a KindIndex rebuild job. Startup
@@ -45,6 +45,19 @@ func UpsertPagePayload(pagePath string) string {
 
 func DeletePagePayload(pagePath string) string {
 	raw, _ := json.Marshal(indexPayload{Op: "delete", Kind: TypePage, Path: pagePath, ID: pagePath})
+	return string(raw)
+}
+
+// UpsertAttachmentPayload / DeleteAttachmentPayload build the payloads 03-04's
+// attachment mutation hooks will enqueue. ID is the attachment id; the doc id is
+// namespaced ("att:"+id) by the handler.
+func UpsertAttachmentPayload(id string) string {
+	raw, _ := json.Marshal(indexPayload{Op: "upsert", Kind: TypeAttachment, ID: id})
+	return string(raw)
+}
+
+func DeleteAttachmentPayload(id string) string {
+	raw, _ := json.Marshal(indexPayload{Op: "delete", Kind: TypeAttachment, ID: id})
 	return string(raw)
 }
 
@@ -76,21 +89,28 @@ func IndexHandler(idx *Index, r *repo.Repo) jobs.Handler {
 		case "rebuild":
 			return idx.RebuildIndex(ctx)
 		case "upsert":
-			if p.Kind == TypePage {
-				return idx.indexPage(p.Path)
+			switch p.Kind {
+			case TypePage:
+				return idx.indexPage(ctx, p.Path)
+			case TypeAttachment:
+				return idx.indexAttachment(p.ID)
+			default:
+				// An unknown kind is a no-op so a stray payload never wedges the worker.
+				return nil
 			}
-			// Attachment upsert is wired by 03-03; an unknown kind is a no-op so a
-			// stray payload never wedges the worker.
-			return nil
 		case "delete":
 			id := p.ID
 			if id == "" {
 				id = p.Path
 			}
-			if p.Kind == TypePage || p.Kind == "" {
-				return idx.deletePage(id)
+			switch p.Kind {
+			case TypeAttachment:
+				return idx.deleteAttachment(id)
+			case TypePage, "":
+				return idx.deletePage(ctx, id)
+			default:
+				return nil
 			}
-			return nil
 		default:
 			return fmt.Errorf("search: unknown index op %q", p.Op)
 		}
@@ -99,8 +119,10 @@ func IndexHandler(idx *Index, r *repo.Repo) jobs.Handler {
 
 // indexPage upserts a single page document (Index with the page path as the ID
 // overwrites in place). It reads the file through the resolver, parses the
-// frontmatter for title + sequence-aware tags, and indexes the opaque body.
-func (s *Index) indexPage(pagePath string) error {
+// frontmatter for title + sequence-aware tags, indexes the opaque body, and
+// re-indexes the page's heading sub-documents (deleting any stale ones via the
+// page_headings prior-set discipline) so heading deep-links stay fresh.
+func (s *Index) indexPage(ctx context.Context, pagePath string) error {
 	if s.repo == nil {
 		return fmt.Errorf("search: indexPage requires a content repo")
 	}
@@ -112,16 +134,24 @@ func (s *Index) indexPage(pagePath string) error {
 	if err != nil {
 		return fmt.Errorf("search: parse page %q: %w", pagePath, err)
 	}
-	d := pageDoc(pagePath, okf.Field(doc, okf.FieldTitle), string(doc.Body), readTags(doc))
-	return s.withIndex(func(idx bleve.Index) error {
+	title := okf.Field(doc, okf.FieldTitle)
+	d := pageDoc(pagePath, title, string(doc.Body), readTags(doc))
+	if err := s.withIndex(func(idx bleve.Index) error {
 		return idx.Index(pageDocID(pagePath), d)
-	})
+	}); err != nil {
+		return err
+	}
+	return s.indexHeadings(ctx, pagePath, title, doc.Body)
 }
 
-// deletePage removes a page document by ID. Heading-doc cleanup for the page is
-// added by 03-03 (this plan indexes only the page doc).
-func (s *Index) deletePage(id string) error {
-	return s.withIndex(func(idx bleve.Index) error {
+// deletePage removes a page document by ID and clears its heading sub-documents
+// (and their page_headings rows) so a deleted page leaves no stale heading
+// deep-links behind.
+func (s *Index) deletePage(ctx context.Context, id string) error {
+	if err := s.withIndex(func(idx bleve.Index) error {
 		return idx.Delete(id)
-	})
+	}); err != nil {
+		return err
+	}
+	return s.deleteHeadings(ctx, id)
 }

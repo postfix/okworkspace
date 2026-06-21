@@ -61,6 +61,70 @@ func TestRebuild_ExcludesTrash(t *testing.T) {
 	}
 }
 
+// TestIndex_DeleteRemovesHeadings: re-indexing a page after a heading is renamed
+// leaves no stale heading doc, and deleting a page removes its heading docs and
+// page_headings rows. Exercises the REAL SQLite page_headings table (migration
+// 0007 applied by the harness), not a stub.
+func TestIndex_DeleteRemovesHeadings(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+
+	// Initial body with a heading whose anchor encodes "old name".
+	h.writePage(t, "doc.md", "Doc", nil, "intro\n\n## Old Name\n\nbody\n")
+	if err := h.idx.indexPage(ctx, "doc.md"); err != nil {
+		t.Fatalf("indexPage(initial): %v", err)
+	}
+
+	res, err := h.idx.Query(ctx, "old")
+	if err != nil {
+		t.Fatalf("Query(old): %v", err)
+	}
+	if _, ok := resultByKind(res, TypeHeading); !ok {
+		t.Fatalf("expected a heading result before rename; got %+v", res)
+	}
+
+	// Rename the heading and re-index. The stale "#old-name" heading doc must go.
+	h.writePage(t, "doc.md", "Doc", nil, "intro\n\n## New Name\n\nbody\n")
+	if err := h.idx.indexPage(ctx, "doc.md"); err != nil {
+		t.Fatalf("indexPage(renamed): %v", err)
+	}
+
+	res, err = h.idx.Query(ctx, "old")
+	if err != nil {
+		t.Fatalf("Query(old after rename): %v", err)
+	}
+	if r, ok := resultByKind(res, TypeHeading); ok {
+		t.Fatalf("stale heading doc survived rename: %+v", r)
+	}
+	res, err = h.idx.Query(ctx, "new")
+	if err != nil {
+		t.Fatalf("Query(new): %v", err)
+	}
+	if _, ok := resultByKind(res, TypeHeading); !ok {
+		t.Fatalf("renamed heading doc missing after re-index; got %+v", res)
+	}
+
+	// Deleting the page must remove its heading docs and clear page_headings.
+	if err := h.idx.deletePage(ctx, "doc.md"); err != nil {
+		t.Fatalf("deletePage: %v", err)
+	}
+	res, err = h.idx.Query(ctx, "new")
+	if err != nil {
+		t.Fatalf("Query(new after delete): %v", err)
+	}
+	if r, ok := resultByKind(res, TypeHeading); ok {
+		t.Fatalf("heading doc survived page delete: %+v", r)
+	}
+	var rows int
+	if err := h.idx.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM page_headings WHERE page_path=?`, "doc.md").Scan(&rows); err != nil {
+		t.Fatalf("count page_headings: %v", err)
+	}
+	if rows != 0 {
+		t.Fatalf("page_headings rows for deleted page = %d, want 0", rows)
+	}
+}
+
 // TestDrift_HeadMismatchRebuilds: a stored last_indexed_head different from the
 // current gitstore HEAD makes DriftCheck return true.
 func TestDrift_HeadMismatchRebuilds(t *testing.T) {

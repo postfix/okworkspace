@@ -78,6 +78,35 @@ func (h *testHarness) writePage(t *testing.T, path, title string, tags []string,
 	}
 }
 
+// writeAttachment writes an attachment's meta sidecar (attachments/<id>.json)
+// and its extracted-text sidecar (attachments/<id>.txt) to the content repo,
+// mirroring the on-disk three-part model the attachments package owns. The meta
+// JSON carries PagePath (the owning page) so indexing links to it with no scan.
+// Pass extracted="" to simulate a pending/empty extraction (no .txt written).
+func (h *testHarness) writeAttachment(t *testing.T, id, originalName, pagePath, extracted string) {
+	t.Helper()
+	meta := fmt.Sprintf(`{
+  "id": %q,
+  "original_name": %q,
+  "mime_type": "application/pdf",
+  "size_bytes": 123,
+  "uploader_name": "tester",
+  "uploaded_at": "2026-06-21T00:00:00Z",
+  "page_path": %q,
+  "sha256": "deadbeef",
+  "ext": "pdf"
+}
+`, id, originalName, pagePath)
+	if err := h.repo.Write("attachments/"+id+".json", []byte(meta)); err != nil {
+		t.Fatalf("write attachment meta %q: %v", id, err)
+	}
+	if extracted != "" {
+		if err := h.repo.Write("attachments/"+id+".txt", []byte(extracted)); err != nil {
+			t.Fatalf("write attachment txt %q: %v", id, err)
+		}
+	}
+}
+
 // commitAll stages and commits the working tree so HEAD advances (drift tests).
 func (h *testHarness) commit(t *testing.T, msg string, paths ...string) {
 	t.Helper()
