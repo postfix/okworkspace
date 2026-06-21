@@ -6,14 +6,14 @@ current_phase: 07
 current_phase_name: obsidian-style-file-tree-folder-operations-tree-ux
 status: executing
 stopped_at: Completed 07-01-PLAN.md; Phase 7 plan 2 of 4 next
-last_updated: "2026-06-21T13:30:00.000Z"
+last_updated: "2026-06-21T13:12:28.462Z"
 last_activity: 2026-06-21
 last_activity_desc: Completed 07-01-PLAN.md (atomic folder rename/move + ErrFolderExists collision reject)
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 25
-  completed_plans: 21
+  completed_plans: 23
   percent: 63
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 07 (obsidian-style-file-tree-folder-operations-tree-ux) — EXECUTING
-Plan: 1 of 4 — COMPLETE
+Plan: 2 of 4 — COMPLETE
 Status: 07-01 executed (atomic folder rename/move backend + collision reject); plan 2 of 4 next
 Last activity: 2026-06-21 -- Completed 07-01-PLAN.md (atomic folder rename/move + ErrFolderExists collision reject)
 
@@ -75,6 +75,7 @@ Progress: [██░░░░░░░░] 25%
 | Phase 06 P03 | 11min | 2 tasks | 10 files |
 | Phase 06 P04 | 6min | 3 tasks | 8 files |
 | Phase 07 P01 | 18min | 3 tasks | 7 files |
+| Phase 07 P02 | 7min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -126,6 +127,7 @@ Recent decisions affecting current work:
 - [Phase 7 P01]: Moved-page bytes are written VERBATIM (never re-emitted through okf.Emit) — byte-stability preserved; only genuine inbound links re-emitted
 - [Phase 7 P01]: New okf.RewriteLinksMoved (resolveDir for matching, emitDir for recomputation) + unified single-pass rewriteFolderInboundLinks fixes cross-linked moving siblings and eliminates Pitfall 1 double-staging by construction (each page keyed once by final path)
 - [Phase 7 P01]: Folder rename/move share the /pages/* POST catch-all by suffix (/rename-folder, /move-folder) — same sibling-wildcard avoidance as Phase 1 /rename; editor-gated from session role; new_parent re-validated via cleanPathString (WR-08)
+- [Phase ?]: 07-02 grouped folder delete/restore loops the existing per-page Delete/Restore over descendantPages under one crypto/rand delete_group_id (nullable migration 0008); per-page-looped per the RESOLVED atomicity decision, partial progress recoverable; solo delete stays NULL; all group-id SQL parameterized
 
 ### Pending Todos
 
@@ -151,6 +153,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-21T12:52:07.612Z
+Last session: 2026-06-21T13:12:22.410Z
 Stopped at: Phase 7 planned (4 plans verified); executing
 Resume file: .planning/phases/07-obsidian-style-file-tree-folder-operations-tree-ux/07-01-PLAN.md
