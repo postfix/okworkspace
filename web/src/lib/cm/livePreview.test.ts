@@ -19,16 +19,19 @@ import { EditorView } from "@codemirror/view";
 import type { DecorationSet } from "@codemirror/view";
 
 import { markdownExtension } from "./markdown";
-import { livePreview } from "./livePreview";
+import { livePreviewExtension } from "./livePreview";
+import { EditorView as CMEditorView } from "@codemirror/view";
+import type { WidgetType } from "@codemirror/view";
 
 // A description of a single decoration as emitted by the plugin, flattened for
-// assertion: its range plus the class (for marks) and whether it is a "replace"
-// (hide) decoration (spec.widget === null on a Decoration.replace({})).
+// assertion: its range plus the class (for marks), whether it is a "replace"
+// decoration (a hide OR a widget), and the widget (if any) it mounts.
 interface FlatDeco {
   from: number;
   to: number;
   class: string | null;
   isReplace: boolean;
+  widget: WidgetType | null;
 }
 
 // mount builds a headless EditorView with the markdown language + livePreview
@@ -45,27 +48,54 @@ function decorationsFor(doc: string, selectionAt?: number): FlatDeco[] {
       doc,
       selection:
         selectionAt != null ? { anchor: selectionAt } : { anchor: 0 },
-      extensions: [markdownExtension, livePreview],
+      // livePreviewExtension = the inline ViewPlugin + the block table StateField.
+      extensions: [markdownExtension, livePreviewExtension],
     }),
   });
   views.push(view);
 
-  const set: DecorationSet = view.plugin(livePreview)!.decorations;
   const out: FlatDeco[] = [];
-  const iter = set.iter();
-  while (iter.value) {
-    const spec = iter.value.spec as { class?: string };
-    // A Decoration.replace({}) hide has no `class`; a Decoration.mark/.line
-    // carries a `class`. We distinguish a hide by the absence of a class.
-    out.push({
-      from: iter.from,
-      to: iter.to,
-      class: spec.class ?? null,
-      isReplace: !spec.class,
-    });
-    iter.next();
-  }
+  const collect = (set: DecorationSet) => {
+    const iter = set.iter();
+    while (iter.value) {
+      const spec = iter.value.spec as { class?: string; widget?: WidgetType };
+      // A Decoration.mark/.line carries a `class`. A Decoration.replace({}) hide has
+      // neither class nor widget. A widget replace carries `widget`. "isReplace" =
+      // not a class-bearing mark/line (i.e. a hide OR a widget).
+      out.push({
+        from: iter.from,
+        to: iter.to,
+        class: spec.class ?? null,
+        isReplace: !spec.class,
+        widget: spec.widget ?? null,
+      });
+      iter.next();
+    }
+  };
+  // Both the inline ViewPlugin (marks/hides/image widgets) and the block table
+  // StateField register into the EditorView.decorations facet. Iterating the facet
+  // collects both without double-counting; a source is either a DecorationSet or a
+  // (view → DecorationSet) function.
+  view.state.facet(CMEditorView.decorations).forEach((src) => {
+    const set = typeof src === "function" ? src(view) : src;
+    collect(set as DecorationSet);
+  });
   return out;
+}
+
+// widgetDecoAt returns the WidgetType mounted by a replace decoration exactly
+// covering [from,to), or null if none (e.g. the widget was dropped on the active
+// line). Block widgets may report `to` one past the node end (CM6 extends a block
+// replace to the line boundary), so match on `from` + widget presence.
+function widgetDecoAt(
+  decos: FlatDeco[],
+  from: number,
+  to: number,
+): WidgetType | null {
+  const d = decos.find(
+    (x) => x.widget != null && x.from === from && x.to >= to,
+  );
+  return d ? d.widget : null;
 }
 
 const views: EditorView[] = [];
@@ -171,7 +201,7 @@ describe("livePreview decorations (EDIT-01)", () => {
       parent,
       state: EditorState.create({
         doc,
-        extensions: [markdownExtension, livePreview],
+        extensions: [markdownExtension, livePreviewExtension],
       }),
     });
     views.push(view);
@@ -179,7 +209,57 @@ describe("livePreview decorations (EDIT-01)", () => {
     expect(marksOnly(decorationsFor(doc, 1)).length).toBeGreaterThanOrEqual(0);
   });
 
-  // 06-03 owns the image/table WIDGET decorations.
-  it.todo("image: Image → ImageWidget replace decoration (sanitized src)");
-  it.todo("GFM table: Table → block widget grid (reveal-to-source on edit)");
+  // 06-03 — image/table WIDGET decorations (replace + active-line reveal).
+  it("image: Image → ImageWidget replace decoration when off the image line", () => {
+    // Cursor parked on the first paragraph, away from the image line.
+    const doc = "para\n\n![alt](img.png)\n";
+    const decos = decorationsFor(doc, 1);
+    const imgFrom = doc.indexOf("![alt]");
+    const imgTo = imgFrom + "![alt](img.png)".length;
+    // A replace decoration carrying a widget covers the whole image span.
+    const widget = widgetDecoAt(decos, imgFrom, imgTo);
+    expect(widget).not.toBeNull();
+    expect(widget!.constructor.name).toBe("ImageWidget");
+  });
+
+  it("image: a javascript: src widget renders the RAW-text fallback, not an <img>", () => {
+    // The widget decoration is still emitted, but its toDOM() must produce the raw
+    // markdown span (the sanitizer blocks the src) — never an executable <img>.
+    const doc = "para\n\n![x](javascript:alert(1))\n";
+    const decos = decorationsFor(doc, 1);
+    const imgFrom = doc.indexOf("![x]");
+    const imgTo = imgFrom + "![x](javascript:alert(1))".length;
+    const widget = widgetDecoAt(decos, imgFrom, imgTo) as
+      | (import("@codemirror/view").WidgetType & { toDOM(): HTMLElement })
+      | null;
+    expect(widget).not.toBeNull();
+    const dom = widget!.toDOM();
+    expect(dom.tagName).not.toBe("IMG");
+    expect(dom.tagName).toBe("SPAN");
+    expect(dom.textContent).toBe("![x](javascript:alert(1))");
+  });
+
+  it("image: reveal-to-source — no widget when the cursor is on the image line", () => {
+    const doc = "para\n\n![alt](img.png)\n";
+    const imgFrom = doc.indexOf("![alt]");
+    const decos = decorationsFor(doc, imgFrom + 2); // cursor inside the image source
+    const imgTo = imgFrom + "![alt](img.png)".length;
+    expect(widgetDecoAt(decos, imgFrom, imgTo)).toBeNull();
+  });
+
+  it("GFM table: Table → block widget grid, revealed when the selection is on a table line", () => {
+    const doc = "para\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\nafter\n";
+    const tableFrom = doc.indexOf("| A | B |");
+    const tableTo = doc.indexOf("| 1 | 2 |") + "| 1 | 2 |".length;
+
+    // Cursor on the first paragraph (off the table) → a block widget covers it.
+    const off = decorationsFor(doc, 1);
+    const widget = widgetDecoAt(off, tableFrom, tableTo);
+    expect(widget).not.toBeNull();
+    expect(widget!.constructor.name).toBe("TableWidget");
+
+    // Cursor on a table line → the widget is dropped (reveal-to-source).
+    const onTable = decorationsFor(doc, tableFrom + 2);
+    expect(widgetDecoAt(onTable, tableFrom, tableTo)).toBeNull();
+  });
 });

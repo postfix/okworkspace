@@ -35,3 +35,39 @@
   margin-left: auto;
   margin-right: auto;
 }
+
+/*
+ * Inline image widget (ImageWidget.toDOM → <img class="cm-md-image">). Constrain to
+ * the content column so a large image never overflows the editor; tokens only.
+ */
+.livepreview-editor .cm-md-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+/*
+ * Blocked-src fallback span (ImageWidget renders the RAW `![alt](src)` markdown as
+ * plain mono text when sanitizeImageSrc rejects the src — never a broken <img>).
+ */
+.livepreview-editor .cm-md-image-raw {
+  font-family: var(--font-family-mono);
+  color: var(--color-text);
+}
+
+/*
+ * GFM table widget (TableWidget.toDOM → <table class="cm-md-table">). Matches
+ * MarkdownProse.css table styling token-for-token (border-collapse, 1px border in
+ * --color-border, xs/sm cell padding) so Live mode renders a table identically to
+ * read mode and the server's Goldmark GFM.
+ */
+.livepreview-editor .cm-md-table {
+  border-collapse: collapse;
+  margin: var(--space-md) 0;
+}
+
+.livepreview-editor .cm-md-table th,
+.livepreview-editor .cm-md-table td {
+  border: 1px solid var(--color-border);
+  padding: var(--space-xs) var(--space-sm);
+}

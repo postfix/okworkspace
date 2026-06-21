@@ -13,7 +13,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 
 import { markdownExtension } from "./markdown";
-import { livePreview } from "./livePreview";
+import { livePreviewExtension } from "./livePreview";
 import { theme, sourceTheme } from "./theme";
 import { useEditorMode } from "../../stores/editorMode";
 
@@ -25,7 +25,11 @@ export const modeCompartment = new Compartment();
 // ViewPlugin (inline text-construct decorations + active-line marker reveal);
 // 06-03 appends the image/table widgets. The markdown language parses the tree
 // the plugin walks; the theme renders the decoration classes at token values.
-export const liveExtensions: Extension[] = [markdownExtension, livePreview, theme];
+export const liveExtensions: Extension[] = [
+  markdownExtension,
+  livePreviewExtension,
+  theme,
+];
 
 // sourceExtensions: raw Markdown, monospace document-wide, no live-preview
 // decorations. The markdown language stays loaded (syntax-aware editing) but no
