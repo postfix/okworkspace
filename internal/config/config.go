@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -103,10 +104,14 @@ func (a AgentConfig) String() string {
 // GoString redacts the resolved API key under the %#v verb.
 func (a AgentConfig) GoString() string { return a.String() }
 
-// SearchConfig is parsed-but-unused in Phase 0 (placeholder for Phase 3).
+// SearchConfig configures the full-text search index (Phase 3, SRCH-01..06).
+// IndexDir is the on-disk location of the Bleve scorch index; it defaults to
+// <data_dir>/index/ (a derived, rebuildable artifact that lives UNDER the data
+// dir and NEVER inside the content/Git repo). Engine defaults to "bleve".
 type SearchConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Engine  string `yaml:"engine"`
+	Enabled  bool   `yaml:"enabled"`
+	Engine   string `yaml:"engine"`
+	IndexDir string `yaml:"index_dir"`
 }
 
 // AttachmentsConfig is parsed-but-unused in Phase 0 (placeholder for Phase 2).
@@ -151,6 +156,17 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Admin.Username == "" {
 		c.Admin.Username = DefaultAdminUsername
+	}
+	// Search: the index is a derived artifact under the data dir, never inside the
+	// content/Git repo. Default the engine to the locked Bleve and derive the index
+	// dir from data_dir when unset. applyDefaults runs before applyEnvOverrides, so
+	// an OKF_DATA_DIR override below may leave IndexDir pointing at the config-file
+	// data_dir; the index dir is computed from the resolved data dir at boot.
+	if c.Search.Engine == "" {
+		c.Search.Engine = "bleve"
+	}
+	if c.Search.IndexDir == "" && c.Storage.DataDir != "" {
+		c.Search.IndexDir = filepath.Join(c.Storage.DataDir, "index")
 	}
 }
 
