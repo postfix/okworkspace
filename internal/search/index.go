@@ -95,9 +95,18 @@ func (s *Index) DocCount() (uint64, error) {
 
 // swapDir atomically replaces the live index with the freshly-built one at tmp.
 // The new index is opened first (so a failure to open it leaves the old one
-// intact), then under the write lock the old index is closed, the old dir removed,
-// tmp renamed into place, and the new index installed. os.Rename is atomic on the
-// same filesystem; tmp is a sibling of dir so that holds.
+// intact), then under the write lock the old index is closed, the old dir is
+// moved aside to a backup, tmp is renamed into place, and the new index is
+// installed. os.Rename is atomic on the same filesystem; tmp is a sibling of dir
+// so that holds.
+//
+// The old dir is renamed to a .old backup FIRST (rather than RemoveAll'd) so a
+// failed tmp→dir rename can roll the backup back and REOPEN it — otherwise a
+// failed swap left s.idx nil and the on-disk index gone, killing search for the
+// whole process lifetime with no in-process recovery (WR-01). On any failure
+// after the old index is closed, s.idx is restored to a usable handle (the rolled-
+// back old index, else a fresh empty index) so search degrades gracefully instead
+// of returning "index is closed" forever.
 func (s *Index) swapDir(tmp string) error {
 	newIdx, err := bleve.Open(tmp)
 	if err != nil {
@@ -115,18 +124,60 @@ func (s *Index) swapDir(tmp string) error {
 	// tmp dir, then reopen at the final path after the swap.
 	_ = newIdx.Close()
 
-	if err := os.RemoveAll(s.dir); err != nil {
-		return fmt.Errorf("search: remove stale index dir: %w", err)
+	// Move the live dir aside instead of destroying it, so a failed swap can roll
+	// back to a working index.
+	backup := s.dir + ".old"
+	_ = os.RemoveAll(backup)
+	if err := os.Rename(s.dir, backup); err != nil {
+		// The old dir could not even be moved aside. Try to reopen it in place so
+		// search survives; if that fails, fall back to a fresh empty index.
+		s.recoverIndex(s.dir)
+		return fmt.Errorf("search: move stale index dir aside: %w", err)
 	}
+
 	if err := os.Rename(tmp, s.dir); err != nil {
+		// Roll the old index back into place and reopen it (recoverIndex) so search
+		// keeps working with the pre-rebuild data until the next rebuild.
+		if rbErr := os.Rename(backup, s.dir); rbErr == nil {
+			s.recoverIndex(s.dir)
+		} else {
+			// Backup is stranded at <dir>.old; recover whatever we can so the
+			// service is not left with a nil index.
+			s.recoverIndex(backup)
+		}
 		return fmt.Errorf("search: swap index dir: %w", err)
 	}
+
 	reopened, err := bleve.Open(s.dir)
 	if err != nil {
+		// The swapped-in index will not open; restore the backup if it is still
+		// around so search survives, then surface the error.
+		_ = os.RemoveAll(s.dir)
+		if rbErr := os.Rename(backup, s.dir); rbErr == nil {
+			s.recoverIndex(s.dir)
+		}
 		return fmt.Errorf("search: reopen swapped index: %w", err)
 	}
 	s.idx = reopened
+	_ = os.RemoveAll(backup)
 	return nil
+}
+
+// recoverIndex installs a usable index handle into s.idx (caller holds s.mu) after
+// a failed swap, so the service never gets stuck with a nil "index is closed"
+// handle. It tries to reopen the index at dir; if that fails it creates a fresh
+// empty index at s.dir (a degraded but live state — a subsequent rebuild repopulates
+// it). Best-effort: if even the fresh create fails, s.idx is left nil and the next
+// rebuild/startup recovers.
+func (s *Index) recoverIndex(dir string) {
+	if reopened, err := bleve.Open(dir); err == nil {
+		s.idx = reopened
+		return
+	}
+	_ = os.RemoveAll(s.dir)
+	if fresh, err := bleve.New(s.dir, buildMapping()); err == nil {
+		s.idx = fresh
+	}
 }
 
 // withIndex runs fn against the current index pointer while HOLDING the read lock
