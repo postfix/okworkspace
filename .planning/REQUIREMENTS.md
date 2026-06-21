@@ -87,10 +87,10 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 - [x] **AGNT-02**: User can ask the agent about selected text
 - [x] **AGNT-03**: User can ask the agent about a selected attachment
 - [x] **AGNT-04**: User can ask the agent about the whole workspace
-- [ ] **AGNT-05**: User can ask the agent to summarize a page
-- [ ] **AGNT-06**: User can ask the agent to summarize an attachment
-- [ ] **AGNT-07**: User can ask the agent to rewrite selected text and see the proposal
-- [ ] **AGNT-08**: User can ask the agent to draft a new page
+- [x] **AGNT-05**: User can ask the agent to summarize a page
+- [x] **AGNT-06**: User can ask the agent to summarize an attachment
+- [x] **AGNT-07**: User can ask the agent to rewrite selected text and see the proposal
+- [x] **AGNT-08**: User can ask the agent to draft a new page
 - [ ] **AGNT-09**: User can ask the agent to propose a patch to the current page, shown as a diff
 - [ ] **AGNT-10**: User must explicitly approve an agent patch before it is applied and committed
 - [x] **AGNT-11**: The agent cannot write files directly, read secrets, run shell, escape the repository, or push to Git (enforced in the tool layer, not by prompt)
@@ -198,10 +198,10 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | AGNT-02 | Phase 4 | Complete |
 | AGNT-03 | Phase 4 | Complete |
 | AGNT-04 | Phase 4 | Complete |
-| AGNT-05 | Phase 4 | Pending |
-| AGNT-06 | Phase 4 | Pending |
-| AGNT-07 | Phase 4 | Pending |
-| AGNT-08 | Phase 4 | Pending |
+| AGNT-05 | Phase 4 | Complete |
+| AGNT-06 | Phase 4 | Complete |
+| AGNT-07 | Phase 4 | Complete |
+| AGNT-08 | Phase 4 | Complete |
 | AGNT-09 | Phase 4 | Pending |
 | AGNT-10 | Phase 4 | Pending |
 | AGNT-11 | Phase 4 | Complete |
