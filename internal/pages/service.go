@@ -369,9 +369,14 @@ func slugify(title string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-// assemble reconstructs an OKF source from a frontmatter region and a body. When
-// frontmatter is non-empty it is wrapped in --- fences; otherwise the body is
-// returned as-is (Repair will promote it to a frontmatter region).
+// assemble reconstructs an OKF source from a frontmatter region and a body. It is
+// the AUTHORITATIVE assembler — the exact bytes Save parses/repairs/writes — and the
+// only such function in the codebase (the agent service and HTTP layer previously
+// carried near-duplicate currentSource/assembleSource variants that drifted on
+// trim/newline rules; those were removed and any caller that needs "the bytes Save
+// writes" must route through AssembleSource so the invariant is single-sourced,
+// WR-05). When frontmatter is non-empty it is wrapped in --- fences; otherwise the
+// body is returned as-is (Repair promotes it to a frontmatter region).
 func assemble(frontmatter, body string) []byte {
 	fm := strings.TrimSpace(frontmatter)
 	if fm == "" {
@@ -386,4 +391,12 @@ func assemble(frontmatter, body string) []byte {
 	b.WriteString("---\n")
 	b.WriteString(body)
 	return []byte(b.String())
+}
+
+// AssembleSource is the exported canonical assembler (WR-05): it returns the exact
+// OKF source bytes Save assembles from a frontmatter region + body, so any caller
+// outside this package ("the bytes Save writes") shares ONE implementation and can
+// never drift from the writer. Delegates to the authoritative assemble.
+func AssembleSource(frontmatter, body string) []byte {
+	return assemble(frontmatter, body)
 }

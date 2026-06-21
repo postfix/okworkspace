@@ -150,3 +150,70 @@ func countFenceLines(src string) int {
 	}
 	return n
 }
+
+// TestAssembleSourceRoundTrip is the WR-05 gate: the exported canonical assembler
+// (the single "bytes Save writes" implementation) must produce source that parses
+// to exactly one frontmatter region whose body is the input body, and that
+// round-trips byte-stable through okf.Parse -> Emit when nothing is edited.
+func TestAssembleSourceRoundTrip(t *testing.T) {
+	cases := []struct {
+		name        string
+		frontmatter string
+		body        string
+		wantFM      bool
+	}{
+		{
+			name:        "frontmatter + body",
+			frontmatter: "type: Page\ntitle: Notes\ntags: []\n",
+			body:        "# Notes\n\nA paragraph.\n",
+			wantFM:      true,
+		},
+		{
+			name:        "frontmatter without trailing newline",
+			frontmatter: "type: Page\ntitle: Notes",
+			body:        "# Notes\n\nbody\n",
+			wantFM:      true,
+		},
+		{
+			name:        "no frontmatter (body only)",
+			frontmatter: "",
+			body:        "# Just a body\n",
+			wantFM:      false,
+		},
+		{
+			name:        "body containing a literal --- line stays opaque",
+			frontmatter: "type: Page\ntitle: X\n",
+			body:        "intro\n\n```\nnot --- a fence\n```\n",
+			wantFM:      true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := AssembleSource(tc.frontmatter, tc.body)
+			doc, err := okf.Parse(src)
+			if err != nil {
+				t.Fatalf("okf.Parse(AssembleSource): %v", err)
+			}
+			if doc.HasFrontmatter != tc.wantFM {
+				t.Fatalf("HasFrontmatter = %v, want %v; src:\n%s", doc.HasFrontmatter, tc.wantFM, src)
+			}
+			if string(doc.Body) != tc.body {
+				t.Fatalf("parsed body = %q, want %q", string(doc.Body), tc.body)
+			}
+			// Byte-stable: an unedited Parse->Emit must reproduce the assembled bytes.
+			out, err := doc.Emit()
+			if err != nil {
+				t.Fatalf("Emit: %v", err)
+			}
+			if string(out) != string(src) {
+				t.Fatalf("AssembleSource is not byte-stable through okf:\n--- want ---\n%q\n--- got ---\n%q", string(src), string(out))
+			}
+			// Exactly one frontmatter region when one was supplied.
+			if tc.wantFM {
+				if n := countFenceLines(string(src)); n != 2 {
+					t.Fatalf("assembled source has %d fence lines, want exactly 2; src:\n%s", n, src)
+				}
+			}
+		})
+	}
+}
