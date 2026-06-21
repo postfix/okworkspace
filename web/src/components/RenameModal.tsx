@@ -32,7 +32,7 @@ const COPY = {
   folder: {
     dialogTitle: "Rename folder",
     fieldLabel: "New name",
-    help: "Links to pages in this folder will keep working.",
+    help: "Pages inside this folder, and links to them, will keep working.",
     emptyError: "Give your folder a name.",
     failError: "We couldn't rename your folder just now. Try again.",
     confirm: "Rename",

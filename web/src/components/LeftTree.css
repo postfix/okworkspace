@@ -32,6 +32,12 @@
   cursor: default;
 }
 
+/* Folder rows get the same hover affordance as page rows so hovering anywhere in
+   the tree gives feedback (the "feels like Obsidian" bar). */
+.navrow-folder:hover {
+  background: var(--color-tree-hover);
+}
+
 /* A draggable folder row hints it can be picked up to relocate its subtree. The
    browser shows the native not-allowed cursor over an invalid drop target on its
    own (we don't preventDefault those dragovers — UI-SPEC), so no extra rule is

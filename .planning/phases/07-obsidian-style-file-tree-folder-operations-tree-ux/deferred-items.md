@@ -18,3 +18,21 @@ in this phase.
 - **Disposition:** Deferred — belongs to a Phase 6 test-stability follow-up
   (e.g. mark the timing-sensitive assertions deterministic or serialize the CM
   test files). Do NOT block Phase 7 completion.
+
+## UI-audit follow-ups deferred (advisory, not applied this phase)
+
+- **Empty-tree state message** (UI-REVIEW IN/priority-2): when the tree is empty,
+  `LeftTree` renders an empty `<ul>` with no hint. Adding a `.lefttree-status`
+  "No pages yet…" hint is a nice UX win, BUT two pinned tests assert the Pages list
+  is `toBeEmptyDOMElement()` on a null/empty tree — one explicitly a `(UAT blocker)`
+  / "no white-screen" guarantee, the other in the clean-rebuild regression net.
+  Adding the hint requires deliberately updating those pinned tests, which is a
+  conscious decision better made on its own (not as a drive-by during an advisory UI
+  pass). The empty state is rare in practice (workspaces have pages). Deferred so the
+  no-regression override stays intact. When done: add the hint + update both tests to
+  assert the hint renders (and still no crash).
+- **Shared `Dialog.css` overlay color token** (UI-REVIEW minor): `Dialog.css`
+  hardcodes `background: rgba(16, 24, 40, 0.45)` for the backdrop. Extracting it to a
+  `--color-overlay` token is correct, but `Dialog.css` is a SHARED, pre-existing
+  component NOT created/modified by Phase 7 — changing it is out of this phase's
+  scope. Deferred to a tokens-tidy pass.
