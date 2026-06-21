@@ -1,0 +1,135 @@
+/* ⌘K quick-switcher chrome. Reuses .dialog-backdrop (Dialog.css) for the scrim;
+   this file styles only the panel, input row, results region, and footer.
+   All values are tokens EXCEPT two documented media dimensions:
+     - max-width: 640px       (palette width — wider than the 400px modal because
+                               it shows multi-line result rows; a media value, not
+                               a spacing token)
+     - top-anchored ~15vh / max-height min(60vh, 480px)
+                              (Obsidian quick-switcher convention — top-anchored,
+                               not vertically centered like Dialog) */
+
+/* Top-anchor the panel instead of centering it (Dialog centers; the palette
+   floats near the top like Obsidian's quick-switcher). */
+.palette-backdrop {
+  align-items: flex-start;
+  padding-top: 15vh; /* documented media value */
+}
+
+.palette-panel {
+  width: 100%;
+  max-width: 640px; /* documented media value */
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Search-input row owns the chrome; the input itself is borderless. The accent
+   focus ring is applied to the row when the input is focused. */
+.palette-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.palette-input-row:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.palette-input-icon {
+  color: var(--color-text-muted);
+  flex: 0 0 auto;
+}
+
+.palette-input {
+  flex: 1 1 auto;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.palette-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.palette-results {
+  max-height: min(60vh, 480px); /* documented media value */
+  overflow-y: auto;
+  padding: var(--space-xs);
+}
+
+.palette-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.palette-group-label {
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* Empty / no-results panel — a scaled-down empty-state inside the palette. */
+.palette-empty {
+  padding: var(--space-lg);
+  text-align: center;
+}
+
+.palette-empty-heading {
+  margin: 0 0 var(--space-sm) 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+}
+
+.palette-empty-body {
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+.palette-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+/* Inline error row (reuses .banner / .banner-warning tokens). */
+.palette-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: var(--space-md);
+}
+
+.palette-error-heading {
+  font-weight: var(--font-weight-semibold);
+}
+
+.palette-error-body {
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+}
+
+.palette-footer {
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
