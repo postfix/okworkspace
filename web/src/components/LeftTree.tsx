@@ -398,7 +398,19 @@ function useNodeDropZone(
     e.preventDefault();
     setActive(true);
   }
-  function onDragLeave() {
+  function onDragLeave(e: DragEvent) {
+    // HTML5 DnD fires dragleave on a container when the pointer enters a child
+    // element (dragenter on the child, then dragleave on the parent). relatedTarget
+    // is the element being entered; if it is still inside this container the drag
+    // has NOT left, so suppress the clear — otherwise the droptarget highlight
+    // flickers for one frame on every child-enter (WR-01).
+    if (
+      e.currentTarget instanceof Element &&
+      e.relatedTarget instanceof Node &&
+      e.currentTarget.contains(e.relatedTarget)
+    ) {
+      return;
+    }
     setActive(false);
   }
   function onDrop(e: DragEvent) {
