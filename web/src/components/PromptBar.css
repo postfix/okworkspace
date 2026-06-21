@@ -1,0 +1,109 @@
+/*
+ * PromptBar — the persistent bottom bar (the agent entry point). It sits below
+ * .appshell-body as a third flex row: full-width, --color-surface fill, a 1px top
+ * border mirroring the topbar's bottom border. Token-only styling.
+ */
+
+.promptbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.promptbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.promptbar-mode {
+  flex: 0 0 auto;
+}
+
+/* Read-only context chip — surface fill, hairline border, muted Label text. */
+.promptbar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--hit-min-height);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  max-width: 220px;
+}
+
+.promptbar-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The "Whole workspace" toggle — a ghost button acting as aria-pressed toggle.
+   Neutral at rest; the pressed state fills with surface + accent-tinted border. */
+.promptbar-workspace {
+  flex: 0 0 auto;
+  font-size: var(--font-size-label);
+}
+
+.promptbar-workspace[aria-pressed="true"] {
+  background: var(--color-tree-active-bg);
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+/* The prompt input grows to fill the row; it is a one-row textarea so
+   Shift+Enter can insert a newline. */
+.promptbar-input {
+  flex: 1 1 240px;
+  min-width: 180px;
+  resize: none;
+  font-family: var(--font-family-ui);
+  line-height: var(--line-height-body);
+}
+
+.promptbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.promptbar-submit {
+  flex: 0 0 auto;
+  gap: var(--space-xs);
+}
+
+/* The disabled / error note — muted by default; error variant is destructive.
+   Both pair an icon with text so color is never the sole signal. */
+.promptbar-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+.promptbar-note-error {
+  color: var(--color-destructive);
+}
+
+/* Reduced motion: the spinner glyph stops rotating (falls back to the text
+   label) — the .spinner keyframe is global; this disables it on the status. */
+@media (prefers-reduced-motion: reduce) {
+  .promptbar-status .spinner {
+    animation: none;
+  }
+}

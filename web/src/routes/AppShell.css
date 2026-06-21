@@ -96,10 +96,36 @@
   border-radius: var(--radius-sm);
 }
 
+/* The Assistant toggle in the topbar cluster. Neutral ghost at rest; its icon
+   tints accent ONLY while an answer is actively streaming (a quiet "working"
+   cue — never a filled accent button). */
+.topbar-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--hit-min-height);
+}
+
+.topbar-agent.is-active {
+  color: var(--color-accent);
+}
+
 .appshell-body {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* The propose/apply error banner floats above the bottom bar so a failed
+   proposal is visible without stealing the PromptBar row. */
+.agent-propose-error {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-2xl) + var(--space-lg));
+  transform: translateX(-50%);
+  max-width: 480px;
+  z-index: 60;
+  box-shadow: var(--shadow-popover);
 }
 
 .navrail {

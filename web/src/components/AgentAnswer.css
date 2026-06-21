@@ -1,0 +1,67 @@
+/*
+ * AgentAnswer — the streamed-answer render region. Token-only styling. The answer
+ * prose inherits MarkdownProse's own styles; this file only adds the streaming
+ * caret, the citation line, and the error row.
+ */
+
+.agent-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text);
+}
+
+.agent-answer-body {
+  position: relative;
+}
+
+/* A subtle inline caret at the tail of a streaming answer. It pulses while
+   streaming, but the pulse is removed under reduced motion (static marker). */
+.agent-answer-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--color-text-muted);
+  animation: agent-caret-blink 1s step-end infinite;
+}
+
+@keyframes agent-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-answer-caret {
+    animation: none;
+  }
+}
+
+/* The "Reasoned over:" workspace citation line (muted Label). Links are accent
+   prose links (the same .prose-link the rest of the app uses). */
+.agent-citations {
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+.agent-citations-label {
+  color: var(--color-text-muted);
+}
+
+/* Error row — destructive-tinted, icon + text (color is never the sole signal).
+   The partial answer above it is kept (the user's prompt is never discarded). */
+.agent-answer-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-destructive);
+}

@@ -1,22 +1,50 @@
-import { useEffect, useRef, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus, FolderPlus, Search, Shield, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  FilePlus,
+  FolderPlus,
+  PanelRightOpen,
+  Search,
+  Shield,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 
-import { health, logout, me, type Me, type RepoHealth } from "../api/client";
+import {
+  applyPatch,
+  health,
+  logout,
+  me,
+  proposePatch,
+  subscribeAgentChat,
+  type AgentScope,
+  type Me,
+  type ProposePatchResult,
+  type RepoHealth,
+} from "../api/client";
 import UserMenu from "../components/UserMenu";
 import LeftTree, { type LeftTreeHandle } from "../components/LeftTree";
 import RecentList from "../components/RecentList";
 import SearchPalette from "../components/search/SearchPalette";
+import PromptBar, {
+  type AgentMode,
+  type PromptBarStatus,
+} from "../components/PromptBar";
+import AgentPanel from "../components/AgentPanel";
+import DiffReviewDialog from "../components/DiffReviewDialog";
+import { useAgentPanel } from "../stores/agentPanel";
 import { useSearchStore } from "../store/searchStore";
 import "./AppShell.css";
 
-// AppShell is the authenticated chrome (top bar + nav rail + main pane). When
-// given children it renders them in the main pane (e.g. Admin, Profile);
-// otherwise it shows the empty-state. The nav rail hosts the live page tree
-// (LeftTree) and the client-side recent list (RecentList).
+// AppShell is the authenticated chrome (top bar + nav rail + main pane) and the
+// AGENT SESSION OWNER: it holds the prompt/answer streaming state, drives the
+// right-side AgentPanel + bottom PromptBar, and gates the propose/apply trust
+// flow (DiffReviewDialog) to editors. When given children it renders them in the
+// main pane (e.g. Admin, Profile); otherwise it shows the empty-state.
 export default function AppShell({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { data } = useQuery<Me>({ queryKey: ["me"], queryFn: me });
   const { data: repoHealth } = useQuery<RepoHealth>({
@@ -25,18 +53,173 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   });
 
   const isAdmin = data?.role === "admin";
-  // Editors (and admins) can create pages/folders; readers cannot (RBAC mirror
-  // of the server gate — the create affordances are hidden for readers).
+  // Editors (and admins) can create pages/folders AND reach the agent's
+  // propose/apply path; readers cannot (RBAC mirror of the server gate).
   const canEdit = data?.role === "editor" || data?.role === "admin";
-  // The tree owns the create modals (it needs folder-scoped create from its
-  // right-click menu); the top buttons drive root-scoped create through this
-  // imperative handle.
   const treeRef = useRef<LeftTreeHandle>(null);
   const setSearchOpen = useSearchStore((s) => s.setOpen);
 
-  // Global ⌘K / Ctrl K opens the search palette from anywhere (the primary
-  // path; the top-bar trigger is the discoverable fallback). preventDefault
-  // suppresses the browser default. Same document-keydown pattern as Dialog.
+  // ── Agent panel open/collapse (persisted) ──────────────────────────────────
+  const panelOpen = useAgentPanel((s) => s.open);
+  const setPanelOpen = useAgentPanel((s) => s.setOpen);
+  const togglePanel = useAgentPanel((s) => s.toggle);
+
+  // ── Current page scope (auto-detected from the route) ───────────────────────
+  // /app/page/<path> and /app/edit/<path> carry the open page; everything else
+  // (admin/profile/trash/empty) has no page → workspace scope only.
+  const currentPath = pagePathFromLocation(location.pathname);
+  const hasPage = currentPath !== "";
+
+  // ── Agent prompt session state ──────────────────────────────────────────────
+  const [mode, setMode] = useState<AgentMode>("ask");
+  const [workspace, setWorkspace] = useState(false);
+  const [status, setStatus] = useState<PromptBarStatus>("idle");
+  const [answer, setAnswer] = useState("");
+  const [citations, setCitations] = useState<string[]>([]);
+  const [submitted, setSubmitted] = useState(false);
+  const [answerError, setAnswerError] = useState<string | null>(null);
+  const [barError, setBarError] = useState<string | null>(null);
+  // disabledReason is set when a submit hit the agent-off (503) or unreachable
+  // (502) gate — the PromptBar then renders disabled with the explanation.
+  const [disabledReason, setDisabledReason] = useState<string | null>(null);
+  const [unreachable, setUnreachable] = useState(false);
+  // The active stream's unsubscribe (AbortController.abort) — used to cancel.
+  const unsubRef = useRef<(() => void) | null>(null);
+
+  // Tear the stream down on unmount.
+  useEffect(() => () => unsubRef.current?.(), []);
+
+  // Reaching a workspace scope (toggle on, or no page open) means Propose/Rewrite
+  // page-scoped modes don't apply; coerce the mode back to Ask if it became
+  // unavailable so the bar never shows a disabled-mode submit.
+  const effectiveScope: AgentScope = workspace || !hasPage ? "workspace" : "page";
+
+  const scopeLabel = effectiveScope === "workspace" ? "Whole workspace" : "This page";
+
+  const cancelStream = useCallback(() => {
+    unsubRef.current?.();
+    unsubRef.current = null;
+    setStatus("idle");
+  }, []);
+
+  const handleSubmit = useCallback(
+    (prompt: string) => {
+      // Reset per-request state; keep the prompt-kept contract on error.
+      cancelStream();
+      setSubmitted(true);
+      setAnswer("");
+      setCitations([]);
+      setAnswerError(null);
+      setBarError(null);
+      setDisabledReason(null);
+      setUnreachable(false);
+      setStatus("thinking");
+      // Auto-open the panel on first submit so the answer is visible.
+      if (!panelOpen) setPanelOpen(true);
+
+      const unsub = subscribeAgentChat(
+        {
+          prompt,
+          scope: effectiveScope,
+          page_path: hasPage ? currentPath : undefined,
+        },
+        {
+          onToken: (delta) => {
+            setStatus("streaming");
+            setAnswer((a) => a + delta);
+          },
+          onCitation: (paths) => setCitations(paths),
+          onDone: () => {
+            setStatus("idle");
+            unsubRef.current = null;
+          },
+          onError: (message, { disabled, unreachable: isUnreachable }) => {
+            setStatus("idle");
+            unsubRef.current = null;
+            if (disabled || isUnreachable) {
+              // Fail-closed: the PromptBar shows the dedicated disabled note.
+              setDisabledReason(message);
+              setUnreachable(isUnreachable);
+            } else if (answerRef.current) {
+              // Mid-stream failure with a partial answer: keep it + show the
+              // error in the panel (the user's prompt is never discarded).
+              setAnswerError(message);
+            } else {
+              // Pre-answer transient failure: surface on the bar for retry.
+              setBarError(message);
+            }
+          },
+        },
+      );
+      unsubRef.current = unsub;
+    },
+    [cancelStream, effectiveScope, hasPage, currentPath, panelOpen, setPanelOpen],
+  );
+
+  // answerRef mirrors answer so onError (a stable closure) can read the latest
+  // value without re-subscribing each render.
+  const answerRef = useRef("");
+  useEffect(() => {
+    answerRef.current = answer;
+  }, [answer]);
+
+  // ── Propose / apply trust flow (editor-gated) ───────────────────────────────
+  const [proposal, setProposal] = useState<ProposePatchResult | null>(null);
+  const [proposeError, setProposeError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+
+  const proposeMutation = useMutation({
+    mutationFn: (instruction: string) => proposePatch(currentPath, instruction),
+    onSuccess: (res) => {
+      setStale(false);
+      setProposal(res);
+    },
+    onError: (err: Error) => {
+      setProposeError(
+        err.message || "The assistant couldn't propose a change. Try again.",
+      );
+    },
+  });
+
+  const applyMutation = useMutation({
+    mutationFn: (p: ProposePatchResult) =>
+      applyPatch({
+        page_path: p.page_path,
+        new_body: p.new_body,
+        // The frontmatter is preserved by the proposal (whole-body); we re-read
+        // the page's frontmatter from the cache so apply re-assembles the exact
+        // source. The proposal's new_body is the body only.
+        frontmatter: frontmatterFromCache(queryClient, p.page_path),
+        base_revision: p.base_revision,
+      }),
+    onSuccess: () => {
+      setProposal(null);
+      setStale(false);
+      // The saved change is now the latest version — refresh the page view.
+      queryClient.invalidateQueries({ queryKey: ["page", currentPath] });
+    },
+    onError: (err: Error & { status?: number }) => {
+      if (err.status === 409) {
+        // The page moved while the user reviewed — block, never overwrite.
+        setStale(true);
+      } else {
+        setProposeError(
+          err.message || "We couldn't apply that change just now. Try again.",
+        );
+      }
+    },
+  });
+
+  // Propose from a completed Ask/Summarize answer: re-use the answer as the
+  // instruction so the assistant proposes a concrete page change.
+  const proposeFromAnswer = useCallback(() => {
+    if (!canEdit || !hasPage) return;
+    setProposeError(null);
+    setStale(false);
+    proposeMutation.mutate(answerRef.current || "Apply the change discussed above.");
+  }, [canEdit, hasPage, proposeMutation]);
+
+  // Global ⌘K / Ctrl K opens the search palette from anywhere.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
@@ -81,6 +264,20 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             <Search size={16} aria-hidden="true" />
             <span>Search</span>
             <kbd className="keycap">⌘K</kbd>
+          </button>
+          <button
+            type="button"
+            className={`btn btn-ghost topbar-agent${status === "streaming" ? " is-active" : ""}`}
+            onClick={togglePanel}
+            aria-label={panelOpen ? "Hide assistant" : "Show assistant"}
+            aria-pressed={panelOpen}
+          >
+            {panelOpen ? (
+              <PanelRightOpen size={16} aria-hidden="true" />
+            ) : (
+              <Sparkles size={16} aria-hidden="true" />
+            )}
+            <span>Assistant</span>
           </button>
           <UserMenu
             displayName={data?.display_name ?? ""}
@@ -171,7 +368,88 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             </div>
           )}
         </main>
+
+        <AgentPanel
+          open={panelOpen}
+          onClose={() => setPanelOpen(false)}
+          mode={mode}
+          scopeLabel={scopeLabel}
+          status={status}
+          answer={answer}
+          citations={citations}
+          error={answerError}
+          currentPath={currentPath}
+          submitted={submitted}
+          canPropose={canEdit && hasPage}
+          onProposeFromAnswer={proposeFromAnswer}
+        />
       </div>
+
+      <PromptBar
+        mode={mode}
+        onModeChange={setMode}
+        canEdit={canEdit}
+        hasPage={hasPage}
+        pageTitle={hasPage ? "This page" : undefined}
+        workspace={workspace}
+        onWorkspaceToggle={() => setWorkspace((w) => !w)}
+        status={status}
+        disabledReason={disabledReason}
+        unreachable={unreachable}
+        error={barError}
+        onSubmit={handleSubmit}
+        onCancel={cancelStream}
+      />
+
+      {/* The trust gate. Opens with a real diff once a proposal returns; a 409
+          flips it into the stale state (Approve removed). Editor-gated above. */}
+      <DiffReviewDialog
+        open={proposal !== null}
+        title="Review this change"
+        oldText={proposal?.old_body ?? ""}
+        newText={proposal?.new_body ?? ""}
+        stale={stale}
+        busy={applyMutation.isPending}
+        onApprove={() => proposal && applyMutation.mutate(proposal)}
+        onReject={() => {
+          setProposal(null);
+          setStale(false);
+        }}
+        onRerun={() => {
+          setProposal(null);
+          setStale(false);
+          proposeFromAnswer();
+        }}
+      />
+
+      {proposeError && (
+        <div className="banner banner-warning agent-propose-error" role="alert">
+          {proposeError}
+        </div>
+      )}
     </div>
   );
+}
+
+// pagePathFromLocation extracts the workspace-relative page path from the route.
+// /app/page/<path> and /app/edit/<path> carry an open page; any other route
+// (admin, profile, trash, the bare /app empty state) has no page → "".
+function pagePathFromLocation(pathname: string): string {
+  const m = pathname.match(/^\/app\/(?:page|edit)\/(.+)$/);
+  return m ? decodeURIComponent(m[1]) : "";
+}
+
+// frontmatterFromCache reads the cached Page's frontmatter region so applyPatch
+// re-assembles the exact source bytes (the proposal returns the body only). If
+// the page isn't cached (edge case), an empty frontmatter is sent and the server
+// re-validates — it never fabricates frontmatter.
+function frontmatterFromCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  pagePath: string,
+): string {
+  const cached = queryClient.getQueryData<{ frontmatter?: string }>([
+    "page",
+    pagePath,
+  ]);
+  return cached?.frontmatter ?? "";
 }
