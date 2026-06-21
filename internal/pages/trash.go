@@ -91,6 +91,11 @@ func (s *Service) Delete(ctx context.Context, pagePath, user string) error {
 	if err := EnqueueCommit(ctx, s.worker, p); err != nil {
 		return err
 	}
+	// Remove the page (and its heading sub-docs) from the live index immediately so
+	// a trashed page leaves search results without a restart (T-03-17). The doc id
+	// is the ORIGINAL page path; the page now lives under trashDir, which the index
+	// excludes, so only the delete is enqueued. Fire-and-forget.
+	s.enqueueIndexDelete(ctx, pagePath)
 
 	// Record provenance (D-10). The page content is NOT stored here — only the
 	// metadata Restore needs (original path, trash path, title, who, when).
@@ -246,6 +251,9 @@ func (s *Service) Restore(ctx context.Context, id int64, user string) (string, e
 	if err := EnqueueCommit(ctx, s.worker, p); err != nil {
 		return "", err
 	}
+	// The page is back out of trash at target — re-index it so it reappears in
+	// search without a restart. Fire-and-forget; rebuild backstop reconciles.
+	s.enqueueIndexUpsert(ctx, target)
 
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM trash WHERE id = ?`, id); err != nil {
 		return "", fmt.Errorf("pages: delete trash row %d: %w", id, err)

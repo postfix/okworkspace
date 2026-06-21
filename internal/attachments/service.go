@@ -18,6 +18,7 @@ import (
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/jobs"
 	"github.com/postfix/okworkspace/internal/repo"
+	"github.com/postfix/okworkspace/internal/search"
 )
 
 // commitWaitTimeout bounds how long an upload blocks waiting for its commit job
@@ -204,6 +205,11 @@ func (s *Service) Upload(ctx context.Context, pagePath, filename string, data []
 		return AttachmentMeta{}, err
 	}
 
+	// Index the attachment now (filename → searchable immediately, SRCH-04). The
+	// extracted text follows when the KindExtract handler completes and re-indexes
+	// (SRCH-05). Fire-and-forget; does not block the upload.
+	s.enqueueIndexUpsert(ctx, meta.ID)
+
 	// Fire-and-forget text extraction (ATT-08): for an extractable type, enqueue a
 	// KindExtract job that reads the just-committed binary, extracts text, and
 	// commits the <id>.txt sidecar. This is Enqueue (NOT EnqueueAndWait) so the
@@ -237,6 +243,29 @@ func (s *Service) enqueueExtract(ctx context.Context, m AttachmentMeta) error {
 		return fmt.Errorf("attachments: marshal extract payload: %w", err)
 	}
 	return s.worker.Enqueue(ctx, KindExtract, string(raw))
+}
+
+// enqueueIndexUpsert fires a FIRE-AND-FORGET search.KindIndex upsert for an
+// attachment id so its filename (and, once extraction completes, its extracted
+// text) is searchable without a restart. Called from the HTTP-handler goroutine
+// (Upload/Replace) AFTER the commit lands; worker.Enqueue (never EnqueueAndWait)
+// keeps search freshness off the upload latency path. A dropped enqueue is logged
+// at Warn and swallowed — the rebuild backstop reconciles (T-03-20 accept).
+func (s *Service) enqueueIndexUpsert(ctx context.Context, id string) {
+	if err := s.worker.Enqueue(ctx, search.KindIndex, search.UpsertAttachmentPayload(id)); err != nil {
+		slog.WarnContext(ctx, "attachments: failed to enqueue search index upsert (rebuild backstop reconciles)",
+			slog.String("attachment_id", id), slog.String("error", err.Error()))
+	}
+}
+
+// enqueueIndexDelete fires a FIRE-AND-FORGET search.KindIndex delete for an
+// attachment id (removing its doc from the live index). Same context/contract as
+// enqueueIndexUpsert.
+func (s *Service) enqueueIndexDelete(ctx context.Context, id string) {
+	if err := s.worker.Enqueue(ctx, search.KindIndex, search.DeleteAttachmentPayload(id)); err != nil {
+		slog.WarnContext(ctx, "attachments: failed to enqueue search index delete (rebuild backstop reconciles)",
+			slog.String("attachment_id", id), slog.String("error", err.Error()))
+	}
 }
 
 // List returns the attachments recorded for a page, newest first, each with its

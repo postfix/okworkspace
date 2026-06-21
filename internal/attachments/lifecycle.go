@@ -137,6 +137,11 @@ func (s *Service) Replace(ctx context.Context, id, filename string, data []byte,
 			slog.String("attachment_id", id), slog.String("error", err.Error()))
 	}
 
+	// Re-index the attachment now (its filename/meta may have changed). The
+	// extracted text is refreshed when re-extraction completes and re-indexes.
+	// Fire-and-forget; does not block Replace.
+	s.enqueueIndexUpsert(ctx, meta.ID)
+
 	// Re-extract the new bytes (ATT-05): fire-and-forget so Replace returns
 	// immediately and the card's chip tracks the refreshed lifecycle over SSE. A
 	// non-extractable new type enqueues NOTHING (no .txt, no chip).
@@ -222,6 +227,11 @@ func (s *Service) Remove(ctx context.Context, id, pagePath, user string) (bool, 
 	if err := s.enqueueCommit(ctx, p); err != nil {
 		return false, err
 	}
+	// The attachment's artifacts were deleted (last reference) — remove its doc from
+	// the live index so it leaves results without a restart. Fire-and-forget; the
+	// rebuild backstop reconciles a dropped enqueue (T-03-20). When the file is KEPT
+	// (refs > 0 above), the doc is intentionally left in place.
+	s.enqueueIndexDelete(ctx, id)
 
 	if err := s.deleteRow(ctx, id); err != nil {
 		return false, err

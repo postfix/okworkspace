@@ -5,14 +5,83 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/jobs"
 	"github.com/postfix/okworkspace/internal/repo"
+	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/store"
 )
+
+// indexRecorder is a thread-safe KindIndex job handler registered on the real
+// worker so a test can observe the FIRE-AND-FORGET search index enqueues a
+// mutation makes, WITHOUT standing up a real bleve index. It records each payload
+// the handler receives; helper methods wait for and assert the expected ops.
+type indexRecorder struct {
+	mu       sync.Mutex
+	payloads []string
+}
+
+func (rec *indexRecorder) handler() jobs.Handler {
+	return func(_ context.Context, payload string) error {
+		rec.mu.Lock()
+		rec.payloads = append(rec.payloads, payload)
+		rec.mu.Unlock()
+		return nil
+	}
+}
+
+// waitForPayload polls until a payload equal to want has been recorded, or fails.
+func (rec *indexRecorder) waitForPayload(t *testing.T, want string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		rec.mu.Lock()
+		for _, p := range rec.payloads {
+			if p == want {
+				rec.mu.Unlock()
+				return
+			}
+		}
+		rec.mu.Unlock()
+		time.Sleep(5 * time.Millisecond)
+	}
+	rec.mu.Lock()
+	got := append([]string(nil), rec.payloads...)
+	rec.mu.Unlock()
+	t.Fatalf("search index payload %q never enqueued; recorded: %v", want, got)
+}
+
+// newIndexedFixture is newServiceFixture plus a registered KindIndex recorder so a
+// test can assert the search index enqueues every mutation makes.
+func newIndexedFixture(t *testing.T) (*Service, *repo.Repo, *indexRecorder) {
+	t.Helper()
+	r, gs, _ := newTestRepoAndGit(t)
+
+	st, err := store.Open(filepath.Join(t.TempDir(), "app.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	if err := st.Migrate(context.Background()); err != nil {
+		t.Fatalf("store.Migrate: %v", err)
+	}
+
+	w := jobs.New(st.DB(), jobs.Config{PollInterval: 5 * time.Millisecond})
+	w.Register(KindCommit, CommitHandler(r, gs))
+	rec := &indexRecorder{}
+	w.Register(search.KindIndex, rec.handler())
+	ctx, cancel := context.WithCancel(context.Background())
+	w.Start(ctx)
+	t.Cleanup(func() { w.Stop(); cancel() })
+
+	svc := NewService(r, gs, w, st.DB(), false)
+	svc.now = func() time.Time { return time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC) }
+	return svc, r, rec
+}
 
 // newServiceFixture builds a Service backed by a real repo + git + worker, with
 // the CommitJob handler registered and the drain goroutine running. It returns
@@ -258,12 +327,126 @@ func TestMutationsWaitForCommitOnDisk(t *testing.T) {
 // service's wait-for-commit path returns without a real drain goroutine.
 type capturingWorker struct{ last *string }
 
-func (c *capturingWorker) Enqueue(_ context.Context, _ string, payload string) error {
-	c.last = &payload
+func (c *capturingWorker) Enqueue(_ context.Context, kind, payload string) error {
+	// Capture only commit payloads; mutations also fire-and-forget a search
+	// KindIndex job (Enqueue), which would otherwise overwrite the captured commit.
+	if kind == KindCommit {
+		c.last = &payload
+	}
 	return nil
 }
 
-func (c *capturingWorker) EnqueueAndWait(_ context.Context, _ string, payload string, _ time.Duration) error {
-	c.last = &payload
+func (c *capturingWorker) EnqueueAndWait(_ context.Context, kind, payload string, _ time.Duration) error {
+	if kind == KindCommit {
+		c.last = &payload
+	}
 	return nil
+}
+
+// TestCreateEnqueuesIndexUpsert: Create fire-and-forget enqueues a search.KindIndex
+// upsert for the new page so it is searchable without a restart (SRCH live).
+func TestCreateEnqueuesIndexUpsert(t *testing.T) {
+	svc, _, rec := newIndexedFixture(t)
+	path, err := svc.Create(context.Background(), "runbooks", "Deploy Staging", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	rec.waitForPayload(t, search.UpsertPagePayload(path))
+}
+
+// TestSaveEnqueuesIndexUpsert: Save re-indexes the edited page (new body bytes).
+func TestSaveEnqueuesIndexUpsert(t *testing.T) {
+	svc, r, rec := newIndexedFixture(t)
+	ctx := context.Background()
+	path, err := svc.Create(ctx, "", "Edit Me", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	waitForFile(t, r, path)
+	page, err := svc.Get(ctx, path)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if err := svc.Save(ctx, path, "A new searchable word: zylophone.", page.Frontmatter, page.Revision, "alice"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	rec.waitForPayload(t, search.UpsertPagePayload(path))
+}
+
+// TestRenameEnqueuesIndexMove: Rename is an index MOVE — a delete for the old path
+// and an upsert for the new path.
+func TestRenameEnqueuesIndexMove(t *testing.T) {
+	svc, r, rec := newIndexedFixture(t)
+	ctx := context.Background()
+	oldPath, err := svc.Create(ctx, "", "Rename Source", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	waitForFile(t, r, oldPath)
+	newPath, err := svc.Rename(ctx, oldPath, "Renamed Target", "alice")
+	if err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	rec.waitForPayload(t, search.DeletePagePayload(oldPath))
+	rec.waitForPayload(t, search.UpsertPagePayload(newPath))
+}
+
+// TestMoveEnqueuesIndexMove: Move likewise deletes the old path and upserts the new.
+func TestMoveEnqueuesIndexMove(t *testing.T) {
+	svc, r, rec := newIndexedFixture(t)
+	ctx := context.Background()
+	if err := svc.CreateFolder(ctx, "", "Dest", "alice"); err != nil {
+		t.Fatalf("CreateFolder: %v", err)
+	}
+	oldPath, err := svc.Create(ctx, "", "Move Source", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	waitForFile(t, r, oldPath)
+	newPath, err := svc.Move(ctx, oldPath, "dest", "alice")
+	if err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	rec.waitForPayload(t, search.DeletePagePayload(oldPath))
+	rec.waitForPayload(t, search.UpsertPagePayload(newPath))
+}
+
+// TestDeleteEnqueuesIndexDelete: deleting a page to trash enqueues an index delete
+// for the original page path so it (and its headings) leave results immediately.
+func TestDeleteEnqueuesIndexDelete(t *testing.T) {
+	svc, r, rec := newIndexedFixture(t)
+	ctx := context.Background()
+	path, err := svc.Create(ctx, "", "Delete Me", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	waitForFile(t, r, path)
+	if err := svc.Delete(ctx, path, "alice"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	rec.waitForPayload(t, search.DeletePagePayload(path))
+}
+
+// TestRestoreEnqueuesIndexUpsert: restoring a trashed page re-indexes it so it
+// reappears in search.
+func TestRestoreEnqueuesIndexUpsert(t *testing.T) {
+	svc, r, rec := newIndexedFixture(t)
+	ctx := context.Background()
+	path, err := svc.Create(ctx, "", "Restore Me", "alice")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	waitForFile(t, r, path)
+	if err := svc.Delete(ctx, path, "alice"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	entries, err := svc.ListTrash(ctx)
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("ListTrash: %v (len=%d)", err, len(entries))
+	}
+	restored, err := svc.Restore(ctx, entries[0].ID, "alice")
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	rec.waitForPayload(t, search.UpsertPagePayload(restored))
 }

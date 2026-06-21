@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/postfix/okworkspace/internal/repo"
+	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/store"
 )
 
@@ -151,6 +152,72 @@ func TestMetaSidecar(t *testing.T) {
 	}
 	if !got.UploadedAt.Equal(want.UploadedAt) {
 		t.Fatalf("uploaded_at = %v, want %v", got.UploadedAt, want.UploadedAt)
+	}
+}
+
+// TestUploadEnqueuesIndex (SRCH-04): Upload fire-and-forget enqueues a
+// search.KindIndex job so the attachment's filename is searchable without a
+// restart.
+func TestUploadEnqueuesIndex(t *testing.T) {
+	svc, fe, _ := newTestService(t, []string{"txt"}, 100)
+	if _, err := svc.Upload(context.Background(), "runbooks/deploy.md", "notes.txt", []byte("hello attachment world"), "alice"); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if got := countKind(fe, search.KindIndex); got != 1 {
+		t.Fatalf("search.KindIndex jobs enqueued on Upload = %d, want 1", got)
+	}
+}
+
+// TestReplaceEnqueuesIndex: Replace re-indexes the attachment (filename/meta may
+// have changed) so search stays live.
+func TestReplaceEnqueuesIndex(t *testing.T) {
+	svc, fe, _ := newTestService(t, []string{"txt"}, 100)
+	meta, err := svc.Upload(context.Background(), "runbooks/deploy.md", "notes.txt", []byte("hello attachment world"), "alice")
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	before := countKind(fe, search.KindIndex)
+	if _, err := svc.Replace(context.Background(), meta.ID, "notes-v2.txt", []byte("revised attachment text"), "alice"); err != nil {
+		t.Fatalf("Replace: %v", err)
+	}
+	if got := countKind(fe, search.KindIndex) - before; got != 1 {
+		t.Fatalf("search.KindIndex jobs enqueued on Replace = %d, want 1", got)
+	}
+}
+
+// TestRemoveEnqueuesIndexDelete: removing the LAST reference orphan-deletes the
+// attachment and enqueues a search.KindIndex delete so it leaves results.
+func TestRemoveEnqueuesIndexDelete(t *testing.T) {
+	svc, fe, _ := newTestService(t, []string{"txt"}, 100)
+	// Remove unlinks from the owning page, so the page must exist on disk.
+	if err := svc.repo.Write("runbooks/deploy.md", []byte("# Deploy\n\nNo attachment links here.\n")); err != nil {
+		t.Fatalf("seed page: %v", err)
+	}
+	meta, err := svc.Upload(context.Background(), "runbooks/deploy.md", "notes.txt", []byte("hello attachment world"), "alice")
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	before := countKind(fe, search.KindIndex)
+	deleted, err := svc.Remove(context.Background(), meta.ID, "runbooks/deploy.md", "alice")
+	if err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if !deleted {
+		t.Fatalf("Remove deleted_orphan = false, want true (no other references)")
+	}
+	if got := countKind(fe, search.KindIndex) - before; got != 1 {
+		t.Fatalf("search.KindIndex jobs enqueued on orphan Remove = %d, want 1", got)
+	}
+
+	// Sanity: List shows the attachment is gone.
+	items, lerr := svc.List(context.Background(), "runbooks/deploy.md")
+	if lerr != nil {
+		t.Fatalf("List: %v", lerr)
+	}
+	for _, it := range items {
+		if it.ID == meta.ID {
+			t.Fatalf("attachment %q still listed after orphan Remove", meta.ID)
+		}
 	}
 }
 

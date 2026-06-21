@@ -123,6 +123,19 @@ func (s *Service) relocate(ctx context.Context, oldPath, newPath, action, user s
 	if err := EnqueueCommit(ctx, s.worker, p); err != nil {
 		return "", err
 	}
+	// A rename/move is an index MOVE: remove the doc (and its headings) at the OLD
+	// path, then upsert the NEW path. Fire-and-forget (HTTP-handler context); the
+	// rebuild backstop reconciles a dropped enqueue (T-03-20).
+	s.enqueueIndexDelete(ctx, oldPath)
+	s.enqueueIndexUpsert(ctx, newPath)
+	// Inbound-link rewrites edited OTHER pages in the same commit; re-index each so
+	// their (changed) body bytes stay searchable without a restart.
+	for _, w := range writes {
+		if w.Path == newPath {
+			continue
+		}
+		s.enqueueIndexUpsert(ctx, w.Path)
+	}
 	return newPath, nil
 }
 

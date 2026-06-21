@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/jobs"
+	"github.com/postfix/okworkspace/internal/search"
 )
 
 // KindExtract is the job kind registered on the EXISTING single jobs worker for
@@ -132,6 +134,19 @@ func ExtractHandler(r binaryReader, w enqueuer, db *sql.DB, pushOnCommit bool) j
 			// back. The raw error is kept server-side only (T-02-12).
 			_ = setExtractStatus(ctx, db, p.AttachmentID, ExtractionFailed, cerr.Error())
 			return fmt.Errorf("attachments: enqueue extracted-text commit %q: %w", p.AttachmentID, cerr)
+		}
+
+		// Re-index the attachment WITH its freshly-extracted text so an extracted-text
+		// search finds it without a restart (SRCH-05). This runs ON the single worker
+		// drain goroutine, so it MUST be FIRE-AND-FORGET Enqueue — NEVER EnqueueAndWait,
+		// which would deadlock the single drain goroutine (CR-01, the same lesson as the
+		// .txt commit above). A failure to enqueue must NOT change the extraction-status
+		// outcome: the .txt is already durably queued and the rebuild backstop reconciles
+		// the index, so we log + continue (T-03-16/T-03-20). Asserted by
+		// TestExtractJob_UsesFireAndForgetEnqueue.
+		if ierr := w.Enqueue(ctx, search.KindIndex, search.UpsertAttachmentPayload(p.AttachmentID)); ierr != nil {
+			slog.WarnContext(ctx, "attachments: failed to enqueue search re-index after extraction (rebuild backstop reconciles)",
+				slog.String("attachment_id", p.AttachmentID), slog.String("error", ierr.Error()))
 		}
 
 		status := ExtractionDone

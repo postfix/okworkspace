@@ -17,16 +17,22 @@ import (
 // reset between mutations.
 type capturingAllWorker struct{ payloads []string }
 
-func (c *capturingAllWorker) Enqueue(_ context.Context, _ string, payload string) error {
-	c.payloads = append(c.payloads, payload)
+func (c *capturingAllWorker) Enqueue(_ context.Context, kind, payload string) error {
+	// Capture only commit payloads; mutations also fire-and-forget a search
+	// KindIndex job (Enqueue), which is not what these commit-payload tests inspect.
+	if kind == KindCommit {
+		c.payloads = append(c.payloads, payload)
+	}
 	return nil
 }
 
 // EnqueueAndWait models the synchronous wait-for-commit path: capture the
 // payload and return nil (the modeled job is immediately "done") so the service
 // returns without standing up a real drain goroutine.
-func (c *capturingAllWorker) EnqueueAndWait(_ context.Context, _ string, payload string, _ time.Duration) error {
-	c.payloads = append(c.payloads, payload)
+func (c *capturingAllWorker) EnqueueAndWait(_ context.Context, kind, payload string, _ time.Duration) error {
+	if kind == KindCommit {
+		c.payloads = append(c.payloads, payload)
+	}
 	return nil
 }
 

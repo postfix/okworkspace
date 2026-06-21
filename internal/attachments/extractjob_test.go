@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/postfix/okworkspace/internal/repo"
+	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/store"
 )
 
@@ -188,6 +189,108 @@ func TestExtractJobEnqueueFailureSetsTerminalStatus(t *testing.T) {
 	}
 	if extractErr == "" {
 		t.Fatalf("extract_error empty, want the enqueue error recorded server-side")
+	}
+}
+
+// methodRecordingEnqueuer records, PER call, WHICH worker method was used
+// (Enqueue vs EnqueueAndWait) for each job kind. It applies kindCommit payloads to
+// a repo (so the .txt sidecar lands like the shared fake) while letting a test
+// assert the CR-01 invariant: a re-index enqueued from INSIDE the drain goroutine
+// MUST use fire-and-forget Enqueue and NEVER EnqueueAndWait (which would deadlock
+// the single drain goroutine — Phase 2 CR-01).
+type methodRecordingEnqueuer struct {
+	r *repo.Repo
+	// enqueueKinds / enqueueAndWaitKinds record the kind of every job per method so
+	// a test can prove the method used for a specific kind (e.g. search.KindIndex).
+	enqueueKinds        []string
+	enqueueAndWaitKinds []string
+}
+
+func (m *methodRecordingEnqueuer) Enqueue(_ context.Context, kind, payload string) error {
+	m.enqueueKinds = append(m.enqueueKinds, kind)
+	if kind == kindCommit {
+		return m.apply(payload)
+	}
+	return nil
+}
+
+func (m *methodRecordingEnqueuer) EnqueueAndWait(_ context.Context, kind, payload string, _ time.Duration) error {
+	m.enqueueAndWaitKinds = append(m.enqueueAndWaitKinds, kind)
+	if kind == kindCommit {
+		return m.apply(payload)
+	}
+	return nil
+}
+
+func (m *methodRecordingEnqueuer) apply(payload string) error {
+	var p commitPayload
+	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+		return err
+	}
+	for _, w := range p.Writes {
+		if err := m.r.Write(w.Path, w.Bytes); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func countStr(ss []string, want string) int {
+	n := 0
+	for _, s := range ss {
+		if s == want {
+			n++
+		}
+	}
+	return n
+}
+
+// TestExtractJob_UsesFireAndForgetEnqueue (CR-01, T-03-16): the extraction-done
+// handler re-indexes the attachment so its extracted text is searchable. Because
+// that enqueue happens from INSIDE the single worker drain goroutine, it MUST be
+// fire-and-forget Enqueue and NEVER EnqueueAndWait (which deadlocks the drain).
+// This asserts the property via a fake that records the method used per call.
+func TestExtractJob_UsesFireAndForgetEnqueue(t *testing.T) {
+	r, _, db := newExtractHarness(t)
+	rec := &methodRecordingEnqueuer{r: r}
+
+	id, ext := "01FIREFORGET", "txt"
+	if err := r.Write(BinPath(id, ext), []byte("some extractable text")); err != nil {
+		t.Fatalf("seed binary: %v", err)
+	}
+	seedRow(t, db, id, ext)
+
+	h := ExtractHandler(r, rec, db, false)
+	p := extractPayload{
+		AttachmentID: id,
+		BinPath:      BinPath(id, ext),
+		TxtPath:      TxtPath(id),
+		Ext:          ext,
+		PagePath:     "p.md",
+		User:         "alice",
+	}
+	raw, _ := json.Marshal(p)
+	if err := h(context.Background(), string(raw)); err != nil {
+		t.Fatalf("ExtractHandler err = %v, want nil", err)
+	}
+
+	// The handler MUST NOT call EnqueueAndWait for anything (it runs on the drain
+	// goroutine — CR-01): neither the .txt commit nor the re-index may block-wait.
+	if got := len(rec.enqueueAndWaitKinds); got != 0 {
+		t.Fatalf("EnqueueAndWait called %d time(s) %v from inside the drain goroutine; want 0 (CR-01 deadlock)", got, rec.enqueueAndWaitKinds)
+	}
+
+	// The re-index of the attachment MUST be enqueued via fire-and-forget Enqueue.
+	if got := countStr(rec.enqueueKinds, search.KindIndex); got != 1 {
+		t.Fatalf("search.KindIndex jobs enqueued via Enqueue = %d, want exactly 1 (fire-and-forget re-index)", got)
+	}
+	// Specifically, it must NOT have been routed through EnqueueAndWait.
+	if got := countStr(rec.enqueueAndWaitKinds, search.KindIndex); got != 0 {
+		t.Fatalf("search.KindIndex jobs enqueued via EnqueueAndWait = %d, want 0 (must be fire-and-forget — CR-01)", got)
+	}
+	// The .txt commit is likewise fire-and-forget (the existing CR-01 contract).
+	if got := countStr(rec.enqueueKinds, kindCommit); got != 1 {
+		t.Fatalf("kindCommit jobs enqueued via Enqueue = %d, want 1 (the .txt sidecar)", got)
 	}
 }
 

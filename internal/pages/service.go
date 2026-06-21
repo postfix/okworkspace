@@ -9,10 +9,13 @@ import (
 	"time"
 	"unicode"
 
+	"log/slog"
+
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/jobs"
 	"github.com/postfix/okworkspace/internal/okf"
 	"github.com/postfix/okworkspace/internal/repo"
+	"github.com/postfix/okworkspace/internal/search"
 )
 
 // Sentinel errors mapped to HTTP status codes by handlers_pages.go via
@@ -135,6 +138,7 @@ func (s *Service) Create(ctx context.Context, folder, title, user string) (strin
 	if err := s.enqueueWrite(ctx, path, bytesOut, "create", user); err != nil {
 		return "", err
 	}
+	s.enqueueIndexUpsert(ctx, path)
 	return path, nil
 }
 
@@ -208,7 +212,11 @@ func (s *Service) Save(ctx context.Context, path, body, frontmatter, baseRevisio
 	if err != nil {
 		return fmt.Errorf("pages: emit %q: %w", path, err)
 	}
-	return s.enqueueWrite(ctx, path, out, "edit", user)
+	if err := s.enqueueWrite(ctx, path, out, "edit", user); err != nil {
+		return err
+	}
+	s.enqueueIndexUpsert(ctx, path)
+	return nil
 }
 
 // CreateFolder creates a folder under parent by seeding a blank index.md (NAV-03)
@@ -239,7 +247,11 @@ func (s *Service) CreateFolder(ctx context.Context, parent, name string, user st
 	if err != nil {
 		return fmt.Errorf("pages: emit folder index: %w", err)
 	}
-	return s.enqueueWrite(ctx, indexPath, out, "create", user)
+	if err := s.enqueueWrite(ctx, indexPath, out, "create", user); err != nil {
+		return err
+	}
+	s.enqueueIndexUpsert(ctx, indexPath)
+	return nil
 }
 
 // enqueueWrite builds a single-file commit payload and enqueues it through the
@@ -262,6 +274,31 @@ func (s *Service) enqueueWrite(ctx context.Context, path string, data []byte, ac
 		Push: s.pushOnCommit,
 	}
 	return EnqueueCommit(ctx, s.worker, p)
+}
+
+// enqueueIndexUpsert fires a FIRE-AND-FORGET search.KindIndex upsert for a page
+// path so the live index tracks the change without a restart (CONTEXT Area 4
+// reindex triggers). It is called from the HTTP-handler goroutine AFTER the
+// commit has been enqueued/landed (so the index reflects committed state). It
+// uses worker.Enqueue (never EnqueueAndWait) so a search-freshness job never adds
+// latency to a save; correctness is guaranteed by the idempotent rebuild +
+// startup drift check, so a dropped enqueue is logged at Warn and swallowed
+// (T-03-20 accept).
+func (s *Service) enqueueIndexUpsert(ctx context.Context, pagePath string) {
+	if err := s.worker.Enqueue(ctx, search.KindIndex, search.UpsertPagePayload(pagePath)); err != nil {
+		slog.WarnContext(ctx, "pages: failed to enqueue search index upsert (rebuild backstop reconciles)",
+			slog.String("path", pagePath), slog.String("error", err.Error()))
+	}
+}
+
+// enqueueIndexDelete fires a FIRE-AND-FORGET search.KindIndex delete for a page
+// path (removing the page doc AND its heading sub-docs via the handler's delete
+// branch). Same context/contract as enqueueIndexUpsert.
+func (s *Service) enqueueIndexDelete(ctx context.Context, pagePath string) {
+	if err := s.worker.Enqueue(ctx, search.KindIndex, search.DeletePagePayload(pagePath)); err != nil {
+		slog.WarnContext(ctx, "pages: failed to enqueue search index delete (rebuild backstop reconciles)",
+			slog.String("path", pagePath), slog.String("error", err.Error()))
+	}
 }
 
 // commitSubject renders a short human-readable subject for the hidden commit.
