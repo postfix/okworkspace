@@ -8,8 +8,16 @@
 // RED until Task 4 ships web/src/components/LivePreviewEditor.tsx, then GREEN.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 import LivePreviewEditor from "./LivePreviewEditor";
+
+// LivePreviewEditor uses react-router's useNavigate (for internal `.md` link
+// click-navigation, D-06), so every render must sit inside a Router. `withRouter`
+// wraps the element; the test asserts the SAME value/onChange contract regardless.
+const withRouter = (ui: React.ReactElement) => (
+  <MemoryRouter>{ui}</MemoryRouter>
+);
 
 // Helper: drive a programmatic insertion through the real CM6 view by dispatching
 // against the EditorView the component mounts. We locate it via the .cm-content DOM
@@ -26,12 +34,14 @@ describe("LivePreviewEditor value/onChange contract (EDIT-03/04)", () => {
   it("mounts a single CM6 editor surface", () => {
     const onChange = vi.fn();
     render(
-      <LivePreviewEditor
-        value="hello"
-        onChange={onChange}
-        currentPath="notes.md"
-        mode="live"
-      />,
+      withRouter(
+        <LivePreviewEditor
+          value="hello"
+          onChange={onChange}
+          currentPath="notes.md"
+          mode="live"
+        />,
+      ),
     );
     // The CM6 view renders a .cm-editor / .cm-content into the host.
     expect(document.querySelector(".cm-editor")).not.toBeNull();
@@ -40,12 +50,14 @@ describe("LivePreviewEditor value/onChange contract (EDIT-03/04)", () => {
 
   it("renders the initial value as the document text", () => {
     render(
-      <LivePreviewEditor
-        value="# Title\nbody"
-        onChange={vi.fn()}
-        currentPath="notes.md"
-        mode="source"
-      />,
+      withRouter(
+        <LivePreviewEditor
+          value="# Title\nbody"
+          onChange={vi.fn()}
+          currentPath="notes.md"
+          mode="source"
+        />,
+      ),
     );
     const content = document.querySelector(".cm-content");
     expect(content).not.toBeNull();
@@ -56,12 +68,14 @@ describe("LivePreviewEditor value/onChange contract (EDIT-03/04)", () => {
   it("fires onChange with verbatim bytes when the document changes", () => {
     const onChange = vi.fn();
     const { container } = render(
-      <LivePreviewEditor
-        value=""
-        onChange={onChange}
-        currentPath="notes.md"
-        mode="live"
-      />,
+      withRouter(
+        <LivePreviewEditor
+          value=""
+          onChange={onChange}
+          currentPath="notes.md"
+          mode="live"
+        />,
+      ),
     );
     // Reach into the mounted EditorView and dispatch a real insert transaction,
     // exactly what a keystroke produces. The updateListener must then call onChange
@@ -80,21 +94,25 @@ describe("LivePreviewEditor value/onChange contract (EDIT-03/04)", () => {
   it("reseeds on external value change without an onChange feedback loop", () => {
     const onChange = vi.fn();
     const { rerender } = render(
-      <LivePreviewEditor
-        value="first"
-        onChange={onChange}
-        currentPath="notes.md"
-        mode="live"
-      />,
+      withRouter(
+        <LivePreviewEditor
+          value="first"
+          onChange={onChange}
+          currentPath="notes.md"
+          mode="live"
+        />,
+      ),
     );
     onChange.mockClear();
     rerender(
-      <LivePreviewEditor
-        value="second"
-        onChange={onChange}
-        currentPath="notes.md"
-        mode="live"
-      />,
+      withRouter(
+        <LivePreviewEditor
+          value="second"
+          onChange={onChange}
+          currentPath="notes.md"
+          mode="live"
+        />,
+      ),
     );
     const content = document.querySelector(".cm-content");
     expect(content!.textContent).toContain("second");
@@ -105,24 +123,28 @@ describe("LivePreviewEditor value/onChange contract (EDIT-03/04)", () => {
   it("toggling mode does not change the document bytes", () => {
     const onChange = vi.fn();
     const { rerender, container } = render(
-      <LivePreviewEditor
-        value="# H\n**b**"
-        onChange={onChange}
-        currentPath="notes.md"
-        mode="live"
-      />,
+      withRouter(
+        <LivePreviewEditor
+          value="# H\n**b**"
+          onChange={onChange}
+          currentPath="notes.md"
+          mode="live"
+        />,
+      ),
     );
     const cmEditor = container.querySelector(".cm-editor") as HTMLElement & {
       cmView?: { view: import("@codemirror/view").EditorView };
     };
     const before = cmEditor.cmView!.view.state.doc.toString();
     rerender(
-      <LivePreviewEditor
-        value="# H\n**b**"
-        onChange={onChange}
-        currentPath="notes.md"
-        mode="source"
-      />,
+      withRouter(
+        <LivePreviewEditor
+          value="# H\n**b**"
+          onChange={onChange}
+          currentPath="notes.md"
+          mode="source"
+        />,
+      ),
     );
     expect(cmEditor.cmView!.view.state.doc.toString()).toBe(before);
   });

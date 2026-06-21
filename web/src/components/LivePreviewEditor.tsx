@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Annotation, EditorState } from "@codemirror/state";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
@@ -9,6 +10,7 @@ import {
   sourceExtensions,
   toggleKeymap,
 } from "../lib/cm/mode";
+import { linkNav } from "../lib/cm/linkNav";
 import "./LivePreviewEditor.css";
 
 // LivePreviewEditor is the CodeMirror 6 editing surface that replaces
@@ -49,19 +51,23 @@ export default function LivePreviewEditor({
   currentPath,
   mode,
 }: LivePreviewEditorProps) {
+  const navigate = useNavigate();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   // onChange can change identity between renders; read the latest from a ref so
   // the updateListener (created once) never fires a stale callback. The ref is
   // synced in an effect (never mutated during render).
   const onChangeRef = useRef(onChange);
-  // currentPath is captured for the 06-02 linkNav handler; held in a ref so a
-  // future internal-link click resolves against the live path.
+  // currentPath + navigate are captured for the linkNav handler; held in refs so
+  // an internal-link click always resolves against the LIVE path and routes through
+  // the current navigate fn even though the EditorView is created only once.
   const pathRef = useRef(currentPath);
+  const navigateRef = useRef(navigate);
   useEffect(() => {
     onChangeRef.current = onChange;
     pathRef.current = currentPath;
-  }, [onChange, currentPath]);
+    navigateRef.current = navigate;
+  }, [onChange, currentPath, navigate]);
 
   // Create the EditorView once. ALWAYS destroy in cleanup so React 19 StrictMode's
   // mount→unmount→remount never leaves two views attached or a leaked instance.
@@ -77,6 +83,15 @@ export default function LivePreviewEditor({
           keymap.of([...defaultKeymap, ...historyKeymap]),
           toggleKeymap,
           placeholder("Start writing in Markdown…"),
+          // Internal `.md` link click-navigation (D-06). The handler reads the live
+          // currentPath/navigate from refs so it stays correct across prop changes
+          // without recreating the view (StrictMode-safe — torn down with the view,
+          // no extra cleanup). resolveRelativeMdLink owns the scheme allowlist, so
+          // no javascript:/data: href is ever navigated (T-06-07).
+          linkNav(
+            () => pathRef.current,
+            (to) => navigateRef.current(to),
+          ),
           modeCompartment.of(mode === "live" ? liveExtensions : sourceExtensions),
           EditorView.updateListener.of((u) => {
             // Fire onChange ONLY on a document change, with the bytes verbatim —
