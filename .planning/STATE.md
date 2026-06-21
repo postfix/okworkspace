@@ -4,13 +4,13 @@ milestone: v0.9.9
 milestone_name: milestone
 status: executing
 stopped_at: Phase 6 planned (4 plans verified); executing
-last_updated: "2026-06-21T10:43:36.427Z"
+last_updated: "2026-06-21T10:52:22.581Z"
 last_activity: 2026-06-21 -- Phase 06 execution started
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 21
-  completed_plans: 18
+  completed_plans: 19
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 06 (live-preview-editor-obsidian-style) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-21 -- Phase 06 execution started
 
@@ -68,6 +68,7 @@ Progress: [████████░░] 80%
 | Phase 01 P03 | 75 | 2 tasks | 25 files |
 | Phase 01 P05 | 13m | 2 tasks | 21 files |
 | Phase 06 P01 | 17min | 4 tasks | 20 files |
+| Phase 06 P02 | 12min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,8 @@ Recent decisions affecting current work:
 - [Phase ?]: VER-04 push is config-gated and ff-aware: non-ff sets diverged and alerts, never force/auto-merge
 - [Phase ?]: 06-01: CM6 editor swap — CRLF is LF-normalized by CM6 (as a textarea); EDIT-02 toggle invariance asserted against the doc's own bytes, CRLF on-disk round-trip stays a backend gate
 - [Phase ?]: 06-01: external value seeds are externalSeed-annotated so they don't echo through onChange (avoids controlled-input feedback loop)
+- [Phase ?]: 06-02: live-preview ViewPlugin walks Lezer tree → mark styling + zero-width replace hides; active-line reveal via option (b) skip-on-active-line (no atomicRanges on hides), selection-driven, layout-neutral
+- [Phase ?]: 06-02: fenced-code fences kept vs inline backticks hidden by CodeMark parent check; inline-link URL hidden only under a Link; focus ring moved to CSS to keep theme.ts tokens-only
 
 ### Pending Todos
 
@@ -132,6 +135,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-21T10:43:23.899Z
+Last session: 2026-06-21T10:52:13.181Z
 Stopped at: Phase 6 planned (4 plans verified); executing
 Resume file: .planning/phases/06-live-preview-editor-obsidian-style/06-01-PLAN.md
