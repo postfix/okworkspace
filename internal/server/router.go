@@ -168,6 +168,11 @@ func New(deps Deps) (http.Handler, error) {
 				// live-page collision, D-10). {id} is the trash row id, not a path,
 				// so this does not collide with the /pages/* wildcard.
 				editor.Post("/trash/{id}/restore", h.handleRestoreFromTrash)
+				// Restore a whole folder-delete as a unit (TREE-05), index.md first,
+				// per-page collision auto-suffix. {id} is the OPAQUE delete_group_id
+				// (not a path), bound parameterized in SQL — no wildcard conflict with
+				// /pages/* and no SQLi (T-07-05). Editor-gated like the page restore.
+				editor.Post("/trash/group/{id}/restore", h.handleRestoreFolderGroup)
 			})
 
 			// Admin-only user management (D-05). Every route is gated by

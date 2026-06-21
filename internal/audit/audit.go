@@ -45,6 +45,8 @@ const (
 	ActionFolderCreate      = "folder_create"
 	ActionFolderRename      = "folder_rename"
 	ActionFolderMove        = "folder_move"
+	ActionFolderTrash       = "folder_trash"
+	ActionFolderRestore     = "folder_restore"
 	ActionAttachUpload      = "attach_upload"
 	ActionAttachReplace     = "attach_replace"
 	ActionAttachDelete      = "attach_delete"

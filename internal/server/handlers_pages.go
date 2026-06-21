@@ -256,6 +256,10 @@ func (h *authHandlers) handleRenamePage(w http.ResponseWriter, r *http.Request) 
 		h.handleMoveFolder(w, r, strings.TrimSuffix(wild, "/move-folder"))
 		return
 	}
+	if strings.HasSuffix(wild, "/delete-folder") {
+		h.handleDeleteFolder(w, r, strings.TrimSuffix(wild, "/delete-folder"))
+		return
+	}
 	if !strings.HasSuffix(wild, "/rename") {
 		writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
 		return
@@ -416,6 +420,41 @@ func (h *authHandlers) writeFolderError(w http.ResponseWriter, err error) {
 	default:
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
 	}
+}
+
+// handleDeleteFolder moves a whole folder (its index.md + every descendant) to
+// trash under ONE shared delete_group_id so it can be restored as a unit (TREE-04).
+// It is dispatched on the existing /pages/* POST catch-all by the "/delete-folder"
+// suffix (a sibling {path:.*} route would 405 against the wildcard). The
+// attacker-controlled dir is re-validated via cleanPathString (SEC-01/WR-08) before
+// the service walks it. Editor-gated via the router subgroup (RBAC from the session
+// role, never client input — T-07-06). 404 when the folder has no pages; 204 on
+// success.
+func (h *authHandlers) handleDeleteFolder(w http.ResponseWriter, r *http.Request, rawDir string) {
+	if h.pages == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	dir, ok := cleanPathString(w, rawDir)
+	if !ok {
+		return
+	}
+	user := h.actorUsername(r.Context())
+	if err := h.pages.DeleteFolder(r.Context(), dir, user); err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This folder no longer exists. It may have been moved or deleted.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionFolderTrash,
+		Actor:  user,
+		Target: dir,
+		Source: auditSourceWeb,
+	})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleCreateFolder creates a folder (seeded with a blank index.md, editor

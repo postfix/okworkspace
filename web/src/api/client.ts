@@ -318,6 +318,10 @@ export interface TrashEntry {
   original_path: string;
   deleted_by: string;
   deleted_at: string;
+  // delete_group_id groups every row produced by ONE folder delete (TREE-04/05) so
+  // the TrashView can render them as a single restorable unit. Empty for a solo
+  // per-page delete.
+  delete_group_id: string;
 }
 
 // deletePage moves a page to trash (PAGE-06). Delete is recoverable — the page
@@ -342,6 +346,27 @@ export async function listTrash(): Promise<TrashEntry[]> {
 // page's actual restored location.
 export async function restoreFromTrash(id: number): Promise<{ path: string }> {
   return mutate<{ path: string }>(`/api/v1/trash/${id}/restore`, undefined);
+}
+
+// deleteFolder moves a whole folder (its index.md + every descendant page) to Trash
+// under one shared delete_group_id (TREE-04). Recoverable — the folder can be
+// restored as a unit from Trash; nothing is permanently removed. Dispatched on the
+// /pages/* POST catch-all by the "/delete-folder" suffix.
+export async function deleteFolder(dir: string): Promise<void> {
+  await mutate<void>(`/api/v1/pages/${dir}/delete-folder`, undefined);
+}
+
+// restoreFolderGroup restores a folder-delete as a unit (TREE-05), index.md first.
+// If a page already exists at one of the original paths, that page is restored as
+// "{title} (restored)" so nothing is clobbered; the returned paths are the pages'
+// actual restored locations. groupId is the opaque delete_group_id from a TrashEntry.
+export async function restoreFolderGroup(
+  groupId: string,
+): Promise<{ paths: string[] }> {
+  return mutate<{ paths: string[] }>(
+    `/api/v1/trash/group/${groupId}/restore`,
+    undefined,
+  );
 }
 
 // --- Version history & restore (VER-02/03) ---
