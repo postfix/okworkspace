@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   acquireLock,
+  createPage,
   forceLock,
   getPage,
   releaseLock,
@@ -13,6 +14,9 @@ import {
 import { readField, setField } from "../lib/frontmatter";
 import { getConnId } from "../lib/connId";
 import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
+import DiffReviewDialog, {
+  type ConflictBusy,
+} from "../components/DiffReviewDialog";
 import LinkPicker from "../components/LinkPicker";
 import LivePreviewEditor from "../components/LivePreviewEditor";
 import PresenceIndicator from "../components/PresenceIndicator";
@@ -60,7 +64,19 @@ export default function PageEditor() {
   const [body, setBody] = useState("");
   const [frontmatter, setFrontmatter] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
-  const [conflict, setConflict] = useState(false);
+  // Conflict state (COLL-04). On a stale-save 409 the editor fetches the current
+  // server version and opens DiffReviewDialog in conflict mode (oldText = their
+  // server body, newText = my body) — superseding the Phase 1 banner. conflict is
+  // null when no collision is open. conflictBusy labels the in-flight resolution
+  // button (Overwrite → "Saving…", Save-as-copy → "Saving copy…").
+  const [conflict, setConflict] = useState<{
+    serverBody: string;
+    serverRevision: string;
+  } | null>(null);
+  const [conflictBusy, setConflictBusy] = useState<ConflictBusy>(null);
+  // mergeReference holds the server version surfaced for reference after a Manual
+  // merge (the server version MUST stay visible while reconciling). null = hidden.
+  const [mergeReference, setMergeReference] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Soft-lock state (COLL-02). When another live session holds the lock, lockedBy
@@ -181,7 +197,25 @@ export default function PageEditor() {
           } catch (err) {
             const status = (err as Error & { status?: number }).status;
             if (status === 409) {
-              setConflict(true);
+              // A stale save collided with someone else's commit. Fetch the CURRENT
+              // server version and open the conflict dialog (oldText = their body,
+              // newText = mine) — the resolution surface that supersedes the banner.
+              // baseRevision is deliberately NOT advanced: my edits stay intact and
+              // every resolution choice re-routes through the revision-checked save.
+              try {
+                const server = await getPage(path);
+                setConflict({
+                  serverBody: server.body,
+                  serverRevision: server.revision,
+                });
+              } catch {
+                // If we can't fetch the server version we can't show a real diff;
+                // fall back to the recoverable save-error rather than a prose-only
+                // or fabricated conflict surface.
+                setSaveError(
+                  "We couldn't save your page just now. Your changes are kept here — check your connection and try Save again.",
+                );
+              }
               setSaveState("idle");
               return;
             }
@@ -234,7 +268,20 @@ export default function PageEditor() {
   // rescheduled on every change so typing never triggers a mid-keystroke save.
   // The saver itself coalesces (and never drops) trailing edits, so one timer is
   // enough — no separate idle-escalation timer that could race and clobber.
+  // conflictOpenRef mirrors `conflict !== null` for the autosave gate. A ref (not
+  // the state) so scheduleAutosave's identity is stable and a timer armed BEFORE
+  // the conflict opened still sees the latest gate when it fires (Pitfall 5).
+  const conflictOpenRef = useRef(false);
+  useEffect(() => {
+    conflictOpenRef.current = conflict !== null;
+  }, [conflict]);
+
   const scheduleAutosave = useCallback(() => {
+    // Do NOT re-arm autosave while a conflict dialog is open — otherwise every
+    // debounce would fire a save that 409s again and re-open the dialog (thrash).
+    // The in-flight edit is preserved in the editor; it saves once the conflict is
+    // resolved (which advances baseRevision and resumes autosave). (Pitfall 5.)
+    if (conflictOpenRef.current) return;
     if (draftTimer.current) window.clearTimeout(draftTimer.current);
     draftTimer.current = window.setTimeout(() => void runSaver(false), DRAFT_DEBOUNCE_MS);
   }, [runSaver]);
@@ -301,6 +348,115 @@ export default function PageEditor() {
     }
   }
 
+  // --- Conflict resolution handlers (COLL-04) ---
+  // Every choice routes through the EXISTING revision-checked save path — there is
+  // no conflict endpoint and no silent overwrite. Overwrite saves at the CURRENT
+  // revision (re-409s if another commit lands mid-overwrite → re-open); Save-as-copy
+  // Creates a fresh deduped page and writes my body there (the original is never
+  // touched, proven by TestSaveAsCopyLeavesOriginal); Manual merge keeps my body
+  // with the server version visible, then lets a normal Save run.
+
+  // onConflictOverwrite saves MY version against the page's CURRENT revision. It
+  // re-fetches the revision first (the conflict may be stale by now), then Saves. A
+  // re-409 (another commit landed between the fetch and the save) re-opens the
+  // dialog with the NEWER server version — never a silent clobber.
+  async function onConflictOverwrite() {
+    setConflictBusy("overwrite");
+    setSaveError(null);
+    try {
+      const fresh = await getPage(path);
+      try {
+        await savePage(path, {
+          body: bodyRef.current,
+          frontmatter: frontmatterRef.current,
+          base_revision: fresh.revision,
+        });
+      } catch (err) {
+        const status = (err as Error & { status?: number }).status;
+        if (status === 409) {
+          // Yet another commit landed — re-open with the newer server version.
+          const server = await getPage(path);
+          setConflict({
+            serverBody: server.body,
+            serverRevision: server.revision,
+          });
+          return;
+        }
+        throw err;
+      }
+      // Overwrite landed. Advance the base revision so the next save is not a
+      // self-409, sync the last-saved refs, resolve the conflict, and resume.
+      const after = await getPage(path);
+      baseRevision.current = after.revision;
+      lastSavedBody.current = bodyRef.current;
+      lastSavedFrontmatter.current = frontmatterRef.current;
+      setConflict(null);
+      setMergeReference(null);
+      setSaveState("saved");
+      void acquireLock(path, connId.current).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ["page", path] });
+      queryClient.invalidateQueries({ queryKey: ["tree"] });
+    } catch {
+      setSaveError(
+        "We couldn't save your page just now. Your changes are kept here — check your connection and try Save again.",
+      );
+    } finally {
+      setConflictBusy(null);
+    }
+  }
+
+  // onConflictManualMerge closes the dialog, keeps my body in the editor, and
+  // surfaces the server version for reference (it MUST stay visible while I
+  // reconcile). No backend call here — the eventual Save runs the revision check.
+  function onConflictManualMerge() {
+    if (conflict) setMergeReference(conflict.serverBody);
+    setConflict(null);
+    // Advance baseRevision to the server's so a normal Save after reconciling does
+    // not instantly re-409 against the version I am now merging against.
+    if (conflict) baseRevision.current = conflict.serverRevision;
+    setSaveState("idle");
+  }
+
+  // onConflictSaveAsCopy creates a NEW deduped page ("{title} (Copy)") and writes
+  // my body into it at its FRESH revision, then navigates there. The original page
+  // is NEVER written and never carries the conflicted base revision (the zero-loss
+  // escape hatch; backend proof: TestSaveAsCopyLeavesOriginal).
+  async function onConflictSaveAsCopy() {
+    setConflictBusy("copy");
+    setSaveError(null);
+    try {
+      const title = readField(frontmatterRef.current, "title") || "Untitled";
+      const slash = path.lastIndexOf("/");
+      const folder = slash === -1 ? "" : path.slice(0, slash);
+      const { path: newPath } = await createPage(folder, `${title} (Copy)`);
+      const fresh = await getPage(newPath);
+      await savePage(newPath, {
+        body: bodyRef.current,
+        frontmatter: setField(fresh.frontmatter, "title", `${title} (Copy)`),
+        base_revision: fresh.revision,
+      });
+      setConflict(null);
+      setMergeReference(null);
+      setSaveState("saved");
+      queryClient.invalidateQueries({ queryKey: ["tree"] });
+      // Open the copy (transient "Saved as a copy. Opening it now.").
+      navigate(`/app/edit/${newPath}`);
+    } catch {
+      setSaveError(
+        "We couldn't save a copy just now. Your changes are kept here — check your connection and try again.",
+      );
+    } finally {
+      setConflictBusy(null);
+    }
+  }
+
+  // onConflictCancel (Esc / backdrop) applies NOTHING: my edits stay in the editor,
+  // the server is untouched, and the conflict is re-resolvable on the next save.
+  function onConflictCancel() {
+    if (conflictBusy) return; // don't dismiss mid-save
+    setConflict(null);
+  }
+
   if (isLoading) {
     return <p className="pageeditor-status">Loading…</p>;
   }
@@ -315,18 +471,36 @@ export default function PageEditor() {
           onForceEdit={() => void onForceEdit()}
         />
       )}
-      {conflict && (
-        <div className="banner banner-warning" role="alert">
-          This page was changed somewhere else since you opened it. Reload to see
-          the latest version before saving again.
+      {/* COLL-04: a stale-save 409 opens the conflict dialog (a REAL diff with
+          three risk-ranked, safe-by-default choices) — superseding the Phase 1
+          banner. Every choice routes through the revision-checked save path; no
+          choice can silently overwrite. */}
+      <DiffReviewDialog
+        open={conflict !== null}
+        mode="conflict"
+        title="This page was changed somewhere else"
+        summary="Someone saved a different version while you were editing. Compare your version with theirs, then choose what to keep."
+        columnCaption="Left: the saved version · Right: your unsaved version"
+        oldText={conflict?.serverBody ?? ""}
+        newText={body}
+        conflictBusy={conflictBusy}
+        onReject={onConflictCancel}
+        onOverwrite={() => void onConflictOverwrite()}
+        onManualMerge={onConflictManualMerge}
+        onSaveAsCopy={() => void onConflictSaveAsCopy()}
+      />
+      {mergeReference !== null && (
+        <details className="pageeditor-merge-reference" open>
+          <summary>Their saved version (for reference)</summary>
+          <pre className="pageeditor-merge-reference-body">{mergeReference}</pre>
           <button
             type="button"
-            className="btn btn-secondary pageeditor-reload"
-            onClick={() => navigate(0)}
+            className="btn btn-ghost pageeditor-merge-reference-dismiss"
+            onClick={() => setMergeReference(null)}
           >
-            Reload page
+            Hide
           </button>
-        </div>
+        </details>
       )}
       {saveError && (
         <div className="banner banner-warning" role="alert">

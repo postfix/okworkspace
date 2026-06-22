@@ -70,3 +70,36 @@
   background: var(--color-surface);
   opacity: 0.85;
 }
+
+/* Manual-merge reference pane (COLL-04). After "Manual merge" the dialog closes and
+   the server's version stays visible here for reference while you reconcile your
+   own body. A collapsible <details> (open by default) keeps it from crowding the
+   editor; token-only, mono body so the reference reads as content not chrome. */
+.pageeditor-merge-reference {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  background: var(--color-surface);
+}
+
+.pageeditor-merge-reference > summary {
+  cursor: pointer;
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.pageeditor-merge-reference-body {
+  margin: var(--space-sm) 0;
+  max-height: 40vh;
+  overflow: auto;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  white-space: pre-wrap;
+  color: var(--color-text);
+}
+
+.pageeditor-merge-reference-dismiss {
+  font-size: var(--font-size-label);
+}

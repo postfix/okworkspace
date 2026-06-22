@@ -185,18 +185,45 @@ describe("PageEditor", () => {
     }
   });
 
-  it("surfaces the conflict banner on a 409", async () => {
+  it("opens the conflict dialog on a 409 (supersedes the Phase 1 banner)", async () => {
     const err = new Error("conflict") as Error & { status?: number };
     err.status = 409;
     vi.mocked(client.savePage).mockRejectedValue(err);
+    // First getPage = initial load; the 409 path then fetches the (different)
+    // server version to diff my edit against.
+    vi.mocked(client.getPage)
+      .mockResolvedValueOnce({
+        frontmatter: "type: Page\ntitle: Notes\n",
+        body: "original",
+        revision: "rev-1",
+      })
+      .mockResolvedValue({
+        frontmatter: "type: Page\ntitle: Notes\n",
+        body: "their server version",
+        revision: "rev-2",
+      });
 
     renderEditor("notes.md");
-    await screen.findByLabelText("body");
+    const body = await screen.findByLabelText("body");
+    fireEvent.change(body, { target: { value: "my edited body" } });
     fireEvent.click(screen.getByRole("button", { name: "Save page" }));
 
+    // The conflict dialog (a real diff + three risk-ranked choices) replaces the
+    // old "Reload page" banner.
     expect(
-      await screen.findByText(/changed somewhere else since you opened it/i),
+      await screen.findByText(/this page was changed somewhere else/i),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reload page" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: /overwrite with my version/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /save my version as a new page/i }),
+    ).toBeInTheDocument();
+    // The old banner is gone.
+    expect(
+      screen.queryByRole("button", { name: "Reload page" }),
+    ).toBeNull();
   });
 });
