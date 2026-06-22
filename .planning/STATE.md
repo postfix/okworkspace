@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 05
 current_phase_name: collaboration
 status: executing
-stopped_at: Phase 5 wave 2/4 COMPLETE (05-02 soft-lock HTTP slice: editor-gated acquire/force/release endpoints off the .md/lock suffix, SoftLockBanner warning, PageEditor lock lifecycle + read-only-under-lock + Force edit; COLL-02 end-to-end, save path untouched). build/vet/tests green; vitest 280/280; tsc -b clean. Resume picks up at wave 3 (05-03 presence/SSE). Phase 4 done+verified.
-last_updated: "2026-06-22T12:28:05.000Z"
+stopped_at: "Phase 5 wave 2/4 COMPLETE (05-02 soft-lock HTTP slice: editor-gated acquire/force/release endpoints off the .md/lock suffix, SoftLockBanner warning, PageEditor lock lifecycle + read-only-under-lock + Force edit; COLL-02 end-to-end, save path untouched). build/vet/tests green; vitest 280/280; tsc -b clean. Resume picks up at wave 3 (05-03 presence/SSE). Phase 4 done+verified."
+last_updated: "2026-06-22T12:38:29.318Z"
 last_activity: 2026-06-22
 last_activity_desc: Completed 05-02-PLAN.md (soft-lock HTTP slice, COLL-02)
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 36
-  completed_plans: 34
-  percent: 89
+  completed_plans: 35
+  percent: 88
 ---
 
 # Project State
@@ -29,13 +29,14 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 05 (collaboration) — EXECUTING
-Plan: 2 of 4 complete (wave 2 done)
-Status: Executing Phase 05 — wave 2/4 (05-02 soft-lock HTTP slice) COMPLETE
+Plan: 3 of 4 complete (wave 2 done)
+Status: Ready to execute
 Last activity: 2026-06-22 — Completed 05-02-PLAN.md (soft-lock HTTP slice, COLL-02)
 
 Progress: [█████░░░░░] 50% (2 of 4 plans)
 
 ### Key decisions (05-02)
+
 - Soft-lock endpoints (acquire/force/release) dispatch off the single POST /pages/* catch-all by `.md/lock[/force|/release]` suffix (longer suffixes first, `.md`-anchored) — no new route line; inherits RequireRole(RoleEditor) + nosurf CSRF.
 - Lock identity is server-trusted (actorUsername + CurrentUser().UserID()); only the opaque `conn` id is client-supplied (T-05-06). Acquire doubles as the heartbeat/on-save refresh.
 - Force edit is take-over only (forceLock on both ends) — pages.Save / base_revision optimistic concurrency provably untouched (T-05-09).
@@ -90,6 +91,7 @@ Progress: [█████░░░░░] 50% (2 of 4 plans)
 | Phase 04 P06 | 9min | 3 tasks | 17 files |
 | Phase 04 P07 | 22min | 3 tasks | 9 files |
 | Phase 05 P01 | 20min | 4 tasks | 6 files |
+| Phase 05 P05-03 | ~10min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -180,6 +182,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-22T12:28:05.000Z
+Last session: 2026-06-22T12:38:23.982Z
 Stopped at: Completed 05-02-PLAN.md
 Resume file: None

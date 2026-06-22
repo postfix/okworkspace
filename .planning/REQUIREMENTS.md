@@ -97,7 +97,7 @@ Full MVP per SPEC.md (Phases 0–5). Each maps to a roadmap phase.
 
 ### Collaboration
 
-- [ ] **COLL-01**: User can see when another user is currently editing a page (presence)
+- [x] **COLL-01**: User can see when another user is currently editing a page (presence)
 - [x] **COLL-02**: The system applies a soft lock when a page is being edited; a user can still force-edit
 - [ ] **COLL-03**: Saves use optimistic concurrency with a per-document revision
 - [ ] **COLL-04**: On a save conflict, the user is shown a diff and can choose overwrite, manual merge, or save-as-copy
@@ -205,7 +205,7 @@ Which phases cover which requirements. **Populated during roadmap creation.**
 | AGNT-09 | Phase 4 | Complete |
 | AGNT-10 | Phase 4 | Complete |
 | AGNT-11 | Phase 4 | Complete |
-| COLL-01 | Phase 5 | Pending |
+| COLL-01 | Phase 5 | Complete |
 | COLL-02 | Phase 5 | Complete |
 | COLL-03 | Phase 5 | Pending |
 | COLL-04 | Phase 5 | Pending |
