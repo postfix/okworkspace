@@ -154,22 +154,32 @@ func (s *Service) Release(ctx context.Context, pagePath, sessionID string) error
 	return s.repo.Remove(s.lockPath(pagePath))
 }
 
-// List returns every lock file currently on disk (live or expired — GC uses the
-// expired ones). A non-existent locks subtree yields an empty slice, not an
-// error. Torn/garbage files are skipped. Resolution of the walk root routes
-// through repo.Resolve so the walk can never start outside the repo.
-func (s *Service) List(ctx context.Context) ([]Lock, error) {
+// lockEntry is one lock file found by the subtree walk: the parsed record plus
+// the repo-relative path it was read from (so GC can Remove it through repo.*
+// without reconstructing a page path from the record, which has none).
+type lockEntry struct {
+	lock Lock
+	rel  string // repo-relative `.okf-workspace/locks/{pagePath}.lock`
+}
+
+// walk scans the locks subtree and returns every readable lock file (live or
+// expired) paired with its repo-relative path. A non-existent subtree yields an
+// empty slice, not an error. Torn/garbage and unreadable files are skipped. The
+// walk root is resolved through repo.Resolve so it can never start outside the
+// repo, and the returned rel paths are derived under the canonical repo root.
+func (s *Service) walk() ([]lockEntry, error) {
 	root, err := s.repo.Resolve(lockSubtree)
 	if err != nil {
 		return nil, err
 	}
+	repoRoot := s.repo.Root()
 	if _, statErr := os.Stat(root); statErr != nil {
 		if os.IsNotExist(statErr) {
 			return nil, nil
 		}
 		return nil, statErr
 	}
-	var locks []Lock
+	var entries []lockEntry
 	walkErr := filepath.WalkDir(root, func(abs string, d fs.DirEntry, werr error) error {
 		if werr != nil {
 			return werr
@@ -187,11 +197,31 @@ func (s *Service) List(ctx context.Context) ([]Lock, error) {
 		if json.Unmarshal(raw, &l) != nil {
 			return nil // torn/garbage — skip
 		}
-		locks = append(locks, l)
+		relPath, relErr := filepath.Rel(repoRoot, abs)
+		if relErr != nil {
+			return nil
+		}
+		entries = append(entries, lockEntry{lock: l, rel: filepath.ToSlash(relPath)})
 		return nil
 	})
 	if walkErr != nil {
 		return nil, walkErr
+	}
+	return entries, nil
+}
+
+// List returns every lock record currently on disk (live or expired). A
+// non-existent locks subtree yields an empty slice, not an error. Torn/garbage
+// files are skipped. Resolution of the walk root routes through repo.Resolve so
+// the walk can never start outside the repo.
+func (s *Service) List(ctx context.Context) ([]Lock, error) {
+	entries, err := s.walk()
+	if err != nil {
+		return nil, err
+	}
+	locks := make([]Lock, 0, len(entries))
+	for _, e := range entries {
+		locks = append(locks, e.lock)
 	}
 	return locks, nil
 }

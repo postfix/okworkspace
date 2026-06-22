@@ -14,6 +14,10 @@ import (
 // SessionUserIDKey is the SCS session key holding the authenticated user id.
 const SessionUserIDKey = "user_id"
 
+// SessionConnectionIDKey is the SCS session key holding the client-generated
+// connection id used as the soft-lock session_id (COLL-02 presence/lock owner).
+const SessionConnectionIDKey = "connection_id"
+
 // SecureCookies reports whether cookies should carry the Secure flag for the
 // given public URL — true exactly when the URL is served over HTTPS. It is the
 // SINGLE source of truth for the Secure decision (WR-07): both the SCS session
