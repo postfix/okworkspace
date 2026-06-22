@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 05
 current_phase_name: collaboration
 status: executing
-stopped_at: "Phase 5 wave 2/4 COMPLETE (05-02 soft-lock HTTP slice: editor-gated acquire/force/release endpoints off the .md/lock suffix, SoftLockBanner warning, PageEditor lock lifecycle + read-only-under-lock + Force edit; COLL-02 end-to-end, save path untouched). build/vet/tests green; vitest 280/280; tsc -b clean. Resume picks up at wave 3 (05-03 presence/SSE). Phase 4 done+verified."
-last_updated: "2026-06-22T12:38:29.318Z"
+stopped_at: Completed 05-04-PLAN.md (conflict resolution + force-edit safety proof, COLL-03/COLL-04)
+last_updated: "2026-06-22T12:50:58.701Z"
 last_activity: 2026-06-22
-last_activity_desc: Completed 05-02-PLAN.md (soft-lock HTTP slice, COLL-02)
+last_activity_desc: Completed 05-04-PLAN.md (conflict resolution + force-edit safety proof, COLL-03/COLL-04)
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 36
-  completed_plans: 35
-  percent: 88
+  completed_plans: 36
+  percent: 100
 ---
 
 # Project State
@@ -28,18 +28,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 05 (collaboration) — EXECUTING
-Plan: 3 of 4 complete (wave 2 done)
-Status: Ready to execute
-Last activity: 2026-06-22 — Completed 05-02-PLAN.md (soft-lock HTTP slice, COLL-02)
+Phase: 05 (collaboration) — ALL 4 PLANS COMPLETE
+Plan: 4 of 4 complete (wave 4 / 05-04 done)
+Status: Phase 5 implementation complete — ready for phase verification
+Last activity: 2026-06-22 — Completed 05-04-PLAN.md (conflict resolution + force-edit safety proof, COLL-03/COLL-04)
 
-Progress: [█████░░░░░] 50% (2 of 4 plans)
+Progress: [██████████] 100% (4 of 4 plans)
 
-### Key decisions (05-02)
+### Key decisions (05-04 — the load-bearing slice)
 
-- Soft-lock endpoints (acquire/force/release) dispatch off the single POST /pages/* catch-all by `.md/lock[/force|/release]` suffix (longer suffixes first, `.md`-anchored) — no new route line; inherits RequireRole(RoleEditor) + nosurf CSRF.
-- Lock identity is server-trusted (actorUsername + CurrentUser().UserID()); only the opaque `conn` id is client-supplied (T-05-06). Acquire doubles as the heartbeat/on-save refresh.
-- Force edit is take-over only (forceLock on both ends) — pages.Save / base_revision optimistic concurrency provably untouched (T-05-09).
+- COLL-03 PROVEN: force-edit is lock-only; a stale forced save still 409s (`TestForceEditStillRejectsStaleSave`). `pages.Service.Save` is UNCHANGED — the 409 floor (service.go:200) is reused, not modified.
+- Save-as-copy = `Create(deduped path)` + `Save(newPath, fresh rev)`; the original is never written and never carries the conflicted base revision (`TestSaveAsCopyLeavesOriginal`).
+- A 409 (explicit Save OR autosave) opens `DiffReviewDialog` conflict mode (old=server, new=mine) with three risk-ranked choices (Overwrite / Manual merge / Save as copy); autosave is gated while the dialog is open; the safe choice owns initial focus, never Overwrite. Conflict UI is additive over the 05-02 lock + 05-03 presence wiring.
+- Self-check: backend build/vet/test green (incl. both new tests); frontend vitest 289/289; tsc clean; no user-facing Git vocabulary in conflict copy.
 
 ## Quick Tasks Completed
 
@@ -92,6 +93,7 @@ Progress: [█████░░░░░] 50% (2 of 4 plans)
 | Phase 04 P07 | 22min | 3 tasks | 9 files |
 | Phase 05 P01 | 20min | 4 tasks | 6 files |
 | Phase 05 P05-03 | ~10min | 3 tasks | 7 files |
+| Phase 05 P04 | 25min | 4 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -157,6 +159,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Rewrite apply reuses applyPatch (selection span spliced into cached body); no new write endpoint; missing-span/stale revision 409s into the dialog stale state
 - [Phase ?]: Lock paths use two-layer guard: repo.Resolve guards the repo root; lockPath guards the .okf-workspace/locks/ subtree (ErrUnsafePagePath)
 - [Phase ?]: Force is lock-file-only, decoupled from save authority (pages.Save); lockExpiry=2m, GC interval=60s
+- [Phase 05]: COLL-03 proven — force-edit is lock-only; a stale forced save still 409s (TestForceEditStillRejectsStaleSave). pages.Service.Save is UNCHANGED — the 409 floor is reused, not modified.
+- [Phase 05]: Save-as-copy = Create(deduped path) + Save(newPath, fresh rev); the original is never written and never carries the conflicted base revision (TestSaveAsCopyLeavesOriginal).
+- [Phase 05]: A 409 (explicit OR autosave) opens DiffReviewDialog conflict mode (old=server, new=mine); autosave is gated while open; safe choice owns initial focus, never Overwrite; conflict UI is additive over 05-02 lock + 05-03 presence.
 
 ### Pending Todos
 
@@ -182,6 +187,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-22T12:38:23.982Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-06-22T12:50:07.879Z
+Stopped at: Completed 05-04-PLAN.md (conflict resolution + force-edit safety proof, COLL-03/COLL-04)
 Resume file: None

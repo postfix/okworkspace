@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Attachments & Text Extraction** - Users upload, preview, download, and manage original-fidelity attachments with searchable extracted text (completed 2026-06-21; 11/11 verified, code review resolved incl. stored-XSS + worker-stall fixes; 4 browser-only checks deferred)
 - [x] **Phase 3: Search** - Users find pages, headings, and attachments across titles, body, tags, filenames, and extracted text (completed 2026-06-21; 13/13 verified, code review resolved incl. drift-detection + heading-deep-link fixes; 13 browser checks deferred)
 - [x] **Phase 4: Eino Agent** - Users get approval-gated AI help over pages, selections, attachments, and the workspace (completed 2026-06-21)
-- [ ] **Phase 5: Collaboration** - Users see presence, soft locks, and conflict resolution so concurrent edits never silently lose work
+- [x] **Phase 5: Collaboration** - Users see presence, soft locks, and conflict resolution so concurrent edits never silently lose work (completed 2026-06-22)
 - [x] **Phase 6: Live-Preview Editor (Obsidian-style)** - Editors get an Obsidian-style live-preview Markdown editor (inline rendering as you type, source toggle) while keeping the byte-stable Markdown round-trip (completed 2026-06-21)
 - [x] **Phase 7: Obsidian-style File Tree (folder operations & tree UX)** - Users manage folders and files directly in the tree (right-click menus, drag-and-drop, folder rename/move/delete) the way they would in Obsidian (completed 2026-06-21)
 
@@ -203,12 +203,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Saves use optimistic concurrency with a per-document revision, and a stale save is rejected rather than silently overwriting
   4. On a save conflict, the user is shown a diff and can choose overwrite, manual merge, or save-as-copy (which creates a new page)
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 - [x] 05-01-PLAN.md — Lock store + GC job + SessionConnectionIDKey + ticker wiring (COLL-02 foundation) [wave 1]
 - [x] 05-02-PLAN.md — Lock endpoints + SoftLockBanner + read-only-under-lock editor + force-edit (COLL-02 e2e) [wave 2]
 - [x] 05-03-PLAN.md — Presence SSE stream + PresenceIndicator + subscribePresence (COLL-01) [wave 3]
-- [ ] 05-04-PLAN.md — DiffReviewDialog conflict mode + 3 handlers + save-as-copy + force-edit-stale-save hardening test (COLL-04 + COLL-03) [wave 4]
+- [x] 05-04-PLAN.md — DiffReviewDialog conflict mode + 3 handlers + save-as-copy + force-edit-stale-save hardening test (COLL-04 + COLL-03) [wave 4]
 
 **UI hint**: yes
 **Notes**: No phase research needed — conflict UX is well-specified (SPEC §13.1) and the soft-lock file format with TTL/heartbeat is straightforward. This phase hardens and completes the optimistic-concurrency floor scaffolded in Phase 1: the revision check must still run when a user force-edits past a soft lock, and stale locks (session end/crash) must never cause silent data loss. The conflict-resolution UI reuses the DiffReviewDialog built in Phase 4. Soft lock files live in `.okf-workspace/locks/` with user + heartbeat TTL; presence is delivered over SSE.
@@ -293,6 +293,6 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Attachments & Text Extraction | 0/4 | Planned | - |
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 7/7 | Complete   | 2026-06-21 |
-| 5. Collaboration | 3/4 | In Progress|  |
+| 5. Collaboration | 4/4 | Complete   | 2026-06-22 |
 | 6. Live-Preview Editor (Obsidian-style) | 4/4 | Complete   | 2026-06-21 |
 | 7. Obsidian-style File Tree (folder operations & tree UX) | 4/4 | Complete   | 2026-06-21 |
