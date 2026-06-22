@@ -2,13 +2,28 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getPage, savePage, type Page } from "../api/client";
+import {
+  acquireLock,
+  forceLock,
+  getPage,
+  releaseLock,
+  savePage,
+  type Page,
+} from "../api/client";
 import { readField, setField } from "../lib/frontmatter";
+import { getConnId } from "../lib/connId";
 import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
 import LinkPicker from "../components/LinkPicker";
 import LivePreviewEditor from "../components/LivePreviewEditor";
+import SoftLockBanner from "../components/SoftLockBanner";
 import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
+
+// LOCK_HEARTBEAT_MS is the soft-lock refresh interval (COLL-02). It sits well
+// inside the server's 2-minute lock TTL so a held lock never lapses mid-edit; a
+// crashed/closed session stops refreshing and is reaped by GC within one TTL
+// window. Acquire doubles as the refresh (a same-session Acquire re-stamps TTL).
+const LOCK_HEARTBEAT_MS = 30_000;
 
 // Debounce interval (RESEARCH Open Q2: client-driven idle save). A keystroke
 // schedules an autosave ~1s after typing stops. Every write goes through the same
@@ -47,6 +62,20 @@ export default function PageEditor() {
   const [conflict, setConflict] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Soft-lock state (COLL-02). When another live session holds the lock, lockedBy
+  // is their username → the editor renders read-only beneath the SoftLockBanner.
+  // It is null when you hold the lock (or after you Force edit) → the surface is
+  // editable. forceBusy/forceFailed drive the banner's take-over button states.
+  const [lockedBy, setLockedBy] = useState<string | null>(null);
+  const [forceBusy, setForceBusy] = useState(false);
+  const [forceFailed, setForceFailed] = useState(false);
+  // The stable per-tab connection id is the lock SessionID (client-generated,
+  // opaque). useRef so it is read once and shared by every lock call this mount.
+  const connId = useRef(getConnId());
+  // readOnly mirrors lockedBy for the editor surface + Save gating. Held-by-other
+  // ⇒ genuinely read-only (no caret, Save disabled); never a mere visual dim.
+  const readOnly = lockedBy !== null;
+
   // The base revision is the optimistic-concurrency token read at open time; it
   // advances after each successful save so subsequent saves are not self-409s.
   const baseRevision = useRef("");
@@ -81,6 +110,41 @@ export default function PageEditor() {
       lastSavedFrontmatter.current = data.frontmatter;
     }
   }, [data]);
+
+  // Soft-lock lifecycle (COLL-02): acquire the lock on entering Edit, refresh it
+  // on a ~30s heartbeat while we hold it, and best-effort release it on unmount /
+  // path change. Acquire doubles as the heartbeat refresh (a same-session Acquire
+  // re-stamps the TTL); a held-by-other result flips the surface read-only and
+  // names the holder. The effect re-runs per page path so navigating between pages
+  // releases the old lock and acquires the new one.
+  useEffect(() => {
+    if (path === "") return;
+    const conn = connId.current;
+    let cancelled = false;
+
+    async function tryAcquire() {
+      try {
+        const res = await acquireLock(path, conn);
+        if (cancelled) return;
+        // Don't override an in-progress force-edit takeover with a stale heartbeat.
+        setLockedBy(res.result === "held-by-other" ? res.holder?.username ?? "Someone" : null);
+      } catch {
+        // A failed acquire/heartbeat must not break editing — the worst case is we
+        // briefly don't know the lock state; the next tick retries. Leave the
+        // current read-only state as-is (GC reaps a truly abandoned lock).
+      }
+    }
+
+    void tryAcquire();
+    const timer = window.setInterval(() => void tryAcquire(), LOCK_HEARTBEAT_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      // Best-effort release; GC is the backstop, so swallow any error.
+      void releaseLock(path, conn).catch(() => {});
+    };
+  }, [path]);
 
   // runSaver is a single-flight, serialized, coalescing saver. Only one loop runs
   // at a time (the `saving` guard → WR-03: two PUTs never race on a base revision).
@@ -147,6 +211,11 @@ export default function PageEditor() {
           baseRevision.current = fresh.revision;
           lastSavedBody.current = sentBody;
           lastSavedFrontmatter.current = sentFrontmatter;
+          // Refresh the soft lock on a successful save (COLL-02): a save is proof
+          // of an active editing session, so re-stamp the TTL alongside the ~30s
+          // heartbeat. Fire-and-forget — a failed refresh is reaped by GC and must
+          // never block or fail the save that already succeeded.
+          void acquireLock(path, connId.current).catch(() => {});
           queryClient.invalidateQueries({ queryKey: ["page", path] });
           queryClient.invalidateQueries({ queryKey: ["tree"] });
           // Loop re-checks: if the user typed during the awaits above, save again.
@@ -211,12 +280,40 @@ export default function PageEditor() {
     void runSaver(true);
   }
 
+  // onForceEdit takes over the soft lock so this session may type (COLL-02). It
+  // calls forceLock ALONE — it never calls savePage and never touches
+  // baseRevision: force-edit is "take over editing", NOT a save bypass. A
+  // subsequent save still runs the revision check (and 409s into the conflict path
+  // if someone committed in between) — the load-bearing safety rule. On success the
+  // read-only wash lifts and the caret enters; on a transient failure the banner
+  // shows the retry copy and stays read-only.
+  async function onForceEdit() {
+    setForceBusy(true);
+    setForceFailed(false);
+    try {
+      await forceLock(path, connId.current);
+      setLockedBy(null);
+    } catch {
+      setForceFailed(true);
+    } finally {
+      setForceBusy(false);
+    }
+  }
+
   if (isLoading) {
     return <p className="pageeditor-status">Loading…</p>;
   }
 
   return (
     <div className="pageeditor">
+      {lockedBy && (
+        <SoftLockBanner
+          holderName={lockedBy}
+          busy={forceBusy}
+          failed={forceFailed}
+          onForceEdit={() => void onForceEdit()}
+        />
+      )}
       {conflict && (
         <div className="banner banner-warning" role="alert">
           This page was changed somewhere else since you opened it. Reload to see
@@ -290,18 +387,35 @@ export default function PageEditor() {
         </div>
       </div>
 
-      <div className="pageeditor-surface">
+      {readOnly && (
+        <p className="pageeditor-readonly-hint" aria-hidden="true">
+          View only — {lockedBy} is editing. Choose <strong>Force edit</strong> to
+          take over.
+        </p>
+      )}
+
+      <div
+        className={
+          readOnly ? "pageeditor-surface pageeditor-surface-readonly" : "pageeditor-surface"
+        }
+      >
         <LivePreviewEditor
           value={body}
           onChange={onBodyChange}
           currentPath={path}
           mode={mode}
+          readOnly={readOnly}
         />
       </div>
 
       <div className="pageeditor-actions">
         <AutosaveStatus state={saveState} />
-        <button type="button" className="btn btn-primary" onClick={onSaveClick}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={onSaveClick}
+          disabled={readOnly}
+        >
           Save page
         </button>
       </div>
