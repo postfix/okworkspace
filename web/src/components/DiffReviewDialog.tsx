@@ -17,8 +17,18 @@ import "./DiffReviewDialog.css";
 // Initial focus lands on Reject (the safe default), so a user cannot approve a
 // consequential write by reflexively hitting Enter when the dialog opens. This is
 // intentional — do NOT "fix" it by focusing Approve in a future refactor.
+// ConflictBusy marks which destructive/copy action is mid-flight in conflict mode
+// so the footer can disable and label exactly the clicked button (Overwrite →
+// "Saving…", Save-as-copy → "Saving copy…"). null = no action in flight.
+export type ConflictBusy = "overwrite" | "copy" | null;
+
 export interface DiffReviewDialogProps {
   open: boolean;
+  // mode selects the footer contract. "review" (default) is the Phase 4
+  // Approve/Reject trust gate — UNCHANGED. "conflict" is the Phase 5 save-collision
+  // surface: a 3-button risk-ranked footer (Overwrite / Manual merge / Save as
+  // copy) with initial focus on a SAFE choice, never Overwrite.
+  mode?: "review" | "conflict";
   // title is caller-supplied ("Review this change" / "Review the rewrite" / a
   // Phase-5 conflict title) — never assume agent copy here.
   title: string;
@@ -27,34 +37,63 @@ export interface DiffReviewDialogProps {
   // summary is an OPTIONAL one-line caption ABOVE the diff. It is never a
   // replacement for the diff — the real diff is always rendered.
   summary?: string;
-  onApprove: () => void;
+  // columnCaption is an OPTIONAL muted Label under the summary clarifying which
+  // side is which ("Left: the saved version · Right: your unsaved version") so
+  // "old/new" is never ambiguous in a conflict context.
+  columnCaption?: string;
+  // --- review mode (mode="review") ---
+  onApprove?: () => void;
   // onReject is invoked by the Reject button, Esc, and a backdrop click. It must
   // NEVER apply — dismissing the dialog discards the proposal (Dialog contract).
+  // In conflict mode it is the cancel handler (Esc/backdrop = apply nothing).
   onReject: () => void;
   // stale === true means the page moved between proposal and approval (a 409 from
   // /apply-patch). The Approve path is REMOVED — there is no way to apply a stale
   // proposal; the user must re-run. onRerun, when provided, re-issues the proposal.
   stale?: boolean;
   onRerun?: () => void;
-  // busy disables the footer and shows the approve button as "Saving…".
+  // busy (review mode) disables the footer and shows the approve button as
+  // "Saving…".
   busy?: boolean;
+  // --- conflict mode (mode="conflict") ---
+  // The three risk-ranked resolution handlers. Overwrite is the ONLY data-losing
+  // choice; Manual merge and Save as copy are the SAFE choices.
+  onOverwrite?: () => void;
+  onManualMerge?: () => void;
+  onSaveAsCopy?: () => void;
+  // conflictBusy disables the conflict footer and labels the in-flight button.
+  conflictBusy?: ConflictBusy;
 }
 
 export default function DiffReviewDialog({
   open,
+  mode = "review",
   title,
   oldText,
   newText,
   summary,
+  columnCaption,
   onApprove,
   onReject,
   stale = false,
   onRerun,
   busy = false,
+  onOverwrite,
+  onManualMerge,
+  onSaveAsCopy,
+  conflictBusy = null,
 }: DiffReviewDialogProps) {
+  const isConflict = mode === "conflict";
+  const conflictBusyActive = conflictBusy !== null;
   const dialogRef = useRef<HTMLDivElement>(null);
-  // The Reject button is the deliberate initial-focus target (NOT Approve).
+  // The Reject button is the deliberate initial-focus target (NOT Approve) in
+  // review mode.
   const rejectRef = useRef<HTMLButtonElement>(null);
+  // In conflict mode the SAFE control ("Save as copy") is the deliberate
+  // initial-focus target — NEVER Overwrite (the data-losing action). A reflexive
+  // Enter on open must not discard the server's change. *** Do NOT "fix" this by
+  // focusing Overwrite in a future refactor. ***
+  const safeFocusRef = useRef<HTMLButtonElement>(null);
   const previouslyFocused = useRef<Element | null>(null);
   // Keep the latest onReject in a ref so the focus/keydown effect can call it
   // without re-running on every parent re-render (mirrors Dialog.tsx).
@@ -75,8 +114,9 @@ export default function DiffReviewDialog({
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement;
-    // *** Trust contract: focus Reject (the safe default), NEVER Approve. ***
-    rejectRef.current?.focus();
+    // *** Trust contract: focus the SAFE default, NEVER the consequential action.
+    // review mode → Reject; conflict mode → Save as copy (NEVER Overwrite). ***
+    (safeFocusRef.current ?? rejectRef.current)?.focus();
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -154,13 +194,20 @@ export default function DiffReviewDialog({
         </div>
 
         {summary && <p className="diff-summary">{summary}</p>}
+        {columnCaption && !noChange && (
+          <p className="diff-column-caption">{columnCaption}</p>
+        )}
 
         {/* The REAL diff — always rendered (never a prose-only summary). For a
             no-op we still render the diff surface and show a message + disabled
             Approve, rather than fabricating change. */}
         <div className="diff-region" tabIndex={0} aria-label="Proposed changes">
           {noChange ? (
-            <p className="diff-empty">No changes were proposed.</p>
+            <p className="diff-empty">
+              {isConflict
+                ? "These versions are identical — your save will go through."
+                : "No changes were proposed."}
+            </p>
           ) : (
             <ReactDiffViewer
               oldValue={oldText}
@@ -175,7 +222,73 @@ export default function DiffReviewDialog({
         </div>
 
         <div className="dialog-footer diff-footer">
-          {stale ? (
+          {isConflict ? (
+            noChange ? (
+              // Identical versions — the "conflict" resolved itself (both saved the
+              // same bytes). NEVER fabricate a diff; offer a single SAFE Save (it
+              // routes through the normal revision-checked save, here = Overwrite at
+              // the current revision, which will simply succeed).
+              <div className="diff-footer-actions">
+                <button
+                  ref={safeFocusRef}
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={onOverwrite}
+                  disabled={conflictBusyActive}
+                >
+                  {conflictBusy === "overwrite" ? "Saving…" : "Save"}
+                </button>
+              </div>
+            ) : (
+              // The 3-button risk-ranked conflict footer. Overwrite (the ONLY
+              // destructive control) is POSITIONALLY ISOLATED from the safe pair:
+              // the safe buttons are DOM-first so the focus trap's first focusable
+              // is a safe choice, and Overwrite sits in its own trailing group with
+              // an explicit risk sub-line (color is never the sole risk signal).
+              <>
+                <div className="diff-conflict-safe">
+                  {/* Save as copy is DOM-first → the focus trap's first focusable,
+                      and carries the deliberate initial focus (NEVER Overwrite). */}
+                  <button
+                    ref={safeFocusRef}
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={onSaveAsCopy}
+                    disabled={conflictBusyActive}
+                    aria-label="Save my version as a new page, leaving the original unchanged"
+                  >
+                    {conflictBusy === "copy" ? "Saving copy…" : "Save as copy"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={onManualMerge}
+                    disabled={conflictBusyActive}
+                    aria-label="Merge manually — open my version with theirs shown for reference"
+                  >
+                    Manual merge
+                  </button>
+                </div>
+                <div className="diff-conflict-overwrite">
+                  <button
+                    type="button"
+                    className="btn btn-ghost-destructive"
+                    onClick={onOverwrite}
+                    disabled={conflictBusyActive}
+                    aria-label="Overwrite with my version, replacing their changes"
+                  >
+                    {conflictBusy === "overwrite" ? "Saving…" : "Overwrite"}
+                  </button>
+                  <span
+                    className="diff-conflict-risk"
+                    id="diff-conflict-risk-note"
+                  >
+                    This replaces the other person&rsquo;s changes.
+                  </span>
+                </div>
+              </>
+            )
+          ) : stale ? (
             // Stale-revision state — Approve is REMOVED. A warning (never accent)
             // marks the blocking condition; Re-run/Close are the only paths.
             <>

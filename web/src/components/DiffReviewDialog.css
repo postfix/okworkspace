@@ -77,6 +77,47 @@
   gap: var(--space-xs);
 }
 
+/* Conflict-mode column caption: a muted Label clarifying which diff side is which
+   ("Left: the saved version · Right: your unsaved version") so old/new is never
+   ambiguous in a save-collision context. */
+.diff-column-caption {
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* Conflict footer: the SAFE pair (Save as copy + Manual merge) groups left and is
+   DOM-first (focus-trap lands on a safe choice); Overwrite — the ONLY destructive
+   control — is positionally isolated in its own trailing group with a risk
+   sub-line. The parent .diff-footer is already space-between, so the two groups
+   sit at opposite ends; at narrow widths they wrap with Overwrite still isolated. */
+.diff-footer {
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.diff-conflict-safe {
+  display: inline-flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.diff-conflict-overwrite {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* Color is never the sole risk signal — the risk is stated in words next to the
+   destructive control, in the destructive hue. */
+.diff-conflict-risk {
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-destructive);
+}
+
 /* Stale-revision banner: warning color (never accent) marks the blocking
    condition; the icon + heading + body pair color with text so color is never
    the sole signal. */
