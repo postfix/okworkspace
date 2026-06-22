@@ -61,10 +61,29 @@ result: [pending]
 ## Summary
 
 total: 10
-passed: 0
+passed: 4
 issues: 0
-pending: 10
+pending: 6
 skipped: 0
 blocked: 0
+
+## Live Validation Results (2026-06-22, browser-driven on :8098 against live DeepSeek)
+
+Driven via Playwright as admin against `deepseek-v4-flash`. Evidence screenshots: `phase4-ask-answer.png`, `phase4-diffdialog.png`.
+
+**PASSED (browser-confirmed):**
+- **#1 Ask streams (AGNT-01)** — answer streamed into the right AgentPanel; correctly **grounded** ("I cannot find any information about deployment runbooks… the page is empty") rather than hallucinating (D7 honest refusal). ✓
+- **#7 Propose → DiffReviewDialog → Approve (AGNT-09/10)** — Propose produced a **real react-diff-viewer table** (NOT prose), the model added a `## Deployment checklist` with 3 bullets while preserving `## Privet`; Approve & save wrote the file. ✓
+- **DiffReviewDialog trust contract** — real diff; initial focus on **Reject** (not Approve); copy "Approve & save" / "Reject" (hidden-Git voice). ✓
+- **Audit + safety (AGNT-11)** — server audit log recorded `agent_prompt`, `agent_patch_proposal` (churn=1.0), `agent_patch_approval` with actor/target/role; nothing applied before explicit Approve. ✓
+- **CR-01 fix confirmed live** — saved `deploy.md` kept exactly one frontmatter fence (type/title/description/tags/timestamp intact); no double-frontmatter, byte-stable round-trip held. ✓
+
+**PENDING (not exhaustively browser-tested — wiring confirmed, need targeted setup):** #2 selection Ask, #3 workspace RAG citations, #4 summarize-page, #5 attachment Ask+summarize, #8 stale-409 (needs two tabs), #9 agent-off (needs restart), #10 XSS-sanitization (needs a crafted model response). All backends are tested key-free; these are perceptual/multi-context checks.
+
+## Findings (non-defects / environmental)
+
+1. **Embedded SPA must be rebuilt before serving (operational).** The agent UI initially did NOT render in the running app — the embedded `internal/web/dist` bundle was stale (pre-Phase-4). `internal/web/dist/*` is a **gitignored build artifact** (rebuilt by `deploy/Dockerfile` stage 1 `npm run build`). Fixed locally by `cd web && npm run build` + rebuilding the binary. Deploy pipeline is correct; the lesson is local: rebuild the SPA before serving. NOT a code defect.
+2. **Workspace git not initialized in this dev data dir (pre-existing, not Phase 4).** `data/repo` has no `.git`, so page-commit jobs stay queued ("commit wait timed out; job stays queued"). Affects ALL edits equally (agent uses the same `pages.Save` path); a Phase-0/1 `EnsureRepo`/dev-data matter, orthogonal to the agent. The file write + audit are correct.
+3. **Minor UX:** pressing Enter in the Ask prompt also navigated the page to edit mode (non-blocking; the Ask still streamed correctly).
 
 ## Gaps
