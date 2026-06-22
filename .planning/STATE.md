@@ -4,17 +4,17 @@ milestone: v0.9.9
 milestone_name: milestone
 current_phase: 05
 current_phase_name: collaboration
-status: paused
-stopped_at: Phase 5 wave 1/4 COMPLETE + verified (internal/locks store + gc + SessionConnectionIDKey + tests; build/vet/tests green). Autonomous run paused by user at context checkpoint. Resume with /gsd-autonomous --from 5 — picks up at wave 2 (05-02 lock endpoints + SoftLockBanner). Plans 05-01..05-04 all authored + plan-check PASSED. Phase 4 done+verified.
-last_updated: "2026-06-22T12:30:00.000Z"
+status: executing
+stopped_at: Phase 5 wave 2/4 COMPLETE (05-02 soft-lock HTTP slice: editor-gated acquire/force/release endpoints off the .md/lock suffix, SoftLockBanner warning, PageEditor lock lifecycle + read-only-under-lock + Force edit; COLL-02 end-to-end, save path untouched). build/vet/tests green; vitest 280/280; tsc -b clean. Resume picks up at wave 3 (05-03 presence/SSE). Phase 4 done+verified.
+last_updated: "2026-06-22T12:28:05.000Z"
 last_activity: 2026-06-22
-last_activity_desc: Phase 5 wave 1 (05-01) — lock store foundation (acquire/force/release/GC, repo.Resolve-safe + subtree guard, 7/7 key-free tests, lock_gc ticker wired)
+last_activity_desc: Completed 05-02-PLAN.md (soft-lock HTTP slice, COLL-02)
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 36
   completed_plans: 34
-  percent: 88
+  percent: 89
 ---
 
 # Project State
@@ -24,16 +24,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** A non-technical teammate can create, edit, and find knowledge — and get useful AI help on it — while every byte stays as plain Markdown + original files on disk, versioned in Git, with no proprietary store to escape.
-**Current focus:** Phase 06 — live-preview-editor-obsidian-style
+**Current focus:** Phase 05 — collaboration
 
 ## Current Position
 
-Phase: 07 (obsidian-style-file-tree-folder-operations-tree-ux) — ALL PLANS COMPLETE
-Plan: 4 of 4 — COMPLETE
-Status: 07-04 executed (folder DnD + optimistic ["tree"] updates + DeleteFolderDialog + grouped TrashView restore); Phase 7 complete pending human verification
-Last activity: 2026-06-21 -- Completed 07-04-PLAN.md (folder operations + optimistic tree UX, 240 frontend tests green)
+Phase: 05 (collaboration) — EXECUTING
+Plan: 2 of 4 complete (wave 2 done)
+Status: Executing Phase 05 — wave 2/4 (05-02 soft-lock HTTP slice) COMPLETE
+Last activity: 2026-06-22 — Completed 05-02-PLAN.md (soft-lock HTTP slice, COLL-02)
 
-Progress: [██████████] 100% (4 of 4 plans)
+Progress: [█████░░░░░] 50% (2 of 4 plans)
+
+### Key decisions (05-02)
+- Soft-lock endpoints (acquire/force/release) dispatch off the single POST /pages/* catch-all by `.md/lock[/force|/release]` suffix (longer suffixes first, `.md`-anchored) — no new route line; inherits RequireRole(RoleEditor) + nosurf CSRF.
+- Lock identity is server-trusted (actorUsername + CurrentUser().UserID()); only the opaque `conn` id is client-supplied (T-05-06). Acquire doubles as the heartbeat/on-save refresh.
+- Force edit is take-over only (forceLock on both ends) — pages.Save / base_revision optimistic concurrency provably untouched (T-05-09).
 
 ## Quick Tasks Completed
 
@@ -175,6 +180,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-22T12:09:36.238Z
-Stopped at: Completed 04-04-PLAN.md
+Last session: 2026-06-22T12:28:05.000Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
