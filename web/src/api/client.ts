@@ -252,6 +252,49 @@ export async function savePage(
   await mutate<void>(`/api/v1/pages/${path}`, payload, "PUT");
 }
 
+// --- Soft locks (COLL-02) ---
+//
+// Three CSRF-bearing POSTs cloning the createPage/savePage mutate() pattern. The
+// page path is interpolated into the URL exactly like savePage (slashes
+// preserved); the ONLY body field is the opaque client connection id (conn) — the
+// lock's username/user_id are filled server-side FROM THE SESSION, never sent from
+// the client. Force is take-over-only (it never calls savePage and never touches
+// base_revision — the save-time revision check stays the sole write authority).
+
+// AcquireLockResult mirrors POST /pages/{path}/lock. "acquired" means you now hold
+// (or refreshed) the lock; "held-by-other" means a different live session holds it
+// and holder.username names them for the SoftLockBanner ("{name} is editing this
+// page."). holder is present ONLY on held-by-other and carries only the username.
+export interface AcquireLockResult {
+  result: "acquired" | "held-by-other";
+  holder?: { username: string };
+}
+
+// acquireLock acquires (or, for the same connection, refreshes) the soft lock on a
+// page. Acquire doubles as the heartbeat refresh: re-calling it with the same conn
+// re-stamps the TTL (the store treats a same-session Acquire as a refresh).
+export async function acquireLock(
+  path: string,
+  conn: string,
+): Promise<AcquireLockResult> {
+  return mutate<AcquireLockResult>(`/api/v1/pages/${path}/lock`, { conn });
+}
+
+// forceLock unconditionally takes over the soft lock for this connection (the
+// "Force edit" affordance). It is take-over-ONLY — it never saves and never alters
+// base_revision; a subsequent save still revision-checks (the load-bearing rule).
+export async function forceLock(path: string, conn: string): Promise<void> {
+  await mutate<void>(`/api/v1/pages/${path}/lock/force`, { conn });
+}
+
+// releaseLock best-effort releases the soft lock on unmount / leaving Edit. The
+// server only deletes a lock whose session matches conn (idempotent), and GC is
+// the backstop — so callers SWALLOW errors at the call site (a failed release is
+// reaped by the TTL).
+export async function releaseLock(path: string, conn: string): Promise<void> {
+  await mutate<void>(`/api/v1/pages/${path}/lock/release`, { conn });
+}
+
 // createFolder creates a folder (seeded with a blank index.md, NAV-03).
 export async function createFolder(parent: string, name: string): Promise<void> {
   await mutate<void>("/api/v1/folders", { parent, name });
