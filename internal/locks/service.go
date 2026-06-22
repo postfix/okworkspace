@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,6 +18,14 @@ import (
 // the live on-disk holder. A non-holder must NOT silently take over — that is
 // Force's job. Callers (a later HTTP slice) map this to held-by-other.
 var ErrNotHolder = errors.New("locks: not the lock holder")
+
+// ErrUnsafePagePath is returned when a page path, after mirror-the-tree mapping,
+// would resolve OUTSIDE `.okf-workspace/locks/`. repo.Resolve only guarantees a
+// path stays inside the repo ROOT; a crafted page path like "../../etc/passwd"
+// cleans to a path that is inside the root but escapes the locks subtree (its
+// `..` segments cancel the `locks/` prefix). lockPath rejects that explicitly so
+// a lock file can never land outside the locks tree (T-05-01).
+var ErrUnsafePagePath = errors.New("locks: page path escapes lock subtree")
 
 // lockSubtree is the mirror-the-tree root every lock file lives under. It is an
 // application constant (never user input), so it is safe to join here; the page
@@ -56,12 +65,20 @@ func NewService(r *repo.Repo, ttl time.Duration) *Service {
 	return &Service{repo: r, ttl: ttl, now: time.Now}
 }
 
-// lockPath maps a page path to its mirror-the-tree lock-file path. The page path
-// arrives pre-validated by the handler (a later slice) AND repo.Resolve
-// re-validates on every Read/Write/Remove, so this plain join can never let a
-// lock escape the subtree. NEVER call os.* on the result.
-func (s *Service) lockPath(pagePath string) string {
-	return lockSubtree + "/" + pagePath + ".lock"
+// lockPath maps a page path to its mirror-the-tree lock-file path, returning
+// ErrUnsafePagePath if the cleaned result would escape `.okf-workspace/locks/`.
+// repo.Resolve guards the repo ROOT, but a crafted page path's `..` segments can
+// cancel the `locks/` prefix and land back inside the root yet OUTSIDE the locks
+// subtree — so this is the chokepoint that keeps every lock file under the locks
+// tree (T-05-01). NEVER call os.* on the result; pass it to s.repo.* which
+// re-validates against the repo root.
+func (s *Service) lockPath(pagePath string) (string, error) {
+	raw := lockSubtree + "/" + pagePath + ".lock"
+	cleaned := filepath.ToSlash(filepath.Clean(raw))
+	if cleaned != lockSubtree && !strings.HasPrefix(cleaned, lockSubtree+"/") {
+		return "", fmt.Errorf("%w: %q", ErrUnsafePagePath, pagePath)
+	}
+	return cleaned, nil
 }
 
 // Get returns the current LIVE lock for pagePath. A missing file, a torn/garbage
@@ -69,7 +86,11 @@ func (s *Service) lockPath(pagePath string) string {
 // false, nil): an expired or unreadable lock is treated as no live lock (the
 // torn-read fallback self-heals on the next heartbeat write).
 func (s *Service) Get(ctx context.Context, pagePath string) (Lock, bool, error) {
-	raw, err := s.repo.Read(s.lockPath(pagePath))
+	lp, err := s.lockPath(pagePath)
+	if err != nil {
+		return Lock{}, false, err
+	}
+	raw, err := s.repo.Read(lp)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Lock{}, false, nil
@@ -135,7 +156,11 @@ func (s *Service) Force(ctx context.Context, pagePath string, owner Owner) (Lock
 // sessionID, so a session that lost the lock to a TTL takeover cannot clobber the
 // new holder. Idempotent: a missing lock file is not an error.
 func (s *Service) Release(ctx context.Context, pagePath, sessionID string) error {
-	raw, err := s.repo.Read(s.lockPath(pagePath))
+	lp, err := s.lockPath(pagePath)
+	if err != nil {
+		return err
+	}
+	raw, err := s.repo.Read(lp)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
@@ -151,7 +176,7 @@ func (s *Service) Release(ctx context.Context, pagePath, sessionID string) error
 	if l.SessionID != sessionID {
 		return nil
 	}
-	return s.repo.Remove(s.lockPath(pagePath))
+	return s.repo.Remove(lp)
 }
 
 // lockEntry is one lock file found by the subtree walk: the parsed record plus
@@ -187,7 +212,15 @@ func (s *Service) walk() ([]lockEntry, error) {
 		if d.IsDir() || !strings.HasSuffix(abs, ".lock") {
 			return nil
 		}
-		raw, rerr := os.ReadFile(abs)
+		relPath, relErr := filepath.Rel(repoRoot, abs)
+		if relErr != nil {
+			return nil
+		}
+		rel := filepath.ToSlash(relPath)
+		// Read back through the SEC-01 chokepoint (repo.Read → repo.Resolve), not
+		// os.* directly — so even the GC/presence scan never touches a lock file
+		// outside the resolver.
+		raw, rerr := s.repo.Read(rel)
 		if rerr != nil {
 			// A single unreadable lock must not abort the whole scan (GC/presence
 			// are best-effort over files) — skip it.
@@ -197,11 +230,7 @@ func (s *Service) walk() ([]lockEntry, error) {
 		if json.Unmarshal(raw, &l) != nil {
 			return nil // torn/garbage — skip
 		}
-		relPath, relErr := filepath.Rel(repoRoot, abs)
-		if relErr != nil {
-			return nil
-		}
-		entries = append(entries, lockEntry{lock: l, rel: filepath.ToSlash(relPath)})
+		entries = append(entries, lockEntry{lock: l, rel: rel})
 		return nil
 	})
 	if walkErr != nil {
@@ -247,6 +276,10 @@ func (s *Service) EditorsFor(ctx context.Context, pagePath, connID string) ([]Ed
 // is the single place a lock file is written — Acquire/Refresh/Force all funnel
 // through it so the on-disk shape and TTL stamping stay consistent.
 func (s *Service) write(pagePath string, owner Owner) (Lock, error) {
+	lp, err := s.lockPath(pagePath)
+	if err != nil {
+		return Lock{}, err
+	}
 	now := s.now()
 	l := Lock{
 		Username:  owner.Username,
@@ -259,7 +292,7 @@ func (s *Service) write(pagePath string, owner Owner) (Lock, error) {
 	if err != nil {
 		return Lock{}, err
 	}
-	if werr := s.repo.Write(s.lockPath(pagePath), data); werr != nil {
+	if werr := s.repo.Write(lp, data); werr != nil {
 		return Lock{}, werr
 	}
 	return l, nil
