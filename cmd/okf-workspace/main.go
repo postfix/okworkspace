@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/jobs"
+	"github.com/postfix/okworkspace/internal/locks"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/repo"
 	"github.com/postfix/okworkspace/internal/search"
@@ -25,6 +27,15 @@ import (
 	"github.com/postfix/okworkspace/internal/store"
 	"github.com/postfix/okworkspace/internal/users"
 	"github.com/postfix/okworkspace/internal/web"
+)
+
+// Soft-lock timing envelope (COLL-02). A lock expires lockExpiry after its last
+// heartbeat; the lock_gc ticker reaps expired locks every lockGCInterval. The
+// interval is kept strictly below the expiry so a crashed/idle session's lock is
+// reaped within roughly one TTL window (RESEARCH A5: interval < expiry).
+const (
+	lockExpiry     = 2 * time.Minute
+	lockGCInterval = 60 * time.Second
 )
 
 // healthAdapter adapts *gitstore.GitStore to server.HealthChecker without the
@@ -221,9 +232,39 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	searchIdx.SetGit(gs)
 	worker.Register(search.KindIndex, search.IndexHandler(searchIdx, contentRepo))
 
+	// Soft-lock store (COLL-02): the server-authoritative, file-backed lock store
+	// every later collaboration slice (soft locks, presence) depends on. All lock
+	// I/O routes through contentRepo (SEC-01), never os.*. Locks live under
+	// `.okf-workspace/locks/` — a derived coordination artifact, not page content.
+	// The lock_gc handler reaps expired lock files; it is registered on the SAME
+	// single drain goroutine (before Start) and driven by a ctx-gated ticker below.
+	lockStore := locks.NewService(contentRepo, lockExpiry)
+	worker.Register(locks.KindGC, locks.GCHandler(lockStore))
+
 	worker.Start(ctx)
 	defer worker.Stop()
 	logger.Info("job worker started")
+
+	// Lock GC ticker: fire-and-forget enqueue a lock_gc job every lockGCInterval
+	// (inside the TTL envelope) so a crashed/idle session's lock self-reaps. The
+	// SAME ctx that drives worker.Start cancels this goroutine on shutdown — no
+	// separate graceful-shutdown scope is added (RESEARCH caveat). Enqueue (not
+	// EnqueueAndWait) keeps it off the request path, mirroring the search rebuild
+	// enqueues below.
+	go func() {
+		t := time.NewTicker(lockGCInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if eerr := worker.Enqueue(context.Background(), locks.KindGC, ""); eerr != nil {
+					logger.Warn("lock_gc enqueue failed", slog.String("error", eerr.Error()))
+				}
+			}
+		}
+	}()
 
 	// Page lifecycle service: create/get/save/folder + the nested tree, all
 	// mutations flowing through the single-writer CommitJob above. PushOnCommit is
