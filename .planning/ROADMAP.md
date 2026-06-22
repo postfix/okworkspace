@@ -177,7 +177,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. No agent change is applied or committed until the user explicitly approves the diff
   5. The agent cannot write files directly, read secrets, run shell, escape the repository, or push to Git — enforced in the Go tool layer, not by prompt
 
-**Plans**: 6/7 plans complete (1 gap-closure plan)
+**Plans**: 7/7 plans complete
 
 - [x] 04-01-PLAN.md — Slice 1: pin eino v0.9.9 + eino-ext openai v0.1.13 + go-udiff; DeepSeek config (deepseek-v4-flash); agent.Service + ChatModel + key-gated smoke test; 3 audit constants
 - [x] 04-02-PLAN.md — Slice 2: 5 read-only tools + D5 allow-list build gate + ReAct Ask-page over SSE (AGNT-01/11)
@@ -185,7 +185,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 04-04-PLAN.md — Slice 4: single-shot Summarize/Rewrite/Draft + validateProposedBody+retry (AGNT-05/06/07/08)
 - [x] 04-05-PLAN.md — Slice 5 (safety core): propose→server-diff→approve→apply; D4 round-trip + D8 stale-409 tests (AGNT-09/10/11)
 - [x] 04-06-PLAN.md — Slice 6: frontend — PromptBar + AgentPanel + DiffReviewDialog (real-diff trust gate) + SSE consumer (AGNT-01..10 UI)
-- [ ] 04-07-PLAN.md — Gap closure (frontend-only): wire existing backend into the UI — agentContext store + CM6 selection capture, rewrite→DiffReviewDialog, selection Ask, attachment Ask + summarize (AGNT-02/03/06/07)
+- [x] 04-07-PLAN.md — Gap closure (frontend-only): wire existing backend into the UI — agentContext store + CM6 selection capture, rewrite→DiffReviewDialog, selection Ask, attachment Ask + summarize (AGNT-02/03/06/07)
 
 **UI hint**: yes
 **Notes**: NEEDS PHASE RESEARCH — Eino is pre-1.0 (v0.9.9, fast-moving). Before Phase 4 planning, re-verify `react.NewAgent` / `AgentConfig` / `utils.InferTool` / `openai.NewChatModel` signatures against current eino + eino-ext source, confirm the interrupt/resume pattern for the approval gate, and test the chosen provider with `utils.InferTool`-generated schemas before building the full loop. Pin both `eino` and `eino-ext` via `go.sum` immediately after `go get` and commit the lockfile. The approval gate is the load-bearing defense against indirect prompt injection: the DiffReviewDialog must show a real diff (never a prose summary), and the read/write boundary is structural (write tools are NOT in the Eino graph). Every agent file read goes through `repo.Resolve`. The DiffReviewDialog built here is reused in Phase 5. Audit logs capture prompt + approval.
@@ -286,7 +286,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. OKF Pages, Navigation & Hidden Git | 5/5 | Complete   | 2026-06-18 |
 | 2. Attachments & Text Extraction | 0/4 | Planned | - |
 | 3. Search | 0/TBD | Not started | - |
-| 4. Eino Agent | 6/6 | Complete   | 2026-06-21 |
+| 4. Eino Agent | 7/7 | Complete   | 2026-06-21 |
 | 5. Collaboration | 0/TBD | Not started | - |
 | 6. Live-Preview Editor (Obsidian-style) | 4/4 | Complete   | 2026-06-21 |
 | 7. Obsidian-style File Tree (folder operations & tree UX) | 4/4 | Complete   | 2026-06-21 |
