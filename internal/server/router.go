@@ -12,6 +12,7 @@ import (
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
+	"github.com/postfix/okworkspace/internal/locks"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/store"
@@ -52,6 +53,10 @@ type Deps struct {
 	// when nil the route returns a 500. When constructed-but-disabled (cfg.Agent.
 	// Enabled false) the handler returns a structured "agent off" error.
 	Agent *agent.Service
+	// Locks is the soft-lock store backing the acquire/force/release endpoints
+	// (COLL-02). Optional; when nil those routes return a 500, following the
+	// optional-dependency pattern.
+	Locks *locks.Service
 }
 
 // New builds the HTTP handler: chi mux with the middleware stack (recover,
@@ -77,6 +82,7 @@ func New(deps Deps) (http.Handler, error) {
 		search:      deps.Search,
 		searchJobs:  deps.SearchJobs,
 		agent:       deps.Agent,
+		locks:       deps.Locks,
 	}
 	health := &healthHandler{checker: deps.Health}
 

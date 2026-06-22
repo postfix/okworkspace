@@ -351,6 +351,7 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		Search:      searchIdx,
 		SearchJobs:  worker,
 		Agent:       agentSvc,
+		Locks:       lockStore,
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)

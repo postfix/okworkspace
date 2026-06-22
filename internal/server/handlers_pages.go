@@ -229,6 +229,37 @@ func (h *authHandlers) handleRenamePage(w http.ResponseWriter, r *http.Request) 
 	// "{path}/restore" (the sibling-wildcard conflict forbids separate routes, so
 	// both POST sub-actions are dispatched here on the same catch-all).
 	wild := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	// Soft-lock sub-actions (COLL-02) share this same /pages/* POST catch-all by
+	// suffix (the sibling-wildcard conflict forbids separate routes). The longer
+	// suffixes (".md/lock/force", ".md/lock/release") MUST be checked BEFORE the
+	// bare ".md/lock" so the bare branch does not swallow them. Each is anchored on
+	// the ".md" page-file boundary so a real page in a folder named "lock" is not
+	// mis-routed. Identity is filled from the session inside the handlers; only the
+	// opaque connection id comes from the body.
+	if strings.HasSuffix(wild, ".md/lock/force") {
+		path, ok := cleanPathString(w, strings.TrimSuffix(wild, "/lock/force"))
+		if !ok {
+			return
+		}
+		h.handleForceLock(w, r, path)
+		return
+	}
+	if strings.HasSuffix(wild, ".md/lock/release") {
+		path, ok := cleanPathString(w, strings.TrimSuffix(wild, "/lock/release"))
+		if !ok {
+			return
+		}
+		h.handleReleaseLock(w, r, path)
+		return
+	}
+	if strings.HasSuffix(wild, ".md/lock") {
+		path, ok := cleanPathString(w, strings.TrimSuffix(wild, "/lock"))
+		if !ok {
+			return
+		}
+		h.handleAcquireLock(w, r, path)
+		return
+	}
 	if strings.HasSuffix(wild, "/restore") {
 		path, ok := cleanPathString(w, strings.TrimSuffix(wild, "/restore"))
 		if !ok {

@@ -14,6 +14,7 @@ import (
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
+	"github.com/postfix/okworkspace/internal/locks"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/users"
@@ -61,6 +62,11 @@ type authHandlers struct {
 	// when nil the handler returns a 500; when constructed-but-disabled the
 	// handler returns a structured "agent off" error rather than hanging.
 	agent *agent.Service
+	// locks is the soft-lock store backing the acquire/force/release endpoints
+	// (COLL-02). Optional: when nil the lock handlers return a 500, following the
+	// same optional-dependency pattern as pages. The HTTP layer fills Owner's
+	// identity FROM THE SESSION; only the opaque connection id comes from the body.
+	locks *locks.Service
 }
 
 type loginRequest struct {
