@@ -98,4 +98,65 @@ describe("PromptBar", () => {
     rerender(<PromptBar {...baseProps()} workspace />);
     expect(screen.getByTitle("Whole workspace")).toBeTruthy();
   });
+
+  // --- AGNT-07: rewriteAvailable driven by a real selection (not hardcoded) ---
+  it("enables Rewrite only when a non-empty selection is present", () => {
+    // No selection → Rewrite disabled with the "select text first" hint.
+    const { rerender } = render(
+      <PromptBar {...baseProps()} selectionLength={0} />,
+    );
+    const rewriteEmpty = screen.getByRole("option", {
+      name: /Rewrite/,
+    }) as HTMLOptionElement;
+    expect(rewriteEmpty.disabled).toBe(true);
+
+    // selectionLength undefined behaves like 0 (still disabled).
+    rerender(<PromptBar {...baseProps()} />);
+    expect(
+      (screen.getByRole("option", { name: /Rewrite/ }) as HTMLOptionElement)
+        .disabled,
+    ).toBe(true);
+
+    // A real selection enables Rewrite.
+    rerender(<PromptBar {...baseProps()} selectionLength={12} />);
+    expect(
+      (screen.getByRole("option", { name: /Rewrite/ }) as HTMLOptionElement)
+        .disabled,
+    ).toBe(false);
+  });
+
+  // --- AGNT-02: selection context chip ---
+  it("renders a 'Selection (N chars)' chip when a selection is present", () => {
+    render(
+      <PromptBar {...baseProps()} workspace={false} selectionLength={7} />,
+    );
+    expect(screen.getByTitle("Selection (7 chars)")).toBeTruthy();
+  });
+
+  // --- AGNT-03/06: attachment context chip ---
+  it("renders the attachment name chip when an attachment is set and no selection", () => {
+    render(
+      <PromptBar
+        {...baseProps()}
+        workspace={false}
+        selectionLength={0}
+        attachmentName="notes.pdf"
+      />,
+    );
+    expect(screen.getByTitle("notes.pdf")).toBeTruthy();
+  });
+
+  it("workspace toggle ON overrides both the selection and attachment chips", () => {
+    render(
+      <PromptBar
+        {...baseProps()}
+        workspace
+        selectionLength={20}
+        attachmentName="notes.pdf"
+      />,
+    );
+    expect(screen.getByTitle("Whole workspace")).toBeTruthy();
+    expect(screen.queryByTitle("Selection (20 chars)")).toBeNull();
+    expect(screen.queryByTitle("notes.pdf")).toBeNull();
+  });
 });

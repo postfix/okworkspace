@@ -1,5 +1,13 @@
 import { useRef, useState, type KeyboardEvent } from "react";
-import { Library, Loader2, SendHorizontal, FileText, AlertTriangle } from "lucide-react";
+import {
+  Library,
+  Loader2,
+  SendHorizontal,
+  FileText,
+  TextSelect,
+  Paperclip,
+  AlertTriangle,
+} from "lucide-react";
 
 import "./PromptBar.css";
 
@@ -38,6 +46,15 @@ export interface PromptBarProps {
   unreachable?: boolean;
   // error is a transient last-request failure shown until the next submit.
   error?: string | null;
+  // selectionLength is the raw character count of the LIVE editor selection (0 /
+  // undefined when there is none). It drives Rewrite availability (AGNT-07) and
+  // the "Selection (N chars)" context chip (AGNT-02). PromptBar stays
+  // presentational — AppShell reads the agentContext store and passes this down.
+  selectionLength?: number;
+  // attachmentName is the chosen attachment's filename (null/undefined when none)
+  // for the attachment context chip (AGNT-03/06). Like selectionLength it is a
+  // read-only context input — PromptBar does not import the store.
+  attachmentName?: string | null;
   onSubmit: (prompt: string) => void;
   onCancel: () => void;
 }
@@ -72,6 +89,8 @@ export default function PromptBar({
   disabledReason,
   unreachable,
   error,
+  selectionLength,
+  attachmentName,
   onSubmit,
   onCancel,
 }: PromptBarProps) {
@@ -84,10 +103,13 @@ export default function PromptBar({
   // Propose needs editor role + a page in scope. Summarize needs an open page.
   const proposeAvailable = canEdit && hasPage && !workspace;
   const summarizeAvailable = hasPage && !workspace;
-  // Rewrite needs a captured editor selection, which is not plumbed yet (WR-01):
-  // expose it disabled with a "select text first" hint rather than letting a
-  // submit silently run an Ask. It becomes available once selection capture lands.
-  const rewriteAvailable = false;
+  // Rewrite is available exactly when a non-empty editor selection is present
+  // (AGNT-07 — the WR-01 deferral is now closed: selection capture lands via the
+  // agentContext store, surfaced here as selectionLength). When there is no
+  // selection the option stays disabled with the "select text first" hint so a
+  // submit never silently runs an Ask.
+  const hasSelection = (selectionLength ?? 0) > 0;
+  const rewriteAvailable = hasSelection;
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -107,11 +129,25 @@ export default function PromptBar({
     onSubmit(trimmed);
   }
 
+  // Context chip precedence (matches AppShell's effective-scope precedence):
+  // workspace override → live selection → chosen attachment → open page →
+  // workspace default. The chip is read-only (never captures focus); the title
+  // attr carries the full label so a truncated attachment name stays inspectable.
   const scopeChip = workspace
     ? { icon: <Library size={14} aria-hidden="true" />, label: "Whole workspace" }
-    : hasPage
-      ? { icon: <FileText size={14} aria-hidden="true" />, label: pageTitle || "This page" }
-      : { icon: <Library size={14} aria-hidden="true" />, label: "Whole workspace" };
+    : hasSelection
+      ? {
+          icon: <TextSelect size={14} aria-hidden="true" />,
+          label: `Selection (${selectionLength} chars)`,
+        }
+      : attachmentName
+        ? { icon: <Paperclip size={14} aria-hidden="true" />, label: attachmentName }
+        : hasPage
+          ? {
+              icon: <FileText size={14} aria-hidden="true" />,
+              label: pageTitle || "This page",
+            }
+          : { icon: <Library size={14} aria-hidden="true" />, label: "Whole workspace" };
 
   return (
     <div className="promptbar" role="region" aria-label="Assistant prompt">

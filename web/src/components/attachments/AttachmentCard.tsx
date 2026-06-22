@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Download, FileText, File as FileIcon, Undo2, Trash2 } from "lucide-react";
+import {
+  Download,
+  FileText,
+  File as FileIcon,
+  Sparkles,
+  Undo2,
+  Trash2,
+} from "lucide-react";
 
 import {
   downloadAttachmentUrl,
@@ -10,6 +17,8 @@ import {
   type AttachmentMeta,
   type ExtractionStatusValue,
 } from "../../api/client";
+import { useAgentContext } from "../../stores/agentContext";
+import { useAgentPanel } from "../../stores/agentPanel";
 import ExtractionStatus from "./ExtractionStatus";
 import ImagePreviewDialog from "./ImagePreviewDialog";
 import ReplaceAttachmentDialog from "./ReplaceAttachmentDialog";
@@ -141,8 +150,28 @@ export default function AttachmentCard({
           <span>Download</span>
         </a>
 
+        {/* "Ask about this file" (AGNT-03/06) — sets the attachment as the agent
+            context and opens the panel so the user sees where it landed. NOT
+            editor-gated (Ask/Summarize are open to readers), and it must NOT
+            trigger the download or any preview — it is its own button. */}
+        <button
+          type="button"
+          className="btn btn-ghost attachment-card-action attachment-card-ask"
+          aria-label="Ask the assistant about this file"
+          onClick={(e) => {
+            e.stopPropagation();
+            useAgentContext.getState().setAttachment({
+              id: meta.id,
+              name: meta.original_name,
+            });
+            useAgentPanel.getState().setOpen(true);
+          }}
+        >
+          <Sparkles size={16} aria-hidden="true" />
+        </button>
+
         {/* Editor-only lifecycle actions (ATT-05/06/07). Readers see only
-            Download. Each is a 44px icon-only ghost button (--hit-min-icon). */}
+            Download + Ask. Each is a 44px icon-only ghost button (--hit-min-icon). */}
         {canEdit && (
           <>
             <button
