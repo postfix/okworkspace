@@ -112,6 +112,17 @@ func cleanPathString(w http.ResponseWriter, p string) (string, bool) {
 func (h *authHandlers) handleGetPageOrHistory(w http.ResponseWriter, r *http.Request) {
 	wild := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
 	switch {
+	case strings.HasSuffix(wild, ".md/presence"):
+		// Per-page editing-presence SSE stream (COLL-01). Anchored on ".md" like
+		// the other sub-resources so a real page in a folder named "presence" is
+		// never mis-routed. Rides this any-authed catch-all (read-only, no editor
+		// gate, no CSRF — same authority as reading the page).
+		path, ok := cleanPathString(w, strings.TrimSuffix(wild, "/presence"))
+		if !ok {
+			return
+		}
+		h.handlePresence(w, r, path)
+		return
 	case strings.HasSuffix(wild, "/history") && strings.HasSuffix(strings.TrimSuffix(wild, "/history"), ".md"):
 		h.handleHistory(w, r)
 		return
