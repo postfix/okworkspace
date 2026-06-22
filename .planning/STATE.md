@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
-current_phase: 07
-current_phase_name: obsidian-style-file-tree-folder-operations-tree-ux
+current_phase: 05
+current_phase_name: collaboration
 status: paused
-stopped_at: Phase 4 COMPLETE + VERIFIED (UAT passed — live browser validation vs DeepSeek). Autonomous run paused by user before Phase 5. Milestone v0.9.9 still open (Phase 5 Collaboration remaining; Phases 4+5 were the deferred set, 4 now done).
-last_updated: "2026-06-22T12:09:53.213Z"
-last_activity: 2026-06-21
-last_activity_desc: Completed 07-04-PLAN.md (folder operations + optimistic tree UX, 240 frontend tests green)
+stopped_at: Phase 5 wave 1/4 COMPLETE + verified (internal/locks store + gc + SessionConnectionIDKey + tests; build/vet/tests green). Autonomous run paused by user at context checkpoint. Resume with /gsd-autonomous --from 5 — picks up at wave 2 (05-02 lock endpoints + SoftLockBanner). Plans 05-01..05-04 all authored + plan-check PASSED. Phase 4 done+verified.
+last_updated: "2026-06-22T12:30:00.000Z"
+last_activity: 2026-06-22
+last_activity_desc: Phase 5 wave 1 (05-01) — lock store foundation (acquire/force/release/GC, repo.Resolve-safe + subtree guard, 7/7 key-free tests, lock_gc ticker wired)
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 36
-  completed_plans: 33
+  completed_plans: 34
   percent: 88
 ---
 
