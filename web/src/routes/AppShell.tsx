@@ -18,7 +18,9 @@ import {
   logout,
   me,
   proposePatch,
+  rewrite,
   subscribeAgentChat,
+  summarizeAttachment,
   summarizePage,
   type AgentScope,
   type Me,
@@ -36,6 +38,7 @@ import PromptBar, {
 import AgentPanel from "../components/AgentPanel";
 import DiffReviewDialog from "../components/DiffReviewDialog";
 import { useAgentPanel } from "../stores/agentPanel";
+import { useAgentContext } from "../stores/agentContext";
 import { useSearchStore } from "../store/searchStore";
 import "./AppShell.css";
 
@@ -72,6 +75,16 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const currentPath = pagePathFromLocation(location.pathname);
   const hasPage = currentPath !== "";
 
+  // ── Live agent context (selection + attachment), published by route children ──
+  // The CM6 editor publishes the current selection; an attachment card sets the
+  // chosen attachment. Selector reads so the shell re-renders (and the PromptBar
+  // chips / rewriteAvailable update) the moment either changes. This is ephemeral
+  // session context — never persisted (agentContext.ts).
+  const selection = useAgentContext((s) => s.selection);
+  const selectionLength = useAgentContext((s) => s.selectionLength);
+  const attachment = useAgentContext((s) => s.attachment);
+  const hasSelection = selectionLength > 0;
+
   // ── Agent prompt session state ──────────────────────────────────────────────
   const [mode, setMode] = useState<AgentMode>("ask");
   const [workspace, setWorkspace] = useState(false);
@@ -91,12 +104,29 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   // Tear the stream down on unmount.
   useEffect(() => () => unsubRef.current?.(), []);
 
-  // Reaching a workspace scope (toggle on, or no page open) means Propose/Rewrite
-  // page-scoped modes don't apply; coerce the mode back to Ask if it became
-  // unavailable so the bar never shows a disabled-mode submit.
-  const effectiveScope: AgentScope = workspace || !hasPage ? "workspace" : "page";
+  // Effective scope precedence (mirrors the PromptBar chip precedence): an
+  // explicit Whole-workspace toggle wins; then a live selection (AGNT-02); then a
+  // chosen attachment (AGNT-03); then the open page; then the workspace default
+  // when nothing else is in scope. The server still derives the retrieval ROLE
+  // from the session — this only chooses what context the prompt runs against.
+  const effectiveScope: AgentScope = workspace
+    ? "workspace"
+    : hasSelection
+      ? "selection"
+      : attachment
+        ? "attachment"
+        : hasPage
+          ? "page"
+          : "workspace";
 
-  const scopeLabel = effectiveScope === "workspace" ? "Whole workspace" : "This page";
+  const scopeLabel =
+    effectiveScope === "workspace"
+      ? "Whole workspace"
+      : effectiveScope === "selection"
+        ? `Selection (${selectionLength} chars)`
+        : effectiveScope === "attachment"
+          ? (attachment?.name ?? "Attachment")
+          : "This page";
 
   const cancelStream = useCallback(() => {
     unsubRef.current?.();
@@ -116,6 +146,17 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const [proposal, setProposal] = useState<ProposePatchResult | null>(null);
   const [proposeError, setProposeError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+
+  // ── Rewrite proposal (AGNT-07) ──────────────────────────────────────────────
+  // A rewrite is a PROPOSAL: rewrite() returns the rewritten span, which we route
+  // through the SAME DiffReviewDialog (old = the original selection, new = the
+  // rewrite). It NEVER auto-applies — Approve replaces the selection span in the
+  // page body and saves through the existing applyPatch path; Reject discards.
+  // We hold the original selection so apply can locate and replace exactly it.
+  const [rewriteProposal, setRewriteProposal] = useState<{
+    selection: string;
+    rewritten: string;
+  } | null>(null);
 
   const proposeMutation = useMutation({
     mutationFn: (instruction: string) => proposePatch(currentPath, instruction),
@@ -159,6 +200,74 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     },
   });
 
+  // ── Rewrite: request the rewrite, then apply it on explicit Approve ──────────
+  // rewriteMutation only PROPOSES (it sets the diff state); it never writes. The
+  // returned span is shown in the DiffReviewDialog. Apply happens through
+  // applyRewriteMutation below, gated on the user's Approve.
+  const rewriteMutation = useMutation({
+    mutationFn: ({ selection: sel, instruction }: { selection: string; instruction: string }) =>
+      rewrite(sel, instruction),
+    onSuccess: (rewritten, { selection: sel }) => {
+      setStatus("idle");
+      setStale(false);
+      setRewriteProposal({ selection: sel, rewritten });
+    },
+    onError: (err: Error) => {
+      setStatus("idle");
+      // Fail-closed: surface the server's message, never a silent wrong action.
+      setBarError(
+        err.message || "The assistant couldn't rewrite that. Try again.",
+      );
+    },
+  });
+
+  // applyRewriteMutation applies an APPROVED rewrite: it replaces the original
+  // selection span in the page body with the rewritten text and saves through the
+  // existing apply-patch path (editor + CSRF, optimistic concurrency). It re-reads
+  // the page body/frontmatter/revision from the cache so the write re-assembles the
+  // exact source — no new write endpoint. A stale revision 409s into the dialog's
+  // stale state, never overwriting a concurrent edit.
+  const applyRewriteMutation = useMutation({
+    mutationFn: (rp: { selection: string; rewritten: string }) => {
+      const cached = queryClient.getQueryData<{
+        body?: string;
+        frontmatter?: string;
+        revision?: string;
+      }>(["page", currentPath]);
+      const body = cached?.body ?? "";
+      const idx = body.indexOf(rp.selection);
+      if (idx === -1) {
+        // The selection is no longer in the page body (it changed under us) —
+        // treat as stale rather than writing a guessed span.
+        return Promise.reject(
+          Object.assign(new Error("selection no longer present"), { status: 409 }),
+        );
+      }
+      const newBody =
+        body.slice(0, idx) + rp.rewritten + body.slice(idx + rp.selection.length);
+      return applyPatch({
+        page_path: currentPath,
+        new_body: newBody,
+        frontmatter: cached?.frontmatter ?? "",
+        base_revision: cached?.revision ?? "",
+      });
+    },
+    onSuccess: () => {
+      setRewriteProposal(null);
+      setStale(false);
+      queryClient.invalidateQueries({ queryKey: ["page", currentPath] });
+    },
+    onError: (err: Error & { status?: number }) => {
+      if (err.status === 409) {
+        setStale(true);
+      } else {
+        setProposeError(
+          err.message || "We couldn't apply that rewrite just now. Try again.",
+        );
+      }
+    },
+  });
+
   // resetSubmitState clears per-request UI state (kept-prompt contract on error)
   // and opens the panel so the result is visible. Shared by every mode.
   const resetSubmitState = useCallback(() => {
@@ -181,7 +290,19 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         {
           prompt,
           scope: effectiveScope,
-          page_path: hasPage ? currentPath : undefined,
+          // Page path travels for page/selection scope (the selection lives in the
+          // open page); selection text scopes the answer (AGNT-02); attachment_id
+          // scopes it to the chosen file (AGNT-03). The server still derives the
+          // retrieval role from the session, never from these fields.
+          page_path:
+            effectiveScope === "page" || effectiveScope === "selection"
+              ? hasPage
+                ? currentPath
+                : undefined
+              : undefined,
+          selection: effectiveScope === "selection" ? selection : undefined,
+          attachment_id:
+            effectiveScope === "attachment" ? attachment?.id : undefined,
         },
         {
           onToken: (delta) => {
@@ -209,7 +330,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       );
       unsubRef.current = unsub;
     },
-    [effectiveScope, hasPage, currentPath],
+    [effectiveScope, hasPage, currentPath, selection, attachment],
   );
 
   // runSingleShot runs an AWAITED mode (Summarize/Draft) and renders the whole
@@ -240,6 +361,12 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       resetSubmitState();
       switch (mode) {
         case "summarize":
+          // An attachment in context summarizes the file (AGNT-06); otherwise an
+          // open page summarizes the page (AGNT-05, unchanged).
+          if (attachment) {
+            runSingleShot(() => summarizeAttachment(attachment.id));
+            return;
+          }
           if (!hasPage) {
             // Workspace summarize is not an MVP endpoint; require an open page.
             setStatus("idle");
@@ -252,10 +379,16 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           runSingleShot(() => draft(prompt));
           return;
         case "rewrite":
-          // Rewrite needs a captured editor selection (not yet plumbed). The bar
-          // disables it; if it is somehow active, refuse rather than run an Ask.
-          setStatus("idle");
-          setBarError("Select some text in the editor to rewrite it.");
+          // Rewrite acts on the captured editor selection (AGNT-07). Defend here
+          // even though the PromptBar disables Rewrite without a selection — never
+          // run a wrong action. The result ALWAYS routes through DiffReviewDialog
+          // (it never auto-applies).
+          if (!hasSelection) {
+            setStatus("idle");
+            setBarError("Select some text in the editor to rewrite it.");
+            return;
+          }
+          rewriteMutation.mutate({ selection, instruction: prompt });
           return;
         case "propose":
           // Propose routes through the editor-gated diff flow, not the answer pane.
@@ -280,9 +413,13 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       hasPage,
       currentPath,
       canEdit,
+      hasSelection,
+      selection,
+      attachment,
       runSingleShot,
       runAsk,
       proposeMutation,
+      rewriteMutation,
     ],
   );
 
@@ -473,28 +610,50 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         disabledReason={disabledReason}
         unreachable={unreachable}
         error={barError}
+        selectionLength={selectionLength}
+        attachmentName={attachment?.name ?? null}
         onSubmit={handleSubmit}
         onCancel={cancelStream}
       />
 
-      {/* The trust gate. Opens with a real diff once a proposal returns; a 409
-          flips it into the stale state (Approve removed). Editor-gated above. */}
+      {/* The trust gate (ONE dialog, two drivers). Opens with a real diff once a
+          propose patch OR a rewrite returns; a 409 flips it into the stale state
+          (Approve removed). A rewrite NEVER auto-applies — Approve replaces the
+          selection span and saves through the same apply path. Editor-gated. */}
       <DiffReviewDialog
-        open={proposal !== null}
-        title="Review this change"
-        oldText={proposal?.old_body ?? ""}
-        newText={proposal?.new_body ?? ""}
+        open={proposal !== null || rewriteProposal !== null}
+        title={rewriteProposal ? "Review the rewrite" : "Review this change"}
+        oldText={rewriteProposal ? rewriteProposal.selection : proposal?.old_body ?? ""}
+        newText={rewriteProposal ? rewriteProposal.rewritten : proposal?.new_body ?? ""}
         stale={stale}
-        busy={applyMutation.isPending}
-        onApprove={() => proposal && applyMutation.mutate(proposal)}
+        busy={applyMutation.isPending || applyRewriteMutation.isPending}
+        onApprove={() => {
+          if (rewriteProposal) {
+            applyRewriteMutation.mutate(rewriteProposal);
+          } else if (proposal) {
+            applyMutation.mutate(proposal);
+          }
+        }}
         onReject={() => {
           setProposal(null);
+          setRewriteProposal(null);
           setStale(false);
         }}
         onRerun={() => {
-          setProposal(null);
           setStale(false);
-          proposeFromAnswer();
+          if (rewriteProposal) {
+            // Re-run the rewrite against the (possibly updated) live selection.
+            const sel = rewriteProposal.selection;
+            setRewriteProposal(null);
+            if (hasSelection) {
+              rewriteMutation.mutate({ selection, instruction: "Rewrite the selection." });
+            } else {
+              rewriteMutation.mutate({ selection: sel, instruction: "Rewrite the selection." });
+            }
+          } else {
+            setProposal(null);
+            proposeFromAnswer();
+          }
         }}
       />
 
