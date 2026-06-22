@@ -148,6 +148,68 @@ describe("LivePreviewEditor value/onChange contract (EDIT-03/04)", () => {
     );
     expect(cmEditor.cmView!.view.state.doc.toString()).toBe(before);
   });
+
+  // COLL-02 regression: a soft lock is almost always discovered AFTER the editor
+  // mounts (enter Edit → an acquire heartbeat returns held-by-other). The editor must
+  // become genuinely non-editable when `readOnly` flips true post-mount — not stay
+  // editable behind a "View only" banner (the original bug: readOnly was baked into
+  // the initial state and never reconfigured, so keystrokes still landed and autosaved).
+  it("flips to genuinely non-editable when readOnly turns true after mount (COLL-02)", () => {
+    const onChange = vi.fn();
+    const { rerender, container } = render(
+      withRouter(
+        <LivePreviewEditor
+          value="hello"
+          onChange={onChange}
+          currentPath="notes.md"
+          mode="live"
+          readOnly={false}
+        />,
+      ),
+    );
+    const cmEditor = container.querySelector(".cm-editor") as HTMLElement & {
+      cmView?: { view: import("@codemirror/view").EditorView };
+    };
+    const view = cmEditor.cmView!.view;
+    // Entered Edit editable (the lock is not known yet).
+    expect(view.state.readOnly).toBe(false);
+    expect(view.contentDOM.getAttribute("contenteditable")).toBe("true");
+
+    // A held-by-other lock arrives → readOnly flips true.
+    rerender(
+      withRouter(
+        <LivePreviewEditor
+          value="hello"
+          onChange={onChange}
+          currentPath="notes.md"
+          mode="live"
+          readOnly={true}
+        />,
+      ),
+    );
+    // SAME view instance — reconfigured, not rebuilt, so the buffer is preserved …
+    expect(cmEditor.cmView!.view).toBe(view);
+    // … and it is now genuinely non-editable: the browser blocks the caret/keystrokes
+    // (contentEditable=false) and CM commands refuse edits (state.readOnly=true).
+    expect(view.state.readOnly).toBe(true);
+    expect(view.contentDOM.getAttribute("contenteditable")).toBe("false");
+
+    // Force edit clears the lock → editing is restored on the same view.
+    rerender(
+      withRouter(
+        <LivePreviewEditor
+          value="hello"
+          onChange={onChange}
+          currentPath="notes.md"
+          mode="live"
+          readOnly={false}
+        />,
+      ),
+    );
+    expect(cmEditor.cmView!.view).toBe(view);
+    expect(view.state.readOnly).toBe(false);
+    expect(view.contentDOM.getAttribute("contenteditable")).toBe("true");
+  });
 });
 
 // Keep this referenced so the unused-import guard does not complain in the stub

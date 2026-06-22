@@ -13,6 +13,9 @@ vi.mock("../api/client", async (importOriginal) => {
     getPage: vi.fn(),
     savePage: vi.fn(),
     getTree: vi.fn().mockResolvedValue([]),
+    // Lock calls: default to "you hold it" (acquired) so existing tests stay editable.
+    acquireLock: vi.fn().mockResolvedValue({ result: "acquired" }),
+    releaseLock: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -64,6 +67,10 @@ describe("PageEditor", () => {
       revision: "rev-1",
     });
     vi.mocked(client.getTree).mockResolvedValue([]);
+    // Default lock state: this session holds the lock (editable). Tests that need a
+    // held-by-other state override acquireLock per-test.
+    vi.mocked(client.acquireLock).mockResolvedValue({ result: "acquired" });
+    vi.mocked(client.releaseLock).mockResolvedValue(undefined);
   });
 
   it("issues a save PUT on Save page click", async () => {
@@ -225,5 +232,50 @@ describe("PageEditor", () => {
     expect(
       screen.queryByRole("button", { name: "Reload page" }),
     ).toBeNull();
+  });
+
+  // COLL-02 regression: a session that does NOT hold the lock (held-by-other) must
+  // never autosave. The save path is deliberately lock-independent server-side, so
+  // this client gate is what enforces the SoftLockBanner's "won't be saved until you
+  // take over." The original bug let a locked-out, still-editable "View only" surface
+  // autosave + commit its edits.
+  it("does NOT autosave while another session holds the lock (COLL-02)", async () => {
+    vi.useFakeTimers();
+    const flush = async () => {
+      for (let i = 0; i < 8; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+    };
+    try {
+      vi.mocked(client.acquireLock).mockResolvedValue({
+        result: "held-by-other",
+        holder: { username: "alice" },
+      });
+      vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+      renderEditor("notes.md");
+      await flush();
+
+      // Precondition: the page is held by alice → "View only" soft lock is active.
+      expect(
+        screen.getByText(/alice is editing this page/i),
+      ).toBeInTheDocument();
+
+      // A change slips through the stubbed editor (the real CM6 surface is genuinely
+      // non-editable when locked — see LivePreviewEditor.test; this isolates the
+      // autosave gate). Advance well past the debounce.
+      const body = screen.getByLabelText("body");
+      fireEvent.change(body, { target: { value: "edit while locked out" } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      await flush();
+
+      expect(client.savePage).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Annotation, EditorState } from "@codemirror/state";
+import { Annotation, Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 
@@ -53,6 +53,25 @@ type CmEditorEl = HTMLElement & { cmView?: { view: EditorView } };
 // firing onChange for it — a seed is not a user edit and must not echo back through
 // the controlled value (RESEARCH Pitfall 6).
 const externalSeed = Annotation.define<boolean>();
+
+// editableCompartment makes the surface's editability reconfigurable WITHOUT
+// recreating the view, so a soft lock discovered AFTER the editor mounts can flip
+// the live surface to genuinely non-editable and back. The original code baked
+// `readOnly` into the initial EditorState, so when PageEditor entered Edit (editable)
+// and an acquire heartbeat THEN reported held-by-other, the once-created view stayed
+// editable — the "View only" banner showed but keystrokes still landed (and
+// autosaved). Compartment reconfiguration leaves the document untouched, so the
+// user's buffer is preserved (selection/copy still work); only editing is gated.
+const editableCompartment = new Compartment();
+
+// editableExtFor returns the editability extensions for a readOnly value: a
+// genuinely non-editable surface (no caret/edits) when true, nothing (fully
+// editable) when false.
+function editableExtFor(ro: boolean) {
+  return ro
+    ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+    : [];
+}
 
 export default function LivePreviewEditor({
   value,
@@ -123,8 +142,9 @@ export default function LivePreviewEditor({
           // search `#hash` deep-link lands correctly (SRCH-06). T-06-10: read mode
           // reuses the SAME live-preview decoration pipeline as edit Live — there is
           // no second, weaker read renderer.
-          EditorState.readOnly.of(true),
-          EditorView.editable.of(false),
+          // Editability lives in a compartment so it can be reconfigured at runtime
+          // (here it is non-editable; read mode never toggles, so it stays put).
+          editableCompartment.of(editableExtFor(readOnly)),
           nav,
           selectionListener,
           headingAnchors,
@@ -133,6 +153,10 @@ export default function LivePreviewEditor({
           modeCompartment.of(liveExtensions),
         ]
       : [
+          // Editability in a compartment so a soft lock discovered after mount can
+          // flip this surface to genuinely non-editable (COLL-02) without rebuilding
+          // the view. Starts editable in Edit mode; the readOnly effect reconfigures.
+          editableCompartment.of(editableExtFor(readOnly)),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           toggleKeymap,
@@ -208,6 +232,20 @@ export default function LivePreviewEditor({
       ),
     });
   }, [mode, readOnly]);
+
+  // Reconfigure editability when `readOnly` flips AFTER mount — the soft-lock case
+  // (COLL-02): PageEditor enters Edit editable, then an acquire heartbeat reports the
+  // page is held-by-other and sets readOnly=true. Without this, the once-created view
+  // stayed editable (its edits even autosaved) under the "View only" banner. The
+  // Compartment reconfigure leaves the document intact, so the user keeps their text
+  // (selection/copy still work) — only editing is disabled, and Force edit restores it.
+  useEffect(() => {
+    const v = view.current;
+    if (!v) return;
+    v.dispatch({
+      effects: editableCompartment.reconfigure(editableExtFor(readOnly)),
+    });
+  }, [readOnly]);
 
   return <div ref={host} className="livepreview-editor" />;
 }

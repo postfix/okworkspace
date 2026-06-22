@@ -99,6 +99,15 @@ export default function PageEditor() {
   // readOnly mirrors lockedBy for the editor surface + Save gating. Held-by-other
   // ⇒ genuinely read-only (no caret, Save disabled); never a mere visual dim.
   const readOnly = lockedBy !== null;
+  // readOnlyRef mirrors readOnly for the save path, which reads it from stable
+  // callbacks/timers (runSaver, scheduleAutosave) without taking readOnly as a dep.
+  // It is the defense-in-depth gate: a save is never armed or run while this session
+  // does not hold the lock, so even a stray edit (or an autosave timer armed a beat
+  // before the lock arrived) can never persist a held-by-other session's changes.
+  const readOnlyRef = useRef(false);
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
 
   // The base revision is the optimistic-concurrency token read at open time; it
   // advances after each successful save so subsequent saves are not self-409s.
@@ -191,6 +200,11 @@ export default function PageEditor() {
   // base revision, so there is no stale-closure or stale-revision window.
   const runSaver = useCallback(
     async (force: boolean) => {
+      // Never save while another session holds the lock (COLL-02). The save path is
+      // deliberately lock-independent at the server, so this client gate is what keeps
+      // a held-by-other "View only" session from autosaving its edits — the banner's
+      // "won't be saved until you take over" promise. Force edit clears readOnly first.
+      if (readOnlyRef.current) return;
       if (saving.current) return; // a saver loop is already running
       saving.current = true;
       setSaveError(null);
@@ -301,6 +315,11 @@ export default function PageEditor() {
     // The in-flight edit is preserved in the editor; it saves once the conflict is
     // resolved (which advances baseRevision and resumes autosave). (Pitfall 5.)
     if (conflictOpenRef.current) return;
+    // Do NOT arm autosave while another session holds the lock (held-by-other). The
+    // editor is read-only in that state, so there should be nothing to save — but this
+    // is the belt-and-suspenders gate that guarantees a locked-out session never
+    // persists edits even if a change slips through (COLL-02).
+    if (readOnlyRef.current) return;
     if (draftTimer.current) window.clearTimeout(draftTimer.current);
     draftTimer.current = window.setTimeout(() => void runSaver(false), DRAFT_DEBOUNCE_MS);
   }, [runSaver]);
