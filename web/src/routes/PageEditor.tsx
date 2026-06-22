@@ -15,6 +15,7 @@ import { getConnId } from "../lib/connId";
 import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
 import LinkPicker from "../components/LinkPicker";
 import LivePreviewEditor from "../components/LivePreviewEditor";
+import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
 import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
@@ -362,6 +363,13 @@ export default function PageEditor() {
 
       <div className="pageeditor-toolbar">
         <LinkPicker fromPath={path} onInsert={insertLink} />
+        {/* Quiet "who else is editing" line (COLL-01), left of the flex spacer so
+            the Live/Source mode segment stays right-aligned. It is editor-only
+            (PageEditor IS Edit mode — readers never reach it) and reuses the
+            Plan-02 per-tab connection id so your own presence is excluded and two
+            tabs are distinguishable. The component owns its own subscribe/
+            unsubscribe lifecycle; PageEditor only mounts it. */}
+        <PresenceIndicator path={path} conn={connId.current} />
         <div
           className="pageeditor-mode"
           role="group"
