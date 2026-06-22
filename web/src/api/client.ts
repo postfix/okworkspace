@@ -521,6 +521,62 @@ export function subscribeExtractionStatus(
   return () => es.close();
 }
 
+// --- Presence (COLL-01) ---
+
+// PresenceSnapshot is one full-state presence frame pushed by the per-page
+// presence SSE stream. editors is the complete set of live lock holders (one, at
+// most, given one-lock-per-page), each carrying only a username + a you bool —
+// never a session id (the server filters that out, T-05-12). you_hold_lock is
+// whether THIS connection holds the page's live lock, so a consumer can reconcile
+// presence with its own lock state from the same stream.
+export interface PresenceSnapshot {
+  editors: { username: string; you: boolean }[];
+  you_hold_lock: boolean;
+}
+
+// PresenceState is the connection lifecycle the PresenceIndicator renders around
+// the snapshot: "connecting" before the first frame/open, "open" once streaming,
+// "reconnecting" after a drop (the native EventSource auto-reconnects).
+export type PresenceState = "connecting" | "open" | "reconnecting";
+
+// subscribePresence opens an SSE subscription to a page's live editing presence
+// (COLL-01) and invokes onSnapshot for each full-state frame. It mirrors
+// subscribeExtractionStatus: a GET EventSource (no CSRF), JSON.parse per message
+// (keep the last snapshot on a parse error), and an unsubscribe that closes the
+// stream. Unlike the extraction stream, presence has no terminal state, so onError
+// does NOT close — it reports "reconnecting" and lets the native EventSource
+// auto-reconnect (the connection IS the heartbeat). onState surfaces the lifecycle
+// for the indicator's connecting/reconnecting copy.
+export function subscribePresence(
+  path: string,
+  conn: string,
+  onSnapshot: (snapshot: PresenceSnapshot) => void,
+  onState?: (state: PresenceState) => void,
+): () => void {
+  const es = new EventSource(
+    `/api/v1/pages/${path}/presence?conn=${encodeURIComponent(conn)}`,
+  );
+  es.onopen = () => {
+    onState?.("open");
+  };
+  es.onmessage = (e: MessageEvent) => {
+    try {
+      const parsed = JSON.parse(e.data) as PresenceSnapshot;
+      onState?.("open");
+      onSnapshot(parsed);
+    } catch {
+      // Ignore a malformed event; keep the last-known snapshot.
+    }
+  };
+  es.onerror = () => {
+    // The stream dropped. Presence has no terminal state, so do NOT close — the
+    // native EventSource auto-reconnects; surface the degraded "reconnecting"
+    // awareness state in the meantime.
+    onState?.("reconnecting");
+  };
+  return () => es.close();
+}
+
 // --- Agent (AGNT-01..AGNT-10) ---
 
 // AgentScope is the retrieval scope the PromptBar sends with each Ask/stream
