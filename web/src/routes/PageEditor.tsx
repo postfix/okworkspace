@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   acquireLock,
   createPage,
+  deletePage,
   forceLock,
   getPage,
   releaseLock,
@@ -89,6 +90,12 @@ export default function PageEditor() {
   // The stable per-tab connection id is the lock SessionID (client-generated,
   // opaque). useRef so it is read once and shared by every lock call this mount.
   const connId = useRef(getConnId());
+  // forcedRef short-circuits a single in-flight stale "held-by-other" heartbeat that
+  // resolves right AFTER a successful Force edit — without it that late response would
+  // wash the surface back to read-only even though we now hold the lock (WR-01). It is
+  // set on force success and cleared as soon as a heartbeat confirms we hold the lock
+  // ("acquired"), so a genuine later takeover by someone else still re-locks this tab.
+  const forcedRef = useRef(false);
   // readOnly mirrors lockedBy for the editor surface + Save gating. Held-by-other
   // ⇒ genuinely read-only (no caret, Save disabled); never a mere visual dim.
   const readOnly = lockedBy !== null;
@@ -138,13 +145,25 @@ export default function PageEditor() {
     if (path === "") return;
     const conn = connId.current;
     let cancelled = false;
+    // New page path → no force takeover is in flight yet; start from a clean guard.
+    forcedRef.current = false;
 
     async function tryAcquire() {
       try {
         const res = await acquireLock(path, conn);
         if (cancelled) return;
-        // Don't override an in-progress force-edit takeover with a stale heartbeat.
-        setLockedBy(res.result === "held-by-other" ? res.holder?.username ?? "Someone" : null);
+        if (res.result === "held-by-other") {
+          // Ignore a stale heartbeat that was already in flight when we Force-took the
+          // lock — applying it would wash us back to read-only (WR-01). A real later
+          // takeover is still surfaced once forcedRef has been cleared by an "acquired".
+          if (forcedRef.current) return;
+          setLockedBy(res.holder?.username ?? "Someone");
+        } else {
+          // Confirmed this session holds the lock: clear the force guard so a genuine
+          // later takeover by someone else can re-lock us on a subsequent heartbeat.
+          forcedRef.current = false;
+          setLockedBy(null);
+        }
       } catch {
         // A failed acquire/heartbeat must not break editing — the worst case is we
         // briefly don't know the lock state; the next tick retries. Leave the
@@ -341,6 +360,9 @@ export default function PageEditor() {
     try {
       await forceLock(path, connId.current);
       setLockedBy(null);
+      // We now hold the lock. Guard against a stale in-flight heartbeat (dispatched
+      // while the other session still held it) re-locking us read-only (WR-01).
+      forcedRef.current = true;
     } catch {
       setForceFailed(true);
     } finally {
@@ -424,17 +446,22 @@ export default function PageEditor() {
   async function onConflictSaveAsCopy() {
     setConflictBusy("copy");
     setSaveError(null);
+    // Track the freshly-minted copy so we can compensate if writing its body fails —
+    // otherwise an empty "{title} (Copy)" stub would orphan in the tree (IN-02).
+    let createdPath: string | null = null;
     try {
       const title = readField(frontmatterRef.current, "title") || "Untitled";
       const slash = path.lastIndexOf("/");
       const folder = slash === -1 ? "" : path.slice(0, slash);
       const { path: newPath } = await createPage(folder, `${title} (Copy)`);
+      createdPath = newPath;
       const fresh = await getPage(newPath);
       await savePage(newPath, {
         body: bodyRef.current,
         frontmatter: setField(fresh.frontmatter, "title", `${title} (Copy)`),
         base_revision: fresh.revision,
       });
+      createdPath = null; // copy fully persisted — nothing to compensate
       setConflict(null);
       setMergeReference(null);
       setSaveState("saved");
@@ -442,6 +469,11 @@ export default function PageEditor() {
       // Open the copy (transient "Saved as a copy. Opening it now.").
       navigate(`/app/edit/${newPath}`);
     } catch {
+      // Best-effort: remove the empty copy we created before the body landed, then
+      // reconcile the tree so no orphaned stub lingers (IN-02). The original page is
+      // never touched, and the user's body stays in the editor.
+      if (createdPath) await deletePage(createdPath).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ["tree"] });
       setSaveError(
         "We couldn't save a copy just now. Your changes are kept here — check your connection and try again.",
       );
