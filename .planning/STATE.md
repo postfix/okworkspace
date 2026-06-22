@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
-current_phase: 04
-current_phase_name: eino-agent
+current_phase: 07
+current_phase_name: obsidian-style-file-tree-folder-operations-tree-ux
 status: paused
 stopped_at: Phase 4 COMPLETE + VERIFIED (UAT passed — live browser validation vs DeepSeek). Autonomous run paused by user before Phase 5. Milestone v0.9.9 still open (Phase 5 Collaboration remaining; Phases 4+5 were the deferred set, 4 now done).
-last_updated: "2026-06-22T12:06:00.000Z"
-last_activity: 2026-06-22
-last_activity_desc: Phase 4 (Eino Agent) shipped + live-validated — 7 slices, 11/11 AGNT reqs, DeepSeek deepseek-v4-flash, code-review CR-01 fixed, gap closure, UAT passed (7/10 browser-confirmed + 3 unit-tested)
+last_updated: "2026-06-22T12:09:53.213Z"
+last_activity: 2026-06-21
+last_activity_desc: Completed 07-04-PLAN.md (folder operations + optimistic tree UX, 240 frontend tests green)
 progress:
   total_phases: 8
   completed_phases: 7
-  total_plans: 33
+  total_plans: 36
   completed_plans: 33
   percent: 88
 ---
@@ -84,6 +84,7 @@ Progress: [██████████] 100% (4 of 4 plans)
 | Phase 04 P05 | 5min | 3 tasks | 7 files |
 | Phase 04 P06 | 9min | 3 tasks | 17 files |
 | Phase 04 P07 | 22min | 3 tasks | 9 files |
+| Phase 05 P01 | 20min | 4 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -147,6 +148,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Apply is a NON-tool editor-gated CSRF HTTP endpoint reusing pages.Save(baseRevision) → single-writer gitstore.Commit(approved_agent_patch); a moved revision 409s, never a silent overwrite (AGNT-10/11).
 - [Phase ?]: agentContext store is ephemeral (not persisted) — carries transient selection/attachment, unlike persisted UI-preference stores
 - [Phase ?]: Rewrite apply reuses applyPatch (selection span spliced into cached body); no new write endpoint; missing-span/stale revision 409s into the dialog stale state
+- [Phase ?]: Lock paths use two-layer guard: repo.Resolve guards the repo root; lockPath guards the .okf-workspace/locks/ subtree (ErrUnsafePagePath)
+- [Phase ?]: Force is lock-file-only, decoupled from save authority (pages.Save); lockExpiry=2m, GC interval=60s
 
 ### Pending Todos
 
@@ -172,6 +175,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-22T06:51:27.852Z
+Last session: 2026-06-22T12:09:36.238Z
 Stopped at: Completed 04-04-PLAN.md
 Resume file: None

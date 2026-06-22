@@ -203,11 +203,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Saves use optimistic concurrency with a per-document revision, and a stale save is rejected rather than silently overwriting
   4. On a save conflict, the user is shown a diff and can choose overwrite, manual merge, or save-as-copy (which creates a new page)
 
-**Plans**: 4 plans
-- [ ] 05-01-PLAN.md — Lock store + GC job + SessionConnectionIDKey + ticker wiring (COLL-02 foundation) [wave 1]
+**Plans**: 1/4 plans executed
+
+- [x] 05-01-PLAN.md — Lock store + GC job + SessionConnectionIDKey + ticker wiring (COLL-02 foundation) [wave 1]
 - [ ] 05-02-PLAN.md — Lock endpoints + SoftLockBanner + read-only-under-lock editor + force-edit (COLL-02 e2e) [wave 2]
 - [ ] 05-03-PLAN.md — Presence SSE stream + PresenceIndicator + subscribePresence (COLL-01) [wave 3]
 - [ ] 05-04-PLAN.md — DiffReviewDialog conflict mode + 3 handlers + save-as-copy + force-edit-stale-save hardening test (COLL-04 + COLL-03) [wave 4]
+
 **UI hint**: yes
 **Notes**: No phase research needed — conflict UX is well-specified (SPEC §13.1) and the soft-lock file format with TTL/heartbeat is straightforward. This phase hardens and completes the optimistic-concurrency floor scaffolded in Phase 1: the revision check must still run when a user force-edits past a soft lock, and stale locks (session end/crash) must never cause silent data loss. The conflict-resolution UI reuses the DiffReviewDialog built in Phase 4. Soft lock files live in `.okf-workspace/locks/` with user + heartbeat TTL; presence is delivered over SSE.
 
@@ -291,6 +293,6 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Attachments & Text Extraction | 0/4 | Planned | - |
 | 3. Search | 0/TBD | Not started | - |
 | 4. Eino Agent | 7/7 | Complete   | 2026-06-21 |
-| 5. Collaboration | 0/TBD | Not started | - |
+| 5. Collaboration | 1/4 | In Progress|  |
 | 6. Live-Preview Editor (Obsidian-style) | 4/4 | Complete   | 2026-06-21 |
 | 7. Obsidian-style File Tree (folder operations & tree UX) | 4/4 | Complete   | 2026-06-21 |
