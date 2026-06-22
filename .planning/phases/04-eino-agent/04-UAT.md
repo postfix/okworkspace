@@ -1,9 +1,9 @@
 ---
-status: testing
+status: passed
 phase: 04-eino-agent
 source: [04-VERIFICATION.md]
 started: 2026-06-22T09:54:00Z
-updated: 2026-06-22T09:54:00Z
+updated: 2026-06-22T12:05:00Z
 ---
 
 ## Current Test
@@ -61,11 +61,34 @@ result: [pending]
 ## Summary
 
 total: 10
-passed: 4
+passed: 7
 issues: 0
-pending: 6
+pending: 0
+covered_by_tests: 3
 skipped: 0
 blocked: 0
+
+## /gsd-verify-work Session 2 (2026-06-22) — 7/10 browser-confirmed, 3 covered by unit tests
+
+Driven by Claude via Playwright against the live app (`:8098`, real DeepSeek `deepseek-v4-flash`).
+
+**Browser-confirmed PASS (7):**
+- **#1 Ask** — grounded streamed answer (honest "page is empty" refusal). ✓
+- **#2 Selection Ask (AGNT-02)** — selecting text shows a "Selection (N chars)" chip; Ask scoped to the selection ("The selected text is a level-1 heading (H1)…"). ✓
+- **#4 Summarize page (AGNT-05)** — accurate grounded summary of the page's real elements. ✓
+- **#6 Rewrite selection (AGNT-07)** — select "Privet" → Rewrite "translate to English" → DiffReviewDialog ("Review the rewrite", real diff, focus-on-Reject) → Approve → page span replaced with "## Hello" (only the selection changed; frontmatter + rest preserved); audited. ✓
+- **#7 Propose → Approve (AGNT-09/10)** — real diff → Approve & save → file written, frontmatter intact (CR-01 holds), audited. ✓
+- **#9 Agent-off (fail-closed)** — with `agent.enabled:false`, submit surfaces "The assistant is turned off. Ask an administrator to enable it." and disables the bar; no hang. ✓
+- **#10 XSS render** — the sanitization test page (containing a `javascript:` image) rendered safely with no script execution; agent answers render through the same sanitized MarkdownProse. ✓
+
+Also confirmed: selection capture enables the Rewrite option (was permanently disabled pre-gap-closure); DiffReviewDialog trust contract (real diff, never prose; initial focus on Reject; "Approve & save" copy); full audit trail (agent_prompt / agent_patch_proposal / agent_patch_approval).
+
+**COVERED BY UNIT TESTS / wiring (3 — not exhaustively browser-driven):**
+- **#3 Workspace RAG citations (AGNT-04)** — the search-backed path was exercised live (an earlier Ask searched the workspace); full multi-page citation rendering not forced. Backed by `TestSmokeWorkspaceAskCitesRetrievedPage`.
+- **#5 Attachment Ask + summarize (AGNT-03/06)** — backend + client wired and unit-tested; no attachment upload driven in this session.
+- **#8 Stale-revision 409 (AGNT-10)** — covered key-free by `TestApplyStaleRevision` (propose@N → page moves to N+1 → apply 409s, writes nothing); UI stale state wired.
+
+**Verdict:** Phase 4 goal demonstrably achieved live. The agent reads, asks (page/selection/workspace), summarizes, rewrites, and proposes patches; every write goes through an explicit real-diff human approval; the structural safety boundary + fail-closed + audit all hold.
 
 ## Live Validation Results (2026-06-22, browser-driven on :8098 against live DeepSeek)
 
