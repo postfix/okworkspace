@@ -12,6 +12,7 @@ import {
 } from "../lib/cm/mode";
 import { linkNav } from "../lib/cm/linkNav";
 import { headingAnchors, scrollToHash } from "../lib/cm/headingAnchors";
+import { useAgentContext } from "../stores/agentContext";
 import "./LivePreviewEditor.css";
 
 // LivePreviewEditor is the CodeMirror 6 editing surface that replaces
@@ -93,6 +94,27 @@ export default function LivePreviewEditor({
       (to) => navigateRef.current(to),
     );
 
+    // Publish the LIVE selection to the agentContext store so the AppShell agent
+    // session can scope a prompt to it (AGNT-02 selection Ask, AGNT-07 rewrite).
+    // This is a SEPARATE channel from onChange (the verbatim-bytes document
+    // channel, which must stay untouched — EDIT-03): selection is not an edit.
+    // It fires in BOTH the read-only and editable surfaces because selection/copy
+    // works in read mode (the editor's own contract) and the UI-SPEC "Selection
+    // (N chars)" chip applies to viewing AND editing. We read the store
+    // IMPERATIVELY via getState() (no React subscription inside CM) so the
+    // once-created EditorView never needs rebuilding.
+    const selectionListener = EditorView.updateListener.of((u) => {
+      if (!u.selectionSet && !u.docChanged) return;
+      const range = u.state.selection.main;
+      if (range.empty) {
+        useAgentContext.getState().clearSelection();
+      } else {
+        useAgentContext.getState().setSelection(
+          u.state.sliceDoc(range.from, range.to),
+        );
+      }
+    });
+
     const extensions = readOnly
       ? [
           // Unified READ surface: non-editable (no caret/edits) but selection/copy
@@ -104,6 +126,7 @@ export default function LivePreviewEditor({
           EditorState.readOnly.of(true),
           EditorView.editable.of(false),
           nav,
+          selectionListener,
           headingAnchors,
           // Force Live decorations through the same compartment seam edit mode uses,
           // so read and edit are pixel-identical. No toggleKeymap, no Source path.
@@ -115,6 +138,7 @@ export default function LivePreviewEditor({
           toggleKeymap,
           placeholder("Start writing in Markdown…"),
           nav,
+          selectionListener,
           modeCompartment.of(mode === "live" ? liveExtensions : sourceExtensions),
           EditorView.updateListener.of((u) => {
             // Fire onChange ONLY on a document change, with the bytes verbatim —
@@ -146,6 +170,10 @@ export default function LivePreviewEditor({
     return () => {
       v.destroy();
       view.current = null;
+      // Navigating away from a page must not leave a stale selection scoping the
+      // next prompt — clear it as the surface unmounts (covers PageEditor AND
+      // PageView, which both mount this editor).
+      useAgentContext.getState().clearSelection();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
