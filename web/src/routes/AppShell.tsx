@@ -141,6 +141,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const selection = useAgentContext((s) => s.selection);
   const selectionLength = useAgentContext((s) => s.selectionLength);
   const attachment = useAgentContext((s) => s.attachment);
+  const clearAttachment = useAgentContext((s) => s.clearAttachment);
   const hasSelection = selectionLength > 0;
 
   // ── Agent prompt session state ──────────────────────────────────────────────
@@ -750,6 +751,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           currentPath={currentPath}
           submitted={submitted}
           suggestions={suggestions}
+          onClearScope={attachment ? clearAttachment : undefined}
           promptBar={
             <PromptBar
               placeholder={promptPlaceholder}

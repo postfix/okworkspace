@@ -39,12 +39,34 @@
 }
 
 .agentpanel-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
   font-size: var(--font-size-label);
   line-height: var(--line-height-label);
   color: var(--color-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+}
+
+/* The ✕ that clears a pinned file/selection context, returning to page scope. */
+.agentpanel-clear-scope {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.agentpanel-clear-scope:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
 }
 
 .agentpanel-collapse {

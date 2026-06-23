@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Loader2, PanelRightClose, Sparkles } from "lucide-react";
+import { Loader2, PanelRightClose, Sparkles, X } from "lucide-react";
 
 import AgentAnswer from "./AgentAnswer";
 import type { AgentMode, PromptBarStatus } from "./PromptBar";
@@ -40,6 +40,10 @@ export interface AgentPanelProps {
   suggestions: AgentSuggestion[];
   // promptBar is the docked chat input rendered at the bottom of the panel.
   promptBar: ReactNode;
+  // onClearScope, when set, means a specific file/selection is pinned as the
+  // ask context — renders a clear (✕) control next to the scope meta so the user
+  // can return to page/workspace scope without reloading.
+  onClearScope?: () => void;
 }
 
 // MODE_LABEL is the human label for the header meta line.
@@ -64,6 +68,7 @@ export default function AgentPanel({
   submitted,
   suggestions,
   promptBar,
+  onClearScope,
 }: AgentPanelProps) {
   if (!open) return null;
 
@@ -77,6 +82,17 @@ export default function AgentPanel({
           <h2 className="agentpanel-title">Assistant</h2>
           <span className="agentpanel-meta">
             {MODE_LABEL[mode]} · {scopeLabel}
+            {onClearScope && (
+              <button
+                type="button"
+                className="agentpanel-clear-scope"
+                onClick={onClearScope}
+                aria-label="Clear file context"
+                title="Stop asking about this file"
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            )}
           </span>
         </div>
         <button
