@@ -1,7 +1,9 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
+  useRef,
   useState,
   type DragEvent,
   type MouseEvent,
@@ -18,6 +20,7 @@ import {
   useTreeMove,
   type DragKind,
 } from "./hooks/useTreeMutations";
+import { useTreeFold } from "../stores/treeFold";
 import TreeContextMenu, { type TreeContextMenuItem } from "./TreeContextMenu";
 import CreatePageModal from "./CreatePageModal";
 import CreateFolderModal from "./CreateFolderModal";
@@ -519,6 +522,24 @@ function FolderRow({
 }) {
   const [expanded, setExpanded] = useState(true);
   const drop = useNodeDropZone(node.path, onDropNode);
+
+  // Snap to the global target whenever "collapse all / expand all" fires (the
+  // toolbar toggle bumps foldVersion); skip the initial mount so the tree still
+  // loads expanded. A user can still expand/collapse this folder individually
+  // between presses — the next toggle re-broadcasts the global state.
+  const foldVersion = useTreeFold((s) => s.version);
+  const foldCollapsed = useTreeFold((s) => s.collapsed);
+  const firstFold = useRef(true);
+  useEffect(() => {
+    if (firstFold.current) {
+      firstFold.current = false;
+      return;
+    }
+    setExpanded(!foldCollapsed);
+    // foldCollapsed is read at fire time; depend on the version so a repeat
+    // toggle to the same target still re-broadcasts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foldVersion]);
 
   return (
     <li>

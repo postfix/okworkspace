@@ -1,0 +1,35 @@
+/* A 6px-wide column-resize gutter sitting between two panes. Invisible at rest
+   (just a col-resize cursor); a thin accent line reveals on hover / focus /
+   drag so it reads as a grabbable divider. */
+.resize-handle {
+  flex: 0 0 6px;
+  align-self: stretch;
+  position: relative;
+  cursor: col-resize;
+  /* Negative margins let the 6px hit area straddle the 1px pane border without
+     adding visible layout width. */
+  margin: 0 -3px;
+  z-index: 5;
+  touch-action: none;
+}
+
+.resize-handle-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.resize-handle:hover .resize-handle-grip,
+.resize-handle:focus-visible .resize-handle-grip,
+.resize-handle:active .resize-handle-grip {
+  background: var(--color-accent);
+}
+
+.resize-handle:focus-visible {
+  outline: none;
+}

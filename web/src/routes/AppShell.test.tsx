@@ -88,13 +88,6 @@ describe("AppShell — AUTH-06", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders OKF Workspace wordmark in the top bar", async () => {
-    seedMe("reader");
-    renderAppShell();
-    expect(
-      await screen.findByRole("button", { name: /OKF Workspace/i }),
-    ).toBeInTheDocument();
-  });
 });
 
 describe("AppShell — agent dispatch (04-07)", () => {

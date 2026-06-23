@@ -1,9 +1,20 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ChevronsDownUp,
+  ChevronsUpDown,
   FilePlus,
   FolderPlus,
+  PanelLeft,
+  PanelLeftClose,
   PanelRightOpen,
   Search,
   Shield,
@@ -30,6 +41,10 @@ import {
 import UserMenu from "../components/UserMenu";
 import LeftTree, { type LeftTreeHandle } from "../components/LeftTree";
 import RecentList from "../components/RecentList";
+import ResizeHandle from "../components/ResizeHandle";
+import { usePanelSizes } from "../stores/panelSizes";
+import { useNavrail } from "../stores/navrail";
+import { useTreeFold } from "../stores/treeFold";
 import SearchPalette from "../components/search/SearchPalette";
 import PromptBar, {
   type AgentMode,
@@ -73,6 +88,23 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const canEdit = data?.role === "editor" || data?.role === "admin";
   const treeRef = useRef<LeftTreeHandle>(null);
   const setSearchOpen = useSearchStore((s) => s.setOpen);
+
+  // ── Resizable column widths (persisted, drag-driven) ────────────────────────
+  // The navrail + assistant widths live in a store and feed the --navrail-width /
+  // --agentpanel-width CSS vars (set inline on .appshell below); the ResizeHandle
+  // gutters nudge them on drag.
+  const navWidth = usePanelSizes((s) => s.navWidth);
+  const agentWidth = usePanelSizes((s) => s.agentWidth);
+  const nudgeNav = usePanelSizes((s) => s.nudgeNav);
+  const nudgeAgent = usePanelSizes((s) => s.nudgeAgent);
+
+  // ── File-tree panel hide/show (Obsidian-style, persisted) ───────────────────
+  const navOpen = useNavrail((s) => s.open);
+  const toggleNav = useNavrail((s) => s.toggle);
+
+  // Tree collapse-all / expand-all toggle (drives every FolderRow).
+  const treeCollapsed = useTreeFold((s) => s.collapsed);
+  const toggleFold = useTreeFold((s) => s.toggle);
 
   // ── Agent panel open/collapse (persisted) ──────────────────────────────────
   const panelOpen = useAgentPanel((s) => s.open);
@@ -508,23 +540,34 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   }
 
   return (
-    <div className="appshell">
+    <div
+      className="appshell"
+      style={
+        {
+          "--navrail-width": `${navWidth}px`,
+          "--agentpanel-width": `${agentWidth}px`,
+        } as CSSProperties
+      }
+    >
       <SearchPalette />
       <header className="topbar">
-        <button
-          type="button"
-          className="topbar-wordmark topbar-wordmark-btn"
-          onClick={() => navigate("/app")}
-        >
-          OKF Workspace
-        </button>
-        <div className="topbar-right">
-          {repoHealth?.ok && (
-            <span className="repo-health" title={repoHealth.detail}>
-              <span className="repo-health-dot" aria-hidden="true" />
-              <span>Storage healthy</span>
-            </span>
-          )}
+        {/* Left cluster (Obsidian-style): file-tree toggle + Search sit together
+            at the leading edge of the bar. */}
+        <div className="topbar-left">
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn topbar-nav-toggle"
+            onClick={toggleNav}
+            aria-label={navOpen ? "Hide file tree" : "Show file tree"}
+            aria-pressed={navOpen}
+            title={navOpen ? "Hide file tree" : "Show file tree"}
+          >
+            {navOpen ? (
+              <PanelLeftClose size={16} aria-hidden="true" />
+            ) : (
+              <PanelLeft size={16} aria-hidden="true" />
+            )}
+          </button>
           <button
             type="button"
             className="btn btn-ghost topbar-search"
@@ -535,6 +578,14 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             <span>Search</span>
             <kbd className="keycap">⌘K</kbd>
           </button>
+        </div>
+        <div className="topbar-right">
+          {repoHealth?.ok && (
+            <span className="repo-health" title={repoHealth.detail}>
+              <span className="repo-health-dot" aria-hidden="true" />
+              <span>Storage healthy</span>
+            </span>
+          )}
           <button
             type="button"
             className={`btn btn-ghost topbar-agent${status === "streaming" ? " is-active" : ""}`}
@@ -558,27 +609,46 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       </header>
 
       <div className="appshell-body">
+        {navOpen && (
+          <>
         <nav className="navrail" aria-label="Workspace navigation">
-          {canEdit && (
-            <div className="navrail-actions">
+          <div className="navrail-toolbar">
+            {canEdit && (
               <button
                 type="button"
-                className="navrow navrow-action"
+                className="navrail-tool"
                 onClick={() => treeRef.current?.openCreatePage()}
+                aria-label="New page"
+                title="New page"
               >
                 <FilePlus size={16} aria-hidden="true" />
-                <span>New page</span>
               </button>
+            )}
+            {canEdit && (
               <button
                 type="button"
-                className="navrow navrow-action"
+                className="navrail-tool"
                 onClick={() => treeRef.current?.openCreateFolder()}
+                aria-label="New folder"
+                title="New folder"
               >
                 <FolderPlus size={16} aria-hidden="true" />
-                <span>New folder</span>
               </button>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              className="navrail-tool"
+              onClick={toggleFold}
+              aria-label={treeCollapsed ? "Expand all folders" : "Collapse all folders"}
+              title={treeCollapsed ? "Expand all" : "Collapse all"}
+            >
+              {treeCollapsed ? (
+                <ChevronsUpDown size={16} aria-hidden="true" />
+              ) : (
+                <ChevronsDownUp size={16} aria-hidden="true" />
+              )}
+            </button>
+          </div>
 
           <LeftTree ref={treeRef} />
           <RecentList />
@@ -607,6 +677,10 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             </div>
           )}
         </nav>
+
+        <ResizeHandle ariaLabel="Resize sidebar" onResize={nudgeNav} />
+          </>
+        )}
 
         <main className="mainpane">
           {repoHealth && !repoHealth.ok && !repoHealth.diverged && (
@@ -638,6 +712,13 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             </div>
           )}
         </main>
+
+        {panelOpen && (
+          <ResizeHandle
+            ariaLabel="Resize assistant"
+            onResize={(dx) => nudgeAgent(-dx)}
+          />
+        )}
 
         <AgentPanel
           open={panelOpen}

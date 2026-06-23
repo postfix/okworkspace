@@ -4,11 +4,15 @@ import { Clock } from "lucide-react";
 import { useRecent } from "../stores/recent";
 import "./RecentList.css";
 
+// RECENT_VISIBLE caps how many recent pages the rail shows (the store keeps more
+// for de-dup history; the sidebar only surfaces the few most recent).
+const RECENT_VISIBLE = 3;
+
 // RecentList shows the client-side recently-visited pages (NAV-05), most recent
 // first. Empty state uses the UI-SPEC muted copy.
 export default function RecentList() {
   const navigate = useNavigate();
-  const recents = useRecent((s) => s.recents);
+  const recents = useRecent((s) => s.recents).slice(0, RECENT_VISIBLE);
 
   return (
     <div className="recentlist">
