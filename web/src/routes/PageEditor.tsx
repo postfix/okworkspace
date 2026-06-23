@@ -515,6 +515,45 @@ export default function PageEditor() {
 
   return (
     <div className="pageeditor">
+      {/* Top-right corner controls (Obsidian-style): save state, the Live/Source
+          single-toggle, an explicit Save, and the switch-to-reading-view book.
+          Pinned to the top-right of the editor, above everything else. */}
+      <div className="pageeditor-topbar">
+        <AutosaveStatus state={saveState} />
+        <button
+          type="button"
+          className="btn btn-ghost icon-btn"
+          aria-pressed={mode === "source"}
+          aria-label={mode === "live" ? "Switch to source" : "Switch to live preview"}
+          title={mode === "live" ? "Source · ⌘E" : "Live preview · ⌘E"}
+          onClick={() => setMode(mode === "live" ? "source" : "live")}
+        >
+          {mode === "live" ? (
+            <Code size={18} aria-hidden="true" />
+          ) : (
+            <Eye size={18} aria-hidden="true" />
+          )}
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost icon-btn"
+          onClick={onSaveClick}
+          disabled={readOnly}
+          aria-label="Save page"
+          title="Save"
+        >
+          <Save size={18} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost icon-btn"
+          onClick={() => navigate(`/app/page/${path}`)}
+          aria-label="Switch to reading view"
+          title="Read view"
+        >
+          <BookOpen size={18} aria-hidden="true" />
+        </button>
+      </div>
       {lockedBy && (
         <SoftLockBanner
           holderName={lockedBy}
@@ -596,46 +635,6 @@ export default function PageEditor() {
             tabs are distinguishable. The component owns its own subscribe/
             unsubscribe lifecycle; PageEditor only mounts it. */}
         <PresenceIndicator path={path} conn={connId.current} />
-        {/* Corner icon cluster (Obsidian-style): save state, the Live/Source
-            single-toggle, an explicit Save, and the switch-to-reading-view book.
-            All icon-only with title tooltips; the Save keeps its "Save page"
-            accessible name. */}
-        <div className="pageeditor-toolbar-right">
-          <AutosaveStatus state={saveState} />
-          <button
-            type="button"
-            className="btn btn-ghost icon-btn"
-            aria-pressed={mode === "source"}
-            aria-label={mode === "live" ? "Switch to source" : "Switch to live preview"}
-            title={mode === "live" ? "Source · ⌘E" : "Live preview · ⌘E"}
-            onClick={() => setMode(mode === "live" ? "source" : "live")}
-          >
-            {mode === "live" ? (
-              <Code size={18} aria-hidden="true" />
-            ) : (
-              <Eye size={18} aria-hidden="true" />
-            )}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost icon-btn"
-            onClick={onSaveClick}
-            disabled={readOnly}
-            aria-label="Save page"
-            title="Save"
-          >
-            <Save size={18} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost icon-btn"
-            onClick={() => navigate(`/app/page/${path}`)}
-            aria-label="Switch to reading view"
-            title="Read view"
-          >
-            <BookOpen size={18} aria-hidden="true" />
-          </button>
-        </div>
       </div>
 
       {readOnly && (

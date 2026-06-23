@@ -1,12 +1,19 @@
 .pageeditor {
-  /* The editor fills the available main-pane width (a wide editing surface uses
-     the screen instead of floating as a narrow column), capped only so it never
-     gets uncomfortably long on an ultra-wide monitor. */
+  /* The editor fills ALL available main-pane width (no cap) and reflows with the
+     window — a full-bleed editing surface, not a narrow centered column. */
   width: 100%;
-  max-width: 1400px;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+}
+
+/* Top-right corner controls row (save state + Live/Source toggle + Save +
+   Read-view), right-aligned above the page. */
+.pageeditor-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
 }
 
 .pageeditor-status {
@@ -33,17 +40,8 @@
   margin-bottom: var(--space-sm);
 }
 
-/* Right-aligned corner cluster: autosave status + Live/Source toggle + Save +
-   Read-view, all icon buttons (Obsidian-style). */
-.pageeditor-toolbar-right {
-  display: inline-flex;
-  align-items: center;
-  margin-left: auto;
-  gap: var(--space-sm);
-}
-
 /* The active Live/Source toggle reads as pressed: accent icon tint. */
-.pageeditor-toolbar-right .icon-btn[aria-pressed="true"] {
+.pageeditor-topbar .icon-btn[aria-pressed="true"] {
   color: var(--color-accent);
 }
 
