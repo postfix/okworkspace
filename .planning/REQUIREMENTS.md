@@ -74,17 +74,17 @@ Which phases cover which requirements. Filled in during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LINK-01 | TBD | Pending |
-| LINK-02 | TBD | Pending |
-| LINK-03 | TBD | Pending |
-| GRAPH-01 | TBD | Pending |
-| GRAPH-02 | TBD | Pending |
-| GRAPH-03 | TBD | Pending |
-| GRAPH-04 | TBD | Pending |
-| GRAPH-05 | TBD | Pending |
-| TAG-01 | TBD | Pending |
-| TAG-02 | TBD | Pending |
-| TAG-03 | TBD | Pending |
-| TAG-04 | TBD | Pending |
-| TAG-05 | TBD | Pending |
-| TAG-06 | TBD | Pending |
+| LINK-01 | Phase 8 | Pending |
+| LINK-02 | Phase 9 | Pending |
+| LINK-03 | Phase 8 | Pending |
+| GRAPH-01 | Phase 10 | Pending |
+| GRAPH-02 | Phase 10 | Pending |
+| GRAPH-03 | Phase 10 | Pending |
+| GRAPH-04 | Phase 10 | Pending |
+| GRAPH-05 | Phase 10 | Pending |
+| TAG-01 | Phase 11 | Pending |
+| TAG-02 | Phase 11 | Pending |
+| TAG-03 | Phase 11 | Pending |
+| TAG-04 | Phase 11 | Pending |
+| TAG-05 | Phase 12 | Pending |
+| TAG-06 | Phase 12 | Pending |
