@@ -63,6 +63,11 @@ export default function AttachmentDropzone({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: false,
+    // Force the classic hidden-<input> click instead of the File System Access
+    // API (window.showOpenFilePicker), which silently no-ops in some Chrome
+    // setups (extensions, non-trusted activation) — that's why "click to browse"
+    // did nothing while drag-and-drop still worked.
+    useFsAccessApi: false,
   });
 
   let stateClass = "attachment-dropzone";
