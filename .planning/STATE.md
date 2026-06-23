@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
-current_phase: 05
-current_phase_name: collaboration
-status: executing
+current_phase: 9.9
+status: Awaiting next milestone
 stopped_at: Completed 05-04-PLAN.md (conflict resolution + force-edit safety proof, COLL-03/COLL-04)
-last_updated: "2026-06-22T12:50:58.701Z"
-last_activity: 2026-06-22
-last_activity_desc: Completed 05-04-PLAN.md (conflict resolution + force-edit safety proof, COLL-03/COLL-04)
+last_updated: "2026-06-23T22:02:51.238Z"
+last_activity: 2026-06-23
+last_activity_desc: Milestone v0.9.9 completed and archived
 progress:
   total_phases: 8
   completed_phases: 8
   total_plans: 36
   completed_plans: 36
   percent: 100
+current_phase_name: collaboration
 ---
 
 # Project State
@@ -28,12 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 05 (collaboration) — ALL 4 PLANS COMPLETE
-Plan: 4 of 4 complete (wave 4 / 05-04 done)
-Status: Phase 5 implementation complete — ready for phase verification
-Last activity: 2026-06-22 — Completed 05-04-PLAN.md (conflict resolution + force-edit safety proof, COLL-03/COLL-04)
-
-Progress: [██████████] 100% (4 of 4 plans)
+Phase: Milestone v0.9.9 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-23 — Milestone v0.9.9 completed and archived
 
 ### Key decisions (05-04 — the load-bearing slice)
 
@@ -190,3 +188,7 @@ Items acknowledged and carried forward from previous milestone close:
 Last session: 2026-06-22T12:50:07.879Z
 Stopped at: Completed 05-04-PLAN.md (conflict resolution + force-edit safety proof, COLL-03/COLL-04)
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

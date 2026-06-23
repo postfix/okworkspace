@@ -14,21 +14,22 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 <!-- Shipped and confirmed valuable. -->
 
-(None yet — ship to validate)
+- ✓ **Skeleton & auth** — v0.9.9 — single Go binary serves the React frontend; Argon2id login with admin/editor/reader roles; admin bootstrap on first startup; SCS HttpOnly+SameSite sessions; data dir + Git repo initialized on startup
+- ✓ **OKF pages** — v0.9.9 — create/rename/move/delete-to-trash/restore; edit title/tags/description/body; Markdown rendering; YAML frontmatter parse + required-field repair; page links; byte-stable round-trip
+- ✓ **Navigation** — v0.9.9 — left file tree with expand/collapse, current-page highlight, recents, create-page-in-folder, create-folder (Phase 7 added right-click menus, drag-and-drop, folder rename/move/delete)
+- ✓ **Attachments** — v0.9.9 — upload, byte-exact download, attachment cards, replace, orphan-delete; JSON sidecars; PDF/DOCX/TXT text extraction; SVG served as download
+- ✓ **Search** — v0.9.9 — page title/body/tag, attachment filename, and extracted-text search returning page/heading/attachment results (Bleve, incremental index, ⌘K palette)
+- ✓ **Eino agent** — v0.9.9 — ask/summarize/rewrite/draft/propose-patch over page/selection/attachment/workspace; propose→review-diff→approve→apply→commit; read-only 5-tool boundary, no direct writes
+- ✓ **Git versioning (hidden)** — v0.9.9 — automatic identity-stamped commits on page/attachment/agent-approved changes; single-writer batched commits; history view; restore version; optional remote push
+- ✓ **Collaboration (MVP)** — v0.9.9 — soft locks + presence indicator; optimistic concurrency with document revision; 409 conflict shows a diff with overwrite / manual-merge / save-as-copy
+- ✓ **Security & audit** — v0.9.9 — fuzz-tested safe path resolver; upload size/MIME/extension limits; `Content-Disposition: attachment` for risky formats; Argon2id hashing; HttpOnly SameSite cookies; nosurf CSRF; SQLite+slog audit log
+- ✓ **Live-preview editor (Obsidian-style)** — v0.9.9 (Phase 6) — CM6 inline-rendering Markdown editor with source toggle, byte-stable round-trip preserved
 
 ### Active
 
-<!-- Current scope (full MVP per SPEC.md, Phases 0–5). Hypotheses until shipped. -->
+<!-- Next-milestone scope. Empty until the next milestone is defined via /gsd-new-milestone. -->
 
-- [ ] **Skeleton & auth** — single Go binary serves the TypeScript/React frontend; local username/password login with admin/editor/reader roles; admin bootstrapped on first startup; session cookies; data dir + Git repo initialized on startup
-- [ ] **OKF pages** — create/rename/move/delete-to-trash/restore pages; edit title, tags, description, body; Markdown rendering; YAML frontmatter parse + required-field repair on save; link between pages
-- [ ] **Navigation** — left-side file tree with folder expand/collapse, current-page highlight, recent pages, create-page-in-folder, create-folder
-- [ ] **Attachments** — upload to a page, download the unmodified original, attachment cards, replace, delete (and delete-from-repo when unreferenced); metadata JSON sidecars; text extraction for PDF/DOCX/TXT so the agent can read sidecars
-- [ ] **Search** — page title, body full-text, tag, attachment filename, and extracted-attachment-text search returning page/attachment/heading result types (Bleve)
-- [ ] **Eino agent** — bottom prompt for ask/summarize/rewrite/draft/propose-patch over current page, selection, attachment, or whole workspace; propose→review-diff→approve→apply→commit flow; read/write tool boundary enforced (no direct writes, no secrets, no path escape, no shell, no direct Git push)
-- [ ] **Git versioning (hidden)** — automatic commits on page/attachment/agent-approved changes with user-identity metadata; batched commits; page history view; restore previous version; optional remote push
-- [ ] **Collaboration (MVP)** — soft locks + presence indicator; optimistic concurrency with document revision; conflict shows a diff with overwrite / manual-merge / save-as-copy choices
-- [ ] **Security & audit** — safe path resolver (no `../`, absolute, or symlink escape); upload size/MIME/extension limits; `Content-Disposition: attachment` for risky formats; Argon2id/bcrypt password hashing; HTTPOnly SameSite cookies; CSRF protection; audit log of key actions
+(None — v0.9.9 MVP shipped 2026-06-23. Define the next milestone with `/gsd-new-milestone`.)
 
 ### Out of Scope
 
@@ -45,7 +46,8 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 ## Context
 
 - **Domain:** internal knowledge base / wiki, "agent-era" — files-as-truth so both humans and agents read the same Markdown.
-- **Repository today:** greenfield. Contains only `SPEC.md` (the full product+technical spec, the source of truth for this build), `LICENSE`, `.gitignore`. No source code yet.
+- **Current state (post-v0.9.9, 2026-06-23):** MVP shipped — all 8 phases (36 plans, 82 tasks) complete and verified. A single CGO-free Go binary serves the embedded React SPA, backed by `internal/{config,server,auth,users,repo,okf,attachments,search,gitstore,agent,jobs,locks,audit,web}` + `cmd/okf-workspace`. All phase verifications closed via live browser UAT on 2026-06-24 (auth/RBAC/seed, attachments byte-exact + extraction, ⌘K search, agent summarize, two-session presence/lock/409 conflict floor). Tech stack as locked: chi, Goldmark, Bleve, Eino + DeepSeek (provider-agnostic), modernc SQLite, React 19 + Vite + CM6.
+- **Repository origin:** began greenfield from `SPEC.md` (the product+technical spec, source of truth for the build).
 - **Storage model:** OKF-compatible Markdown + first-class attachments on the filesystem inside a Git repo; SQLite holds *operational data only* (users, sessions, jobs, indexing cache, attachment references, UI prefs, audit mirror) and must never become the source of truth for content.
 - **Repo layout (workspace data):** `index.md`, topic folders (`runbooks/`, `architecture/`, `decisions/`), `assets/{originals,extracted,metadata}/`, and app-private `.okf-workspace/{manifest.json,trash/,locks/}`.
 - **Backend service shape (SPEC §16):** `internal/{config,server,auth,users,repo,okf,attachments,search,gitstore,agent,jobs,audit,web}` plus `cmd/okf-workspace/main.go`.
