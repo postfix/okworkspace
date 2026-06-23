@@ -37,7 +37,9 @@ export const theme = EditorView.theme({
     lineHeight: "var(--line-height-body)",
   },
   ".cm-content": {
-    maxWidth: "var(--prose-max-width)",
+    // Fill the available width (editor + read view both use this surface) rather
+    // than a narrow centered prose column.
+    maxWidth: "100%",
     caretColor: "var(--color-text)",
     minHeight: "var(--editor-min-height)",
   },

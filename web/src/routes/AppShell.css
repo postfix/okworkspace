@@ -1,10 +1,11 @@
 .appshell {
-  /* Pin the shell to the viewport box directly instead of relying on a
-     height:100% chain through html/body/#root (which can collapse and leave the
-     app shrink-wrapped to its content). fixed + inset:0 always fills the window
-     and reflows on resize; the panes manage their own internal scrolling. */
+  /* Pinned to the top-left of the viewport; the exact width/height come from JS
+     (window.innerWidth/Height, set inline) so the shell fills the real window
+     even when a transform'd extension wrapper would otherwise re-anchor a
+     fixed/inset:0 element to a shrunk container. The panes scroll internally. */
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -229,9 +230,12 @@
 
 .mainpane {
   flex: 1 1 auto;
-  padding: var(--space-lg);
+  padding: var(--space-md);
   background: var(--color-bg);
   overflow-y: auto;
+  /* Let children (the editor) stretch to the full pane height. */
+  display: flex;
+  flex-direction: column;
 }
 
 .empty-state {

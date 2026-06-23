@@ -106,6 +106,22 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const treeCollapsed = useTreeFold((s) => s.collapsed);
   const toggleFold = useTreeFold((s) => s.toggle);
 
+  // ── Explicit viewport sizing (extension-proof fill) ─────────────────────────
+  // position:fixed + inset:0 normally fills the window, but a browser extension
+  // that wraps the page in a transform'd container re-anchors fixed elements to
+  // that wrapper (which can be shrink-wrapped), leaving the shell short. Sizing
+  // to window.innerWidth/Height directly is immune to that, and tracks resize.
+  const [vp, setVp] = useState(() => ({
+    w: typeof window === "undefined" ? 0 : window.innerWidth,
+    h: typeof window === "undefined" ? 0 : window.innerHeight,
+  }));
+  useEffect(() => {
+    const update = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
   // ── Agent panel open/collapse (persisted) ──────────────────────────────────
   const panelOpen = useAgentPanel((s) => s.open);
   const setPanelOpen = useAgentPanel((s) => s.setOpen);
@@ -546,6 +562,8 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         {
           "--navrail-width": `${navWidth}px`,
           "--agentpanel-width": `${agentWidth}px`,
+          width: vp.w ? `${vp.w}px` : "100vw",
+          height: vp.h ? `${vp.h}px` : "100vh",
         } as CSSProperties
       }
     >

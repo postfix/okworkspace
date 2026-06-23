@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Code, Eye, Save } from "lucide-react";
+import { BookOpen, Code, Eye, Paperclip, Save } from "lucide-react";
 
 import {
   acquireLock,
@@ -21,6 +21,7 @@ import DiffReviewDialog, {
 } from "../components/DiffReviewDialog";
 import LinkPicker from "../components/LinkPicker";
 import LivePreviewEditor from "../components/LivePreviewEditor";
+import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
 import { useEditorMode } from "../stores/editorMode";
@@ -48,6 +49,8 @@ export default function PageEditor() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const path = params["*"] ?? "";
+  // Ref to the attachments block so the corner paperclip can jump to it.
+  const attachmentsRef = useRef<HTMLDivElement>(null);
 
   // Live/Source editor mode — a persisted per-device UI preference (default Live).
   // The CM6 surface reads `mode`; the toolbar toggle and the Cmd/Ctrl-E shortcut
@@ -547,6 +550,20 @@ export default function PageEditor() {
         <button
           type="button"
           className="btn btn-ghost icon-btn"
+          onClick={() =>
+            attachmentsRef.current?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            })
+          }
+          aria-label="Attachments"
+          title="Attachments"
+        >
+          <Paperclip size={18} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost icon-btn"
           onClick={() => navigate(`/app/page/${path}`)}
           aria-label="Switch to reading view"
           title="Read view"
@@ -658,6 +675,14 @@ export default function PageEditor() {
         />
       </div>
 
+      <div ref={attachmentsRef}>
+        <AttachmentsSection
+          pagePath={path}
+          canEdit={!readOnly}
+          maxUploadMB={100}
+          allowedTypes={["pdf", "docx", "txt", "png", "jpg", "svg"]}
+        />
+      </div>
     </div>
   );
 }

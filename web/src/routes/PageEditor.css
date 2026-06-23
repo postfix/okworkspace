@@ -1,7 +1,9 @@
 .pageeditor {
-  /* The editor fills ALL available main-pane width (no cap) and reflows with the
-     window — a full-bleed editing surface, not a narrow centered column. */
+  /* The editor fills ALL available main-pane space — full width (no cap) AND
+     full height (the surface grows to fill), reflowing with the window. */
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -27,10 +29,17 @@
 }
 
 .pageeditor-surface {
+  /* Grow to fill the leftover vertical space so the editor is full-height. */
+  flex: 1 1 auto;
   min-height: var(--editor-min-height);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+/* CodeMirror fills the (now-growing) surface so the whole box is the editor. */
+.pageeditor-surface .cm-editor {
+  height: 100%;
 }
 
 .pageeditor-toolbar {
