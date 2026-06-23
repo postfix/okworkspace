@@ -1,393 +1,281 @@
 # Architecture Research
 
-**Domain:** Self-hosted single-binary Go service (chi) + React/Vite SPA — files-as-truth Markdown wiki with hidden Git versioning, Bleve search, a background job worker, and a CloudWeGo Eino agent
-**Researched:** 2026-06-17
-**Confidence:** HIGH (SPEC §7/§9/§11/§14/§16 is explicit and internally consistent; Eino orchestration model verified against CloudWeGo docs; remaining items are standard Go service patterns)
+**Domain:** Self-hosted Markdown wiki (Go + React) — v1.0 milestone: Knowledge Graph + LLM Auto-Tagging
+**Researched:** 2026-06-24
+**Confidence:** HIGH (grounded in the actual v0.9.9 codebase, not assumed)
 
-> **Mandate:** This is a *validation and refinement* of the SPEC's proposed architecture, not a new design. The SPEC's package layout (§16), repo layout (§9), and data flows (§14.2, §15.4, §19) are sound. Below they are confirmed, the component boundaries and interfaces are made explicit, the three key data flows are traced end-to-end, a dependency-driven build order is derived, and the four hard design tensions are addressed with concrete recommendations.
+> This is an INTEGRATION study for a subsequent milestone. The existing architecture is fixed; the question is *where the two new features attach*. Every recommendation below names a concrete existing seam (package, function, job kind, endpoint group) that the new code reuses or mirrors, so the roadmapper can derive phases with explicit new-vs-modified boundaries and a dependency-aware build order.
 
 ---
 
-## Standard Architecture
-
-### System Overview
-
-The system is a **layered modular monolith**: one HTTP process, clear internal package seams, two persistence substrates (the Git-backed file repo = source of truth; SQLite = derived/operational cache), and an async job worker decoupling slow work (extraction, indexing, commits) from request handlers.
+## Existing Architecture (the surface we integrate WITH)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  React/Vite SPA (embedded static assets)                              │
-│  AppShell · LeftTree · PageView/Editor · AttachmentPanel · PromptBar  │
-└───────────────┬──────────────────────────────────┬───────────────────┘
-                │ REST /api/v1 (JSON, cookie auth)   │ SSE (agent stream + job status)
-┌───────────────▼──────────────────────────────────▼───────────────────┐
-│  internal/server  (chi router, middleware: session, CSRF, RBAC, audit)│
-│  internal/web     (embed.FS static assets + SPA fallback)             │
-├────────────────────────────────────────────────────────────────────── ┤
-│                         SERVICE LAYER (plain Go)                       │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────────┐ ┌────────┐ ┌───────┐│
-│  │ auth   │ │ okf    │ │ repo   │ │ attachments│ │ search │ │ agent ││
-│  │ users  │ │(parse/ │ │(safe   │ │(upload/    │ │(Bleve  │ │(Eino, ││
-│  │        │ │ render)│ │ paths) │ │ metadata)  │ │ query) │ │ tools)││
-│  └───┬────┘ └───┬────┘ └───┬────┘ └─────┬──────┘ └───┬────┘ └───┬───┘│
-│      │          │          │            │            │          │     │
-│      │   ┌──────▼──────────▼────────────▼────────────▼──────┐   │     │
-│      │   │   internal/jobs (async worker + queue)            │◄──┘     │
-│      │   │   text-extraction · index · git-commit · cleanup  │         │
-│      │   └──────┬───────────────────────────────┬───────────┘         │
-│      │          │                               │                     │
-│  ┌───▼──────────▼───┐                  ┌─────────▼──────────┐          │
-│  │ internal/audit   │                  │ internal/gitstore  │          │
-│  │ (writes to both) │                  │ (shell-out git CLI)│          │
-│  └───────┬──────────┘                  └─────────┬──────────┘          │
-├──────────┼─────────────────────────────────────┼──────────────────────┤
-│          ▼                                       ▼                      │
-│  ┌───────────────┐                    ┌────────────────────────────┐   │
-│  │  app.db       │  derived/cache     │  repo/  = SOURCE OF TRUTH   │   │
-│  │  (SQLite)     │◄───── reflects ────│  *.md + assets/{originals,  │   │
-│  │  users·sess·  │      (one-way)     │  extracted,metadata} +      │   │
-│  │  jobs·index·  │                    │  .okf-workspace/{trash,     │   │
-│  │  attach-refs· │                    │  locks,manifest}            │   │
-│  │  audit-mirror │                    │  (a Git working tree)       │   │
-│  └───────────────┘                    └────────────────────────────┘   │
+│  React 19 SPA (go:embed)  — react-query (server state) · zustand (UI) │
+│  routes: /app/page/:path · ⌘K search · agent panel · diff dialog      │
+└───────────────┬──────────────────────────────────────────────────────┘
+                │  /api/v1/*  (chi: authed group = reads, editor group = CSRF writes)
+┌───────────────▼──────────────────────────────────────────────────────┐
+│  internal/server  (HTTP handlers, role gating, nosurf CSRF)           │
+├───────────────────────────────────────────────────────────────────────┤
+│  internal/pages   SINGLE-WRITER mutation service                      │
+│    Save/Create/Rename → okf.Parse/Repair/Emit (byte-stable)           │
+│    → EnqueueCommit (jobs) ─┐         → enqueueIndexUpsert (fire&forget)│
+│  internal/agent   Eino ReAct + single-shot modes; READ-ONLY 5 tools;  │
+│    ProposePatch (no write) → /apply-patch endpoint → pages.Save        │
+│  internal/okf     byte-stable Doc model: FindLinks · Field/SetField · │
+│                   Repair · Emit  (frontmatter = surgical yaml.Node)    │
+│  internal/search  Bleve index; readTags; KindIndex jobs; RebuildIndex │
+├──────────────────────────┬────────────────────────────────────────────┤
+│  internal/jobs  SINGLE background goroutine, SQLite FIFO queue         │
+│    Register(kind, handler) · Enqueue (fire&forget) · EnqueueAndWait    │
+├──────────────────────────┼────────────────────────────────────────────┤
+│  internal/gitstore  single-writer git CLI commits  │  internal/repo    │
+│  Markdown files on disk (truth)  │  SQLite app.db (operational only)   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Rule that governs everything:** data flows *one way* — files are written first, then SQLite/Bleve are updated to reflect them. SQLite and the Bleve index are rebuildable caches; deleting `app.db` and `bleve/` must lose nothing except sessions and job queue state. This is the non-negotiable invariant from SPEC §8.1.
+**Five load-bearing invariants the new features MUST NOT break:**
 
-### Component Responsibilities
-
-| Package | Owns / Responsibility | Depends on | Exposes (interface shape) |
-|---------|----------------------|------------|---------------------------|
-| `cmd/okf-workspace` | Process entrypoint, `serve` command, wiring/DI of all services, startup sequence (config → db → repo/git init → search open → job worker → http) | everything | `main()` |
-| `internal/config` | Load+validate `config.yaml`, defaults, env overrides (`api_key_env`); typed config struct | — | `Load(path) (Config, error)` |
-| `internal/server` | chi router, middleware stack (recover, request-id, session, CSRF, RBAC, audit), REST handlers, SSE endpoints | all services | `New(deps) http.Handler` |
-| `internal/web` | `embed.FS` of built SPA, static serving + SPA history-fallback | — | `Handler() http.Handler` |
-| `internal/auth` | Login/logout, password hash (Argon2id/bcrypt), session create/validate, cookie issuance, role checks | `users`, db | `Authenticate`, `Session`, `RequireRole(role)` middleware |
-| `internal/users` | User CRUD, admin bootstrap on first start, roles (admin/editor/reader) | db | `Create/Get/List`, `BootstrapAdmin` |
-| `internal/repo` | **Safe path resolver** (no `../`, abs, symlink escape), read/write Markdown, create folder, rename/move, delete-to-trash/restore, list tree | filesystem | `Resolve(rel) (abs, error)`, `Read/Write/Move/Trash`, `Tree()` |
-| `internal/okf` | Parse/serialize YAML frontmatter (Goldmark + yaml), validate+repair required fields, render Markdown→HTML, new-page templates | — (pure) | `Parse([]byte) (Doc, error)`, `Serialize(Doc)`, `Render(body)` |
-| `internal/attachments` | Accept upload, validate size/MIME/ext, generate safe stored name + sha256, write original, write metadata JSON, link/unlink to page, serve download, **enqueue** extraction job, ref-count GC | `repo`, `jobs`, db | `Store`, `Get`, `Download`, `Link/Unlink`, `Replace`, `Delete` |
-| `internal/search` | Open/own Bleve index, index page & attachment docs, query by title/body/tag/filename/extracted-text, return typed results | Bleve | `Index(doc)`, `Delete(id)`, `Query(q, filter) []Result` |
-| `internal/gitstore` | Detect/init repo, pull-on-startup, stage+commit (with identity+action metadata), push, read history, restore version; **serializes all git ops** | git CLI, `repo` dir | `Commit(spec)`, `History(path)`, `Restore(path, rev)`, `Push()` |
-| `internal/agent` | Build Eino ReAct agent, register read/write tools, run chat/summarize/propose-patch, stream tokens, enforce read-vs-write approval boundary, never see secrets | `repo`, `okf`, `search`, `attachments` (read paths only) | `Chat(ctx, req) stream`, `ProposePatch`, tools call back into services |
-| `internal/jobs` | In-process worker pool + persisted queue (SQLite-backed), job kinds: extract / index / commit / cleanup, retry+backoff, status for SSE | `attachments` (extractors), `search`, `gitstore`, db | `Enqueue(job)`, `Status(id)`, worker loop |
-| `internal/audit` | Append audit events (login, page/attachment/agent actions) to log + SQLite mirror | db | `Record(event)` |
+1. **Files are truth; SQLite is operational-only.** A links/backlinks/tag-edge table is a *derived cache* — it must be fully rebuildable from the `.md` files, exactly like the Bleve index. Never the source of truth.
+2. **Byte-stable frontmatter.** `okf.Doc` re-emits `RawFront` verbatim unless `FrontDirty`. Tag writes must go through a surgical `yaml.Node` edit (à la `okf.SetField`), never a re-marshal of the whole file. The golden-corpus round-trip test is the gate.
+3. **Single-writer commit path.** Every content write flows `pages.Save → EnqueueCommit → gitstore.Commit`. There is no second writer. Tag application reuses this exact path.
+4. **Agent never writes.** `internal/agent` has a 5-tool read-only allow-list enforced by a set-equality build test (`tools_test.go`). Tagging is a *suggestion* mode; the write happens at a separate CSRF+editor-gated HTTP endpoint, mirroring `/agent/propose-patch` → `/agent/apply-patch`.
+5. **Fire-and-forget derived-index maintenance.** `pages.Save` calls `enqueueIndexUpsert` (worker.Enqueue, never EnqueueAndWait — CR-01 deadlock lesson) after the commit. The graph index follows the identical pattern.
 
 ---
 
-## Recommended Project Structure
+## Feature 1 — Knowledge Graph
 
-Confirmed exactly as SPEC §16, with internal sub-structure made explicit. **No deviation recommended.**
+### Q1: Where is the page-link graph computed and stored?
+
+**Recommendation: maintain a derived adjacency in SQLite (`page_links` table), updated by the SAME fire-and-forget job mechanism that updates Bleve — NOT derived on-demand per request.**
+
+Rationale (decisive, not wishy-washy):
+
+- **The structural scanner already exists.** `okf.FindLinks(body)` is a byte scanner that skips code fences/inline code and returns resolved link destinations. The rename/move flow (`pages.rewriteFolderInboundLinks`) already walks every `.md` once via `filepath.WalkDir` + `repo.Read` + `okf.Parse` and resolves links to repo-relative targets via `path.Clean(path.Join(fromDir, dest))`. That resolution logic is the *exact* forward-edge extractor a graph needs — reuse it, do not reinvent.
+- **Derive-on-demand for the GLOBAL graph does not scale even at this size with acceptable latency margins.** A global graph render would re-walk + re-parse every page on every request. At ~5 users / a few hundred pages it would *work*, but it duplicates the rebuild cost on a hot path and gives no incremental freshness for the local-graph panel. A small adjacency table is O(edges) to read and trivially incremental.
+- **Backlinks are the reverse index of forward links** — they fall out of the same table for free (`SELECT src FROM page_links WHERE dst = ?`). A page-view backlinks panel and the local-graph neighborhood both read it.
+
+**Proposed `page_links` schema (operational metadata, fully rebuildable):**
 
 ```
-cmd/okf-workspace/
-  main.go                  # serve command, DI wiring, startup order
-
-internal/
-  config/      config.go   # YAML load + validate + env
-  server/      router.go    handlers_*.go  middleware.go  sse.go
-  web/         embed.go     # embed.FS of ../web/dist
-  auth/        auth.go      session.go     password.go    middleware.go
-  users/       users.go     bootstrap.go
-  repo/        path.go      # safe resolver — most security-critical file
-               files.go     tree.go        trash.go
-  okf/         frontmatter.go  render.go    template.go    validate.go
-  attachments/ store.go     metadata.go    extract/       # pdf, docx, txt extractors
-               download.go  refcount.go
-  search/      index.go     query.go        mapping.go     # Bleve doc mapping
-  gitstore/    git.go       commit.go       history.go     restore.go
-  agent/       agent.go     tools.go        prompts.go     patch.go
-  jobs/        queue.go     worker.go       jobs_*.go      # one file per job kind
-  audit/       audit.go
-  store/       db.go        migrations/      # SQLite + schema (shared by several pkgs)
-
-web/                        # React/Vite SPA; `npm run build` → web/dist (embedded)
-  src/ ...
-  dist/                     # build output, embedded by internal/web
+page_links(src_path TEXT, dst_path TEXT, PRIMARY KEY(src_path, dst_path))
+  -- one row per resolved internal link edge; src links to dst.
+  -- index on dst_path for O(backlinks) reverse lookup.
 ```
 
-### Structure Rationale
+Only **internal, resolvable** links become edges: skip `isAbsoluteOrExternal` destinations (the same predicate `okf.RewriteLinks` already uses), resolve the rest with `path.Clean(path.Join(dir(src), dest))`, and keep an edge only if the target `.md` exists in the repo (a dangling link is not a graph edge — optionally surface "unresolved links" separately later, out of v1.0 scope).
 
-- **`internal/repo` is the security chokepoint.** `path.go` (the safe resolver) is the single function through which *every* filesystem access for content must pass. Build and fuzz-test it first (SPEC §21.1, §22.1). No other package may construct absolute repo paths itself.
-- **`internal/okf` is pure** (no I/O) — frontmatter parse/serialize/render. This makes round-trip testing (SPEC §22.3) trivial and keeps Markdown integrity logic isolated and reusable by both the page handlers and the agent's patch tooling.
-- **`internal/store`** (added to the SPEC list, implied by "SQLite"): centralizes the `*sql.DB`, migrations, and the operational-data schema so `users`, `auth`, `jobs`, `audit`, `attachments`(refs), search-cache all share one well-managed connection rather than each opening SQLite.
-- **`attachments/extract/`** subpackage isolates per-format extractors (pdf/docx/txt) so adding formats is additive and so the extractors run only inside the job worker, never in a request handler.
-- **`agent/tools.go`** is the *only* surface where the agent touches the rest of the system — it calls the same services as the HTTP handlers, never the filesystem directly (SPEC §15, §21.3).
+**Freshness — reuse the KindIndex pattern exactly.** Register a new job kind on the *existing* `jobs.Worker`:
+
+- New `const KindGraph = "graph"` with op `upsert|delete|rebuild` (mirror `search.indexPayload`).
+- `pages.Service` already has `enqueueIndexUpsert`/`enqueueIndexDelete` called after every mutation. Add a sibling `enqueueGraphUpsert`/`enqueueGraphDelete` right beside them (same fire-and-forget, same Warn-and-swallow on enqueue failure because the rebuild backstop reconciles).
+- The graph handler's `upsert(path)` = re-scan that one page's outbound links and replace its `src_path` rows (delete-then-insert the page's edge set). `delete(path)` = delete rows where `src=path OR dst=path`. `rebuild` = walk the whole repo (clone `RebuildIndex`'s `repo.Tree()` loop) and rewrite the table — the startup-drift + admin-reindex backstop.
+
+**Create/rename/move/delete freshness specifics (the question's emphasis):**
+
+| Mutation | Existing hook | Graph action |
+|----------|---------------|--------------|
+| Create | `Create → enqueueIndexUpsert` | + `enqueueGraphUpsert(newPath)` (a new page may already contain links) |
+| Edit/Save | `Save → enqueueIndexUpsert` | + `enqueueGraphUpsert(path)` (links added/removed in body) |
+| Rename/Move | `relocate` rewrites inbound links across many files, then upserts each | + `enqueueGraphUpsert` for the moved page AND every file whose body was rewritten (the `rewriteFolderInboundLinks` result set already names them) **and** a graph `delete(oldPath)` so the stale `src=oldPath` rows go. Because rename rewrites *destinations* in linkers, those linkers' edges change → they must be re-scanned, which the existing per-file upsert set already covers. |
+| Delete-to-trash | `enqueueIndexDelete` | + `enqueueGraphDelete(path)` — removes the page's outbound edges AND inbound edges pointing at it (the now-dangling links remain in linkers' bodies but produce no edge until/unless that linker is re-saved; the rebuild backstop reconciles). |
+| Restore | restore re-adds the file + upserts index | + `enqueueGraphUpsert(restoredPath)` |
+
+This means **NO new write path** — graph maintenance rides entirely on the mutation hooks that already exist, and the single background goroutine keeps it strictly serialized (no concurrent-writer races on `page_links`).
+
+### Q2: Graph-serving endpoints and payload sizing
+
+Two read endpoints, both in the `authed` (any-authenticated) chi group beside `/tree` and `/search` — graph reads are not mutations:
+
+| Endpoint | Scope | Shape | Payload control |
+|----------|-------|-------|-----------------|
+| `GET /api/v1/graph` | Global | `{nodes:[{path,title}], edges:[{src,dst,type}]}` | At a few hundred pages this is small (KB-scale). Title comes from a cheap `okf.Field(doc, FieldTitle)` or — better — a `pages` metadata cache so the endpoint doesn't re-parse every file. Cap node count defensively; if the workspace ever grows, paginate/cluster later (out of v1.0). |
+| `GET /api/v1/graph/local?path=…&depth=1` | Neighborhood | Same shape, filtered to the page + its direct (depth-1) neighbors | depth-1 default keeps it tiny; allow `depth=2` as an opt-in. This is the local-graph side panel AND backs the page-view backlinks list (`edges where dst=path` = backlinks). |
+
+**Edge `type` is computed at query time, not stored per-type-as-separate-tables.** The endpoint returns each edge tagged `link` (from `page_links`) or `tag` (from the shared-tag join, see Q3). The UI's Obsidian-style toggles (page links / backlinks / shared tags) then **filter client-side** — react-query caches the full edge set, zustand holds the toggle state. Backlinks are not a separate edge type in storage; they are forward `link` edges *rendered* as inbound when viewed from the target. Keeping payloads reasonable is mostly "don't re-parse files on the hot path" (read from the cache table) + depth-limit the local view.
+
+### Q3: Shared-tag edges
+
+**Source:** frontmatter `tags`, read with the **already-existing** `search.readTags(doc)` (sequence-aware — it handles `tags: [a,b]`, block lists, and a single scalar; `okf.Field` alone returns "" for sequences, Pitfall 7). Do not write a second tag reader.
+
+**Computation:** shared-tag edges are derived, not stored as adjacency. Maintain a `page_tags(path, tag)` table populated by the **same KindGraph upsert job** (when a page is re-scanned, replace its tag rows alongside its link rows — one job, two tables). Then a shared-tag edge between A and B exists iff they share ≥1 tag:
+
+```
+-- pages sharing tag T are mutually connected via T
+SELECT a.path AS src, b.path AS dst, a.tag AS via
+FROM page_tags a JOIN page_tags b
+  ON a.tag = b.tag AND a.path < b.path;
+```
+
+This is computed in the `/graph` endpoint (or a small materialized helper). **Caveat for the roadmapper:** a popular tag creates an O(n²) clique. Cap fan-out per tag (e.g. skip tag-cliques above a threshold, or only connect within the neighborhood for the local graph) — flag this for the graph-edges plan. `page_tags` doubles as a tag-autocomplete/source-of-truth for the auto-tagging UI (Feature 2), so build it once and both features consume it.
 
 ---
 
-## Architectural Patterns
+## Feature 2 — LLM Auto-Tagging
 
-### Pattern 1: Files-as-truth with one-way derived caches
+### Where suggestion lives (new Eino mode / endpoint)
 
-**What:** The Git working tree under `repo/` is authoritative. SQLite (`app.db`) and the Bleve index are *projections* of that tree, updated **after** a successful file write. A reconcile/reindex pass can rebuild both from files alone.
+**Recommendation: a new SINGLE-SHOT agent mode `SuggestTags`, mirroring `agent.Rewrite`/`agent.Draft` — NOT a ReAct tool, NOT a new tool in the read-only allow-list.**
 
-**When to use:** Always, for any content mutation. Read paths may serve from the file (page body) and/or the cache (tree listing, search) but writes go file-first.
+- `internal/agent` already has the single-shot pattern: `generateOnce(ctx, msgs, maxTokens, temp)` with a hard `singleShotTimeout`, per-mode token caps, and a validate-and-retry harness (`proposeWithRetry`). Add `func (s *Service) SuggestTags(ctx, path) ([]string, error)`:
+  - Fetch body via the role-scoped `deps.Pages.Get` (never `os.ReadFile`).
+  - Single-shot Generate with a tags-extraction prompt; the page text is supplied as **untrusted DATA** (reuse `delimitUntrusted`).
+  - **Validate the model output into a clean `[]string`** (lowercase, dedup, strip empties, cap count, reject prompt-injection-y junk) — the tagging analog of `validateProposedBody`. Retry on malformed output, never return garbage.
+- The 5-tool read-only boundary is **untouched** — `tools_test.go` set-equality still passes because tagging adds no tool. (Adding a 6th tool would fail the build gate; we deliberately do not.)
 
-**Trade-offs:** + Portability and the "copy the folder = full backup" guarantee (SPEC §3.3, §25). + Agents read the same files humans edit. − Two stores can drift on crash between write and projection; mitigated by making projection idempotent + a startup reconcile + treating the cache as disposable.
+New endpoints in the chi `editor` (CSRF + editor-gated) group, beside `/agent/propose-patch`:
 
-```go
-// Canonical write path (page save). Order is load-bearing.
-func (s *PageService) Save(ctx, path, doc, baseRev string) error {
-    abs, err := s.repo.Resolve(path)            // 1. safe-path gate
-    if err != nil { return err }
-    if err := s.checkRevision(path, baseRev); err != nil {
-        return ErrConflict                        // 2. optimistic concurrency
-    }
-    doc = s.okf.RepairRequired(doc)               // 3. frontmatter repair
-    if err := s.repo.Write(abs, s.okf.Serialize(doc)); err != nil {
-        return err                                // 4. FILE WRITTEN = truth
-    }
-    s.jobs.Enqueue(IndexJob{Path: path})          // 5. project → Bleve (async)
-    s.jobs.Enqueue(CommitJob{Path: path, User: u, Action: "page_edit"})
-    s.audit.Record(...)                           // 6. audit
-    return nil                                     // returns BEFORE commit lands
-}
-```
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/v1/agent/suggest-tags` | Body `{path}` → returns `{suggested:[…], current:[…], base_revision}` — the suggest step. **Writes nothing.** Capture `base_revision` via `pages.Revision` at suggestion time, exactly like `ProposePatch`. |
+| `POST /api/v1/agent/apply-tags` | Body `{path, tags:[…], base_revision}` → the approve→apply step. |
 
-### Pattern 2: Async job worker decoupling slow/serial work
+### How suggest→approve→apply reuses the EXISTING propose→apply→commit path (byte-stable)
 
-**What:** A single in-process worker (goroutine pool) draining a SQLite-persisted queue handles text extraction, (re)indexing, git commits, and cleanup. Handlers `Enqueue` and return immediately; the SPA polls/streams status via SSE.
+This is the crux. The tag write must **NOT** introduce a new commit path and must keep frontmatter byte-stable.
 
-**When to use:** Anything slow (PDF/DOCX extraction), anything that must be serialized (git), anything batchable (commits).
+**The clean reuse:** apply-tags assembles the new page source by **surgically editing only the `tags` key on the parsed `okf.Doc`**, then routes through `pages.Save` (the single-writer path) — identical in spirit to how `/apply-patch` calls `pages.Save`.
 
-**Trade-offs:** + Fast request latency, natural batching point, retry/backoff in one place. + Survives restart (queue is persisted). − Eventual consistency (search/commit lag a save); acceptable for a 5-person tool. − Single-process only — fine given the single-binary deployment goal.
+Concrete flow for `POST /agent/apply-tags`:
 
-### Pattern 3: Serialized git via a single commit queue + batching
+1. Re-validate the tag list server-side (defense in depth — same posture as `/apply-patch` re-running `ValidateProposedBody`).
+2. `pages.Get(path)` → gives `Frontmatter` (raw region), `Body`, current `Revision`.
+3. **New surgical setter in `okf`: `SetTags(d *Doc, tags []string)`** — mirrors `okf.SetField` but writes a `yaml.SequenceNode` for the `tags` key (SetField only does scalars). It sets `FrontDirty=true` so `Emit` re-marshals **only** the frontmatter `yaml.Node` (key order + unknown fields preserved) while the opaque `Body` is passed through **byte-for-byte untouched**. This is the ONE genuinely new okf primitive the milestone needs.
+4. Call `pages.Save(path, body, newFrontmatter, base_revision, actor)` — the SAME method `/apply-patch` uses. It enforces the 409 stale-revision floor, re-`Repair`s, `Emit`s byte-stably, and `EnqueueCommit`s through the single-writer worker. The fire-and-forget `enqueueIndexUpsert` (and the new `enqueueGraphUpsert`) fire automatically, so search facets AND shared-tag graph edges refresh with no extra wiring.
 
-**What:** All git operations funnel through `gitstore` driven by one worker. Commits are **batched**: autosave writes the working tree continuously, but a `CommitJob` debounces (short idle window, e.g. 2–5s, or explicit save) and folds multiple pending changes into one commit with structured metadata (SPEC §14.2).
+**Why this preserves every invariant:** the body never goes through the model or an AST (only the body is read for suggestion, never rewritten); frontmatter is edited as a `yaml.Node`, not regenerated; the write is the single-writer git commit; the agent itself still never writes (apply is the gated HTTP endpoint); and the 409 floor blocks a stale tag-apply if the page changed since suggestion.
 
-**When to use:** Every commit trigger (page/attachment/agent change). Never `git` from a request handler or from two goroutines concurrently.
+> **Decision point for the roadmapper:** `pages.Save` currently takes `frontmatter string` (the raw region) + `body string` and re-assembles. apply-tags can either (a) build the new raw frontmatter string itself via `okf.SetTags`+`Emit`-style and pass it through `Save` as today, or (b) add a thin `pages.SaveTags(path, tags, baseRev, user)` that does the parse→SetTags→Emit internally and reuses `enqueueWrite`. Option (b) is cleaner and keeps the frontmatter manipulation inside `pages`/`okf` where the byte-stability tests live. Recommend (b).
 
-**Trade-offs:** + No `.git/index.lock` contention, clean history, identity+action in every message. − Commit lags the save (acceptable; the file is already truth). − If `push_on_commit`, push failure must not fail the user write — push is a separate retryable step.
+### How the bulk sweep reuses the async jobs worker
 
-```go
-// Commit message carries identity + provenance (SPEC §14.2).
-spec := CommitSpec{
-  Paths:   batched,                 // multiple files → one commit
-  Message: "Update runbooks/deploy-staging.md",
-  User:    "janis", Action: "page_edit", Source: "web-ui",
-}
-```
+**Recommendation: the bulk sweep is a fan-out of per-page jobs on the EXISTING worker, with suggestions staged for batch review — NOT a single long-running request and NOT silent auto-apply.**
 
-### Pattern 4: Eino agent as a sandboxed tool-caller (ReAct over compose.Graph)
+- New job kind `KindTagSuggest` on `jobs.Worker`. A `POST /agent/bulk-tag-sweep` (editor-gated) enumerates target pages (untagged, or all — read `page_tags` to find untagged) and enqueues one `KindTagSuggest{path}` job per page, fire-and-forget. The single drain goroutine processes them serially (respecting LLM rate limits naturally — no concurrent provider hammering), with the worker's built-in backoff/retry/MaxAttempts handling a flaky provider.
+- Each `KindTagSuggest` job calls `agent.SuggestTags(path)` and **persists the suggestion to a `tag_suggestions(path, suggested_json, base_revision, status='pending')` table** — it does NOT apply. This is the "no silent frontmatter writes" requirement: the sweep produces a review queue.
+- A `GET /agent/tag-suggestions` (authed) lists pending suggestions; the UI shows a batch approve/reject surface. Approving one calls the same `apply-tags` path (per-page `pages.Save`, single-writer, 409-checked). Because each apply re-checks `base_revision`, a page edited between sweep and approval is safely skipped/flagged, never clobbered.
 
-**What:** The agent uses a `ToolCallingChatModel` (OpenAI-compatible provider per config — local Ollama or remote) inside Eino's ReAct loop (`compose.Graph` with ChatModel + Tools nodes). Tools are thin Go functions that call the *same services* the HTTP layer uses. **Read tools** execute immediately; **write tools** (`apply_page_patch`, `create_page`, `attach_file_to_page`) do not mutate — they return a *proposal* that the human approves, after which the normal page-save path runs. Eino's interrupt/resume (human-in-the-loop) maps directly onto this approval gate.
-
-**When to use:** Agentic flows only (Q&A, summarize, propose-patch, attachment Q&A) — never plain CRUD (SPEC §8.3).
-
-**Trade-offs:** + Single enforcement point for the safety boundary (no secrets, no shell, no path escape — §21.3). + Provider-agnostic. − ReAct loop cost/latency; mitigate with bounded `MaxStep` and scoping context to the current page/attachment.
-
-```go
-// Read tool: executes now. Write tool: returns a proposal, never writes.
-proposePagePatch := tool.New("propose_page_patch", func(ctx, in PatchIn) (PatchOut, error) {
-    cur := okf.Parse(repo.Read(in.Path))          // read via service, not FS
-    proposed := applyModelEdit(cur, in.Instruction)
-    return PatchOut{Diff: unifiedDiff(cur, proposed), RequiresApproval: true}, nil
-})
-// apply happens only after POST /agent/apply-patch with approval:true → PageService.Save
-```
+This reuses: the worker (serialization + retry/backoff), the suggestion mode, the apply endpoint, and the commit path — the sweep adds only a job kind + a staging table + a list/approve UI.
 
 ---
 
-## Data Flow
+## New vs Modified Components (explicit for the roadmapper)
 
-### Flow A — Page edit → save → index → commit
+### New components
 
+| Component | Location | What it is |
+|-----------|----------|------------|
+| `page_links` table + maintenance | `internal/graph` (new) or extend `internal/search` | Derived link adjacency (rebuildable) |
+| `page_tags` table + maintenance | same | Derived tag membership (rebuildable); feeds shared-tag edges + untagged-page query |
+| `KindGraph` job + handler | new package / jobs registration | upsert/delete/rebuild of `page_links`+`page_tags` for one page or whole repo |
+| `GET /graph`, `GET /graph/local` | `internal/server/handlers_graph.go` (new) | Global + neighborhood JSON (authed group) |
+| `okf.SetTags(d, tags)` | `internal/okf/repair.go` or new file | Surgical `yaml.SequenceNode` frontmatter setter (the one new byte-stable primitive) |
+| `agent.SuggestTags` + `validateTags` | `internal/agent` | Single-shot tag suggestion mode + output validator (mirrors Rewrite/Draft + validateProposedBody) |
+| `KindTagSuggest` job + `tag_suggestions` table | jobs + new table | Bulk sweep fan-out → staged review queue |
+| `POST /agent/suggest-tags`, `/agent/apply-tags`, `/agent/bulk-tag-sweep`, `GET /agent/tag-suggestions` | `internal/server/handlers_agent.go` | Suggest/apply/sweep/list endpoints (editor-gated except the GET) |
+| Graph view (global) + local panel + backlinks panel + tag-suggestion review UI | `web/src/` | React: react-query for `/graph`, zustand for edge-type toggles; a force-graph lib for rendering |
+
+### Modified components
+
+| Component | Modification | Risk |
+|-----------|-------------|------|
+| `pages.Service` mutation methods | Add `enqueueGraphUpsert`/`enqueueGraphDelete` calls beside the existing `enqueueIndexUpsert`/`Delete` in Create/Save/relocate/trash/restore | Low — additive, same fire-and-forget pattern |
+| `pages.Service` (optional `SaveTags`) | Thin tag-write method reusing `enqueueWrite` | Low — wraps existing path |
+| `jobs` wiring (cmd/server startup) | `Register(KindGraph, …)`, `Register(KindTagSuggest, …)`; enqueue graph rebuild on startup-drift (mirror search rebuild) | Low |
+| `internal/server/router.go` | Register the new routes in the correct chi group (authed vs editor) | Low |
+| Startup drift recovery | Add graph-table rebuild alongside the existing search rebuild-on-drift | Low — same trigger |
+| `agent.Service`/`Deps` | No new tool; reuse `Pages` reader. Possibly inject a tag-suggestion store | Low — boundary unchanged |
+
+**The agent's 5-tool read-only allow-list and `tools_test.go` set-equality test are NOT modified** — a structural guarantee the roadmapper should call out as an explicit non-goal/constraint.
+
+---
+
+## Data-Flow Changes
+
+**Page mutation (after):**
 ```
-User clicks Save (Editor)
-   │ PUT /api/v1/pages/{path}  {frontmatter, body, base_revision}
-   ▼
-server handler → RBAC(editor) → CSRF check
-   ▼
-repo.Resolve(path)            ── safe-path gate (reject ../, abs, symlink)
-   ▼
-revision check vs base_revision  ── conflict? → 409 + diff (overwrite/merge/copy)
-   ▼
-okf.RepairRequired + Serialize  ── ensure required frontmatter fields
-   ▼
-repo.Write(file)              ★ SOURCE OF TRUTH UPDATED
-   ▼
-jobs.Enqueue(IndexJob) ──► worker: search.Index(page)      (async → Bleve)
-jobs.Enqueue(CommitJob) ─► worker: debounce+batch ─► gitstore.Commit ─► [push]
-   ▼
-audit.Record(page_edit) ; 200 {new revision}   ── returns before commit lands
-```
-
-### Flow B — Attachment upload → store → extract → index
-
-```
-User drags file into page (multipart POST /pages/{path}/attachments)
-   ▼
-server handler → RBAC(editor) → size/ext/MIME validation
-   ▼
-attachments.Store:
-   ├─ generate safe stored name + sha256, choose assets/originals/YYYY/MM/<id>_<name>
-   ├─ write ORIGINAL (immutable)                       ★ truth
-   ├─ write metadata JSON (assets/metadata/<id>.json)  ★ truth
-   ├─ insert attachment-ref row (SQLite, cache)
-   └─ insert attachment link/card into page draft (okf body)
-   ▼
-jobs.Enqueue(ExtractJob)
-   └─► worker: extract text → assets/extracted/<id>.txt ★ truth
-            ├─ update metadata.extraction.status = done
-            ├─ jobs.Enqueue(IndexJob: attachment text)  → Bleve
-            └─ jobs.Enqueue(CommitJob: attachment_upload) → gitstore
-   ▼
-SSE pushes extraction_status: queued → done  ── UI updates card
-Response (immediate): {id, download_url, extraction_status: "queued"}
+PUT /pages → pages.Save → 409 check → okf.Repair/Emit (byte-stable)
+   → EnqueueCommit ──────────────► gitstore.Commit (single writer)
+   → enqueueIndexUpsert ─fire&forget─► KindIndex  ─► Bleve
+   → enqueueGraphUpsert ─fire&forget─► KindGraph  ─► page_links + page_tags   ★NEW
 ```
 
-Download path is independent and synchronous: `GET /attachments/{id}/download` → resolve id → metadata → stream original with `Content-Disposition: attachment` for risky types (§21.2). The original is **never** modified (§11).
-
-### Flow C — Agent propose → review → approve → apply → commit
-
+**Tag apply (new, reuses the write path):**
 ```
-User prompt in PromptBar (POST /agent/chat or /agent/propose-patch, with context)
-   ▼
-agent.Chat: Eino ReAct loop (ChatModel ⇄ Tools), tokens streamed via SSE
-   ├─ read tools run live: read_page, search_pages, read_attachment_text ...
-   └─ propose_page_patch tool → builds unified diff   (NO write yet)
-   ▼
-Response: {summary, diff, requires_approval:true}
-   ▼
-UI DiffReviewDialog → user Approves
-   ▼
-POST /agent/apply-patch {page_path, diff, approval:true}
-   ▼
-server → RBAC(editor) → validate patch applies to current revision
-   ▼
-PageService.Save(...)  ── SAME path as Flow A (repo.Write → index → commit)
-   ▼
-gitstore.Commit(action="approved_agent_patch", agent="okf-assistant", prompt=...)
-   ▼
-audit.Record(agent_patch_approval)
+POST /agent/apply-tags → re-validate tags → pages.Get → okf.SetTags (surgical yaml.Node)
+   → pages.Save(newFrontmatter, body, baseRev)  ─► [identical single-writer flow above]
 ```
 
-The crucial boundary: **the agent never writes files.** It only produces proposals; the approved apply re-enters the ordinary, audited, revision-checked page-save flow. This satisfies SPEC §5.4 and §15.3.
-
-### State Management (frontend)
-
+**Bulk sweep (new, reuses the worker):**
 ```
-React Query (server cache) ←─ REST /api/v1 ─→ Go services
-   │  tree, page, search, attachment, history queries
-SSE channel ──► agent token stream + job/extraction status ──► component state
-Local UI state: editor buffer, page mode (read/edit/diff/history), soft-lock presence
+POST /agent/bulk-tag-sweep → enumerate untagged (page_tags) → enqueue N× KindTagSuggest
+   worker drains serially → agent.SuggestTags (single-shot, validated)
+       → INSERT tag_suggestions(status=pending)         (NO write to files)
+   UI reviews → approve → POST /agent/apply-tags → [tag apply flow above]
+```
+
+**Graph read:**
+```
+GET /graph → read page_links + page_tags (no file re-parse) → tag edges by type
+   → JSON {nodes, edges[type]} → react-query cache → zustand toggles filter client-side
 ```
 
 ---
 
-## Build Order (dependency-driven → maps to SPEC Phases 0–5)
+## Suggested Build Order (dependency-aware)
 
-The order below is forced by dependencies, not preference. Each item names what it unblocks.
+The dependencies dictate this ordering; each phase is independently shippable/verifiable.
 
-**Phase 0 — Skeleton (foundations everything else needs)**
-1. `config` + `store`(SQLite+migrations) + `cmd` wiring + startup sequence.
-2. `repo.path` **safe resolver first**, fuzz-tested — gate for all file access.
-3. `gitstore` init + pull-on-startup (no commit consumers yet, but repo must exist).
-4. `web` embed + `server` skeleton + `auth`/`users` + admin bootstrap + login.
-   *Rationale:* auth must exist before any write API; safe-path must exist before any file op; SQLite/git/data-dir init are prerequisites for all services.
+1. **Derived graph store + maintenance (foundation).** `page_links` + `page_tags` tables; `KindGraph` job (upsert/delete/rebuild) reusing `okf.FindLinks` + the rename link-resolution logic + `search.readTags`; wire `enqueueGraph*` into every `pages` mutation; startup-drift rebuild. *Verify: tables stay correct across create/edit/rename/move/delete vs a from-scratch rebuild.* **Must precede the graph view and the shared-tag edges — nothing renders without fresh adjacency.**
 
-**Phase 1 — OKF pages (the core loop)**
-5. `okf` parse/serialize/render/repair (pure, round-trip tested) — needed before pages render or save.
-6. `repo` files/tree/trash on top of the resolver → tree + page read/edit/create/delete.
-7. `jobs` worker + `gitstore.Commit` (CommitJob) → automatic batched commits + history/restore.
-   *Rationale:* okf before pages (can't read/write a page without parsing it); jobs+commit before "save" is fully done; this completes the §24 first-milestone vertical slice.
+2. **Backlinks + graph endpoints.** `GET /graph` and `GET /graph/local`; backlinks = reverse query on `page_links`. *Verify: backlinks panel and neighborhood are correct.* Depends on (1).
 
-**Phase 2 — Attachments**
-8. `attachments` store/metadata/download/refcount + ExtractJob (pdf/docx/txt extractors).
-   *Rationale:* depends on `repo` (paths), `jobs` (extraction), `gitstore` (commit on upload). Extraction must exist before the agent can answer about attachments.
+3. **Graph UI (global view, local panel, backlinks panel, edge-type toggles).** Force-graph rendering, react-query + zustand toggles; shared-tag edges from `page_tags` (with the popular-tag fan-out cap flagged in (1)/(2)). Depends on (1)+(2).
 
-**Phase 3 — Search**
-9. `search` (Bleve) mapping + IndexJob wired into page-save and extraction-done.
-   *Rationale:* indexes both pages (Phase 1) and extracted text (Phase 2), so it lands after both produce content. Backfill via a reindex job over existing files.
+4. **`okf.SetTags` + tag suggestion mode + suggest/apply endpoints.** The byte-stable frontmatter setter (with round-trip golden test), `agent.SuggestTags` + `validateTags`, `POST /agent/suggest-tags` (no write) and `/agent/apply-tags` (reuses `pages.Save`). *Verify: per-page suggest→approve writes only the tags key, body byte-identical, 409 floor holds.* The `okf.SetTags` byte-stability work gates everything that writes tags. **Tag suggestion must precede the bulk sweep** (the sweep is a fan-out over the same suggestion+apply primitives).
 
-**Phase 4 — Eino agent**
-10. `agent` ReAct + read tools (list_tree, read_page, search_*, read_attachment_text) → Q&A + summarize; then propose_page_patch + apply flow + DiffReviewDialog.
-    *Rationale:* agent tools are thin wrappers over `repo`/`okf`/`search`/`attachments`, all of which must exist first. Read tools before write/patch tools.
+5. **Bulk sweep + review queue.** `KindTagSuggest` job, `tag_suggestions` staging table, `/agent/bulk-tag-sweep` + `GET /agent/tag-suggestions`, batch review UI; approvals reuse phase-4 apply. Depends on (4). Reuses `page_tags` from (1) to find untagged pages.
 
-**Phase 5 — Collaboration improvements**
-11. Soft locks (`.okf-workspace/locks/`) + presence (SSE) + conflict diff UI (overwrite/merge/save-as-copy). Optimistic-concurrency revision check was scaffolded in Phase 1; this hardens it.
-    *Rationale:* layers onto the established save path; safely last.
+Phases (1→2→3) and (4→5) are two chains that can proceed in parallel after (1), since the tag chain only needs `page_tags` (built in 1) for "find untagged"; (4) can start once (1) lands.
 
 ---
 
-## Key Design Tensions (explicit guidance)
+## Anti-Patterns to Avoid (domain-specific, derived from the codebase)
 
-### Tension 1 — Files-as-truth vs SQLite/Bleve cache consistency
-
-**Resolution:** One-way projection (Pattern 1). Always write the file first; update SQLite/Bleve afterward via idempotent jobs. Treat `app.db` (minus sessions/queue) and the Bleve index as **disposable, rebuildable**. Provide a `reindex`/`reconcile` startup option and admin action that walks `repo/` and rebuilds projections — this is also the recovery path after a crash between file-write and projection, and after an out-of-band edit (someone `git pull`s or edits a file directly). Never let a read of stale cache mask the file: page *body* reads come from the file; only listings/search/refs come from cache.
-
-### Tension 2 — Soft-lock concurrency (presence) vs optimistic concurrency (correctness)
-
-**Resolution:** Two independent mechanisms, both needed. **Soft locks** (`.okf-workspace/locks/<path>` with user+heartbeat TTL, surfaced via SSE) are *advisory UX* — they show "Janis is editing" and allow force-edit; they never block a save. **Optimistic concurrency** (`base_revision` = content/git hash on every `PUT`) is the *correctness* guard: on mismatch return 409 + a diff and let the user choose overwrite / manual-merge / save-as-copy (§13.1). Build the revision check in Phase 1 (cheap, high value); add presence locks in Phase 5. Do not conflate them: a stale lock must never lose data, and the revision check must work even when locks are off.
-
-### Tension 3 — Git commit batching vs history granularity
-
-**Resolution:** Debounced single-writer commit queue (Pattern 3). Autosave writes the working tree frequently; a `CommitJob` waits a short idle window (config, ~2–5s) or fires on explicit Save, folding pending edits to the *same* page (and co-uploaded attachments) into one commit with structured `User/Action/Source` metadata. Agent-approved patches commit immediately with their own provenance (don't batch a human-approved change with unrelated autosaves — history clarity matters there). Keep `push` a *separate* retryable step after commit so remote failure never blocks a local save (§14.3). All commits serialized through one worker → no index-lock races.
-
-### Tension 4 — Agent capability vs safety boundary
-
-**Resolution:** The agent reaches the system *only* through registered Eino tools that call existing services (Pattern 4) — never the filesystem, never config/secrets, never shell, never git push (§15.3, §21.3). Read tools execute live; write tools return *proposals* and the actual mutation re-enters the human-approved, revision-checked, audited page-save path (Flow C). The safe-path resolver (`repo.Resolve`) is in the call chain of every agent file read, so path-escape is structurally impossible. Bound the ReAct loop with `MaxStep` and scope context to the current page/attachment to control cost and prevent runaway tool loops.
+| Anti-pattern | Why it breaks this system | Do instead |
+|--------------|---------------------------|------------|
+| Storing the graph/tags as the source of truth in SQLite | Violates files-are-truth; the table is a cache | Always rebuildable from `.md`; rebuild-on-drift backstop |
+| Re-marshaling the whole frontmatter to write tags | Reorders keys / drops unknown fields → round-trip rot (Pitfall 1) | Surgical `okf.SetTags` on the `yaml.Node` with `FrontDirty`; body untouched |
+| Adding a write/tag tool to the Eino agent | Breaks the 5-tool read-only boundary + `tools_test.go` gate; agent must never write | Suggest = read-only mode; apply = separate CSRF+editor endpoint → `pages.Save` |
+| Auto-applying swept tags | Violates "no silent frontmatter writes" / agent-safety model | Stage to `tag_suggestions(pending)`; human approves |
+| Deriving the global graph on every request | Re-walks + re-parses every file on a hot path; no incremental local-graph freshness | Incremental `page_links`/`page_tags` via fire-and-forget jobs |
+| `EnqueueAndWait` from inside a job handler (or from the sweep into apply) | CR-01 deadlock — the single drain goroutine waits on itself | Always `Enqueue` (fire-and-forget) for derived-index maintenance |
+| Unbounded shared-tag cliques | A popular tag makes O(n²) edges, bloating the payload | Cap per-tag fan-out; for local graph, connect only within the neighborhood |
+| Bypassing the 409 floor on tag apply | A stale apply silently overwrites a concurrent edit | Capture `base_revision` at suggest time; `pages.Save` enforces it |
 
 ---
 
-## Anti-Patterns
+## Confidence Assessment
 
-### Anti-Pattern 1: Treating SQLite as the content store
-**What people do:** Cache page bodies in SQLite and serve/edit from there for speed.
-**Why it's wrong:** Breaks the core promise (data must be copyable plain files; agents read files) and creates a second source of truth that drifts from Git.
-**Do this instead:** SQLite holds only operational/derived data (users, sessions, jobs, refs, index cache, audit mirror). Page bodies are read from and written to files.
-
-### Anti-Pattern 2: Committing on every keystroke / committing from handlers
-**What people do:** Run `git add && git commit` synchronously inside the save handler, per autosave.
-**Why it's wrong:** Index-lock contention, latency on the user's save, and a useless commit-per-keystroke history.
-**Do this instead:** Debounced, batched commits via the single-writer commit queue; handlers only enqueue.
-
-### Anti-Pattern 3: Giving the agent direct filesystem or write access
-**What people do:** Let the Eino agent `os.WriteFile`/`os.ReadFile` against repo paths for convenience.
-**Why it's wrong:** Defeats path safety, the approval boundary, and audit; an LLM can be coerced into traversal or unreviewed writes.
-**Do this instead:** Agent calls services through tools; reads go through `repo.Resolve`; writes are proposals approved by a human before the normal save path runs.
-
-### Anti-Pattern 4: Building features before the safe-path resolver and okf parser
-**What people do:** Wire page CRUD against raw paths and add path validation "later."
-**Why it's wrong:** Traversal/symlink-escape bugs and Markdown corruption become load-bearing and expensive to retrofit; they're the two most-tested units in §22.
-**Do this instead:** `repo.path` and `internal/okf` are Phase 0/1 foundations, fuzz/round-trip tested before any page handler depends on them.
-
----
-
-## Integration Points
-
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Git remote (Gitea/GitLab) | `gitstore` shells out to `git push`, post-commit, retryable | Optional (`remote_enabled`); push failure must not fail user writes; `pull_on_startup` for portability |
-| LLM provider | Eino `ToolCallingChatModel`, OpenAI-compatible `base_url` (local Ollama or remote) | Provider-agnostic via config; API key from `api_key_env`, never exposed to the agent's tools/context |
-| git CLI | `gitstore` execs the binary (SPEC: "shell out first") | Single-writer queue; can later swap to go-git behind the same interface without touching callers |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| handlers ↔ services | direct Go calls (interfaces) | RBAC/CSRF/audit applied in middleware before reaching services |
-| services ↔ jobs | `Enqueue` (async) | Decouples slow/serial work; SSE relays status back |
-| jobs ↔ gitstore/search | direct calls inside worker | Serialized git; idempotent indexing |
-| agent ↔ services | via registered tools only | The one sandbox seam; same services as handlers, read-only for reads, proposal-only for writes |
-| all writers ↔ repo files | only through `repo` (safe resolver) | Single chokepoint for path safety; nothing constructs repo abs-paths itself |
-| files → SQLite/Bleve | one-way projection (post-write) | Caches are rebuildable; reconcile on startup |
-
----
+| Area | Confidence | Reason |
+|------|------------|--------|
+| Link/backlink store location & maintenance | HIGH | `okf.FindLinks`, `rewriteFolderInboundLinks`, `KindIndex`/`enqueueIndexUpsert`, `RebuildIndex` all exist and verbatim model the pattern |
+| Graph endpoints / payload control | HIGH | Mirrors existing `/tree`+`/search` in the authed group; sizing reasoning is sound at this scale |
+| Shared-tag edges | HIGH | `search.readTags` is the existing sequence-aware reader; O(n²) clique caveat called out |
+| Byte-stable tag write via `okf.SetTags` | HIGH | `okf.SetField`+`Emit`+`FrontDirty` is the proven surgical pattern; only the sequence-node variant is new |
+| Suggest→approve→apply reuse of `pages.Save` | HIGH | `/apply-patch` already demonstrates the exact endpoint→`pages.Save`→single-writer reuse |
+| Bulk sweep on the jobs worker | HIGH | `jobs.Worker` retry/backoff/single-drain is purpose-built for this; only a job kind + staging table are new |
+| Force-graph rendering library choice (frontend) | MEDIUM | Not yet selected; not load-bearing for integration (a STACK-level decision for the graph UI phase) |
 
 ## Sources
 
-- SPEC.md §7 (architecture), §9 (repo layout), §11 (attachments), §14 (git versioning), §15 (agent/Eino), §16 (backend services), §21 (security) — primary source of truth (HIGH)
-- .planning/PROJECT.md — confirmed stack decisions: chi, Bleve, React, shell-out git, provider-agnostic Eino, SQLite-operational-only (HIGH)
-- [Eino: ReAct Agent Manual — CloudWeGo](https://www.cloudwego.io/docs/eino/core_modules/flow_integration_components/react_agent_manual/) — ReAct over compose.Graph (ChatModel + Tools nodes), ToolCallingChatModel, MessageModifier, MaxStep (HIGH)
-- [eino package — pkg.go.dev/github.com/cloudwego/eino](https://pkg.go.dev/github.com/cloudwego/eino) — component model, OpenAI/Ollama implementations (HIGH)
-- [Eino ADK: ChatModelAgent — CloudWeGo](https://www.cloudwego.io/docs/eino/core_modules/eino_adk/agent_implementation/chat_model/) — tool-use config, interrupt/resume for human-in-the-loop (maps to approval gate) (MEDIUM)
-
----
-*Architecture research for: single-binary Go + React files-as-truth wiki with hidden Git, Bleve, job worker, and Eino agent*
-*Researched: 2026-06-17*
+- `internal/okf/{links.go,okf.go,emit.go,repair.go}` — structural link scanner, byte-stable Doc model, surgical frontmatter edit (`Field`/`SetField`/`Repair`), `FrontDirty` re-marshal — HIGH (read directly)
+- `internal/pages/{service.go,rename.go}` — single-writer `Save`/`Create`/`relocate`, `enqueueIndexUpsert`/`Delete`, all-page walk + link rewrite, 409 floor — HIGH (read directly)
+- `internal/search/{indexjob.go,rebuild.go,service.go}` — `KindIndex` fire-and-forget job pattern, `RebuildIndex` repo walk, `readTags` sequence-aware reader — HIGH (read directly)
+- `internal/jobs/{queue.go,worker.go}` — single-writer worker, `Enqueue` vs `EnqueueAndWait`, retry/backoff, `Register(kind, handler)` — HIGH (read directly)
+- `internal/agent/{agent.go,tools.go,propose.go}` + `internal/server/handlers_agent.go` — single-shot modes, read-only 5-tool boundary + set-equality gate, `ProposePatch`→`/apply-patch`→`pages.Save`, validate-and-retry — HIGH (read directly)
+- `internal/server/router.go` — chi `authed` (reads) vs `editor` (CSRF writes) groups — HIGH (read directly)
+- `.planning/PROJECT.md` v1.0 milestone scope + locked constraints — HIGH
