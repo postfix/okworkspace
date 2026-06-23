@@ -19,6 +19,8 @@ export interface DialogProps {
   busy?: boolean;
   // hideFooter lets a caller supply its own footer (e.g. a form submit).
   hideFooter?: boolean;
+  // className applies extra classes to the .dialog box (e.g. a wider variant).
+  className?: string;
 }
 
 // Dialog is a focus-trapped modal. Esc and backdrop-click invoke onCancel; the
@@ -35,6 +37,7 @@ export default function Dialog({
   destructive = false,
   busy = false,
   hideFooter = false,
+  className = "",
 }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<Element | null>(null);
@@ -105,7 +108,7 @@ export default function Dialog({
       }}
     >
       <div
-        className="dialog"
+        className={`dialog${className ? ` ${className}` : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

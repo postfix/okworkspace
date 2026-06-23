@@ -131,6 +131,7 @@ export default function PageView() {
         title="Attachments"
         onCancel={() => setAttachmentsOpen(false)}
         hideFooter
+        className="dialog-wide"
       >
         <AttachmentsSection
           pagePath={path}

@@ -22,6 +22,12 @@
   gap: var(--space-md);
 }
 
+/* Wider variant — for content (attachments) that needs more than the default
+   form-card width. */
+.dialog-wide {
+  max-width: 760px;
+}
+
 .dialog-title {
   margin: 0;
   font-size: var(--font-size-heading);
