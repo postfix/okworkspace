@@ -14,14 +14,14 @@
 }
 
 /*
- * Accent focus ring on the focused CM6 surface (UI-SPEC Color §3). Matches the
- * project focus-ring convention — a literal 2px accent outline, as in tokens.css
- * `:focus-visible`, controls.css, and SearchPalette.css (no ring-width token
- * exists). CM6 paints its own outline by default; override it with the accent ring.
+ * No focus ring around the editor surface itself — a full-bleed editor wrapped in
+ * a 2px accent outline reads as a stray "violet box/line" that tracks the content
+ * as it grows. The focus cue lives on the surrounding .pageeditor-surface border
+ * instead (a subtle accent border on :focus-within). CM6's own default outline is
+ * suppressed here.
  */
 .livepreview-editor .cm-editor.cm-focused {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  outline: none;
 }
 
 /*

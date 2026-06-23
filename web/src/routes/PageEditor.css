@@ -42,6 +42,12 @@
   height: 100%;
 }
 
+/* Subtle focus cue: the surface border tints accent while editing (replaces the
+   old heavy accent outline ring around the editor). */
+.pageeditor-surface:focus-within {
+  border-color: var(--color-accent);
+}
+
 .pageeditor-toolbar {
   display: flex;
   align-items: center;
