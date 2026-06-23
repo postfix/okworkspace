@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.9.9
 milestone_name: milestone
-current_phase: 9.9
+current_phase: "—"
 status: Awaiting next milestone
-stopped_at: Completed 05-04-PLAN.md (conflict resolution + force-edit safety proof, COLL-03/COLL-04)
-last_updated: "2026-06-23T22:02:51.238Z"
-last_activity: 2026-06-23
-last_activity_desc: Milestone v0.9.9 completed and archived
+stopped_at: v0.9.9 MVP shipped — all 8 phases verified (live UAT 2026-06-24), archived, tagged v0.9.9
+last_updated: "2026-06-24T00:00:00.000Z"
+last_activity: 2026-06-24
+last_activity_desc: Milestone v0.9.9 completed and archived (live UAT closed all verification gaps)
 progress:
   total_phases: 8
   completed_phases: 8
   total_plans: 36
   completed_plans: 36
   percent: 100
-current_phase_name: collaboration
+current_phase_name: "between milestones"
 ---
 
 # Project State
