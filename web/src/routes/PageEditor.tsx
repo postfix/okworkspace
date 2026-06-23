@@ -19,6 +19,7 @@ import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
 import DiffReviewDialog, {
   type ConflictBusy,
 } from "../components/DiffReviewDialog";
+import Dialog from "../components/Dialog";
 import LinkPicker from "../components/LinkPicker";
 import LivePreviewEditor from "../components/LivePreviewEditor";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
@@ -49,8 +50,8 @@ export default function PageEditor() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const path = params["*"] ?? "";
-  // Ref to the attachments block so the corner paperclip can jump to it.
-  const attachmentsRef = useRef<HTMLDivElement>(null);
+  // The corner paperclip opens the attachments in a centered modal.
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
 
   // Live/Source editor mode — a persisted per-device UI preference (default Live).
   // The CM6 surface reads `mode`; the toolbar toggle and the Cmd/Ctrl-E shortcut
@@ -550,12 +551,7 @@ export default function PageEditor() {
         <button
           type="button"
           className="btn btn-ghost icon-btn"
-          onClick={() =>
-            attachmentsRef.current?.scrollIntoView({
-              behavior: "smooth",
-              block: "start",
-            })
-          }
+          onClick={() => setAttachmentsOpen(true)}
           aria-label="Attachments"
           title="Attachments"
         >
@@ -675,14 +671,20 @@ export default function PageEditor() {
         />
       </div>
 
-      <div ref={attachmentsRef}>
+      <Dialog
+        open={attachmentsOpen}
+        title="Attachments"
+        onCancel={() => setAttachmentsOpen(false)}
+        hideFooter
+      >
         <AttachmentsSection
           pagePath={path}
           canEdit={!readOnly}
           maxUploadMB={100}
           allowedTypes={["pdf", "docx", "txt", "png", "jpg", "svg"]}
+          hideHeader
         />
-      </div>
+      </Dialog>
     </div>
   );
 }

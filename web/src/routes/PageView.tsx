@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Paperclip, Pencil } from "lucide-react";
+
+import Dialog from "../components/Dialog";
 
 import { getPage, me, type Me, type Page } from "../api/client";
 import { okfTitle } from "../lib/frontmatter";
@@ -26,8 +28,8 @@ export default function PageView() {
   const navigate = useNavigate();
   const path = params["*"] ?? "";
   const visit = useRecent((s) => s.visit);
-  // Ref to the attachments block so the header paperclip can jump to it.
-  const attachmentsRef = useRef<HTMLDivElement>(null);
+  // The header paperclip opens the attachments in a centered modal.
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
 
   const { data: meData } = useQuery<Me>({ queryKey: ["me"], queryFn: me });
   const canEdit = meData?.role === "editor" || meData?.role === "admin";
@@ -97,12 +99,7 @@ export default function PageView() {
           <button
             type="button"
             className="btn btn-ghost icon-btn"
-            onClick={() =>
-              attachmentsRef.current?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              })
-            }
+            onClick={() => setAttachmentsOpen(true)}
             aria-label="Attachments"
             title="Attachments"
           >
@@ -129,14 +126,20 @@ export default function PageView() {
           readOnly
         />
       )}
-      <div ref={attachmentsRef}>
+      <Dialog
+        open={attachmentsOpen}
+        title="Attachments"
+        onCancel={() => setAttachmentsOpen(false)}
+        hideFooter
+      >
         <AttachmentsSection
           pagePath={path}
           canEdit={canEdit}
           maxUploadMB={100}
           allowedTypes={["pdf", "docx", "txt", "png", "jpg", "svg"]}
+          hideHeader
         />
-      </div>
+      </Dialog>
       <RenameModal
         open={renameOpen}
         path={path}

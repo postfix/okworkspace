@@ -11,6 +11,9 @@ interface AttachmentsSectionProps {
   canEdit: boolean;
   maxUploadMB: number;
   allowedTypes: string[];
+  // hideHeader drops the section's own "Attachments" title + Add-files button —
+  // used when the section is rendered inside a modal that already has a title.
+  hideHeader?: boolean;
 }
 
 // AttachmentsSection mounts under the page body in PageView (read mode). It shows
@@ -22,6 +25,7 @@ export default function AttachmentsSection({
   canEdit,
   maxUploadMB,
   allowedTypes,
+  hideHeader = false,
 }: AttachmentsSectionProps) {
   const dropzoneRef = useRef<HTMLDivElement>(null);
 
@@ -35,18 +39,20 @@ export default function AttachmentsSection({
 
   return (
     <section className="attachments-section" aria-label="Attachments">
-      <header className="attachments-header">
-        <h2 className="attachments-heading">Attachments</h2>
-        {canEdit && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => dropzoneRef.current?.scrollIntoView({ block: "nearest" })}
-          >
-            Add files
-          </button>
-        )}
-      </header>
+      {!hideHeader && (
+        <header className="attachments-header">
+          <h2 className="attachments-heading">Attachments</h2>
+          {canEdit && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => dropzoneRef.current?.scrollIntoView({ block: "nearest" })}
+            >
+              Add files
+            </button>
+          )}
+        </header>
+      )}
 
       {canEdit && (
         <div ref={dropzoneRef}>
