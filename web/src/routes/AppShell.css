@@ -12,6 +12,7 @@
 }
 
 .topbar {
+  position: relative;
   height: var(--topbar-height);
   flex: 0 0 var(--topbar-height);
   display: flex;
@@ -25,6 +26,49 @@
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--color-border);
   z-index: 20;
+}
+
+/* Centered search field in the top bar — opens the search palette. Absolutely
+   centered so it stays in the middle regardless of left/right cluster widths. */
+.topbar-search {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: min(420px, 40vw);
+  height: 32px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-label);
+  cursor: text;
+}
+
+.topbar-search:hover {
+  border-color: var(--color-text-muted);
+}
+
+.topbar-search:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.topbar-search-icon {
+  flex: 0 0 auto;
+}
+
+.topbar-search-text {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.topbar-search .keycap {
+  flex: 0 0 auto;
 }
 
 .topbar-left {
@@ -160,20 +204,10 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   border-top: 1px solid var(--color-border);
-}
-
-/* Search fills the footer (left); the Settings/Admin gear sits at the right. */
-.navrail-foot-search {
-  flex: 1 1 auto;
-  justify-content: flex-start;
-  gap: var(--space-sm);
-}
-
-.navrail-foot-search .keycap {
-  margin-left: auto;
 }
 
 /* Filter input in the fixed header. */

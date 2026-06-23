@@ -576,7 +576,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     >
       <SearchPalette />
       <header className="topbar">
-        {/* Left: the file-tree toggle. Search now lives in the navrail footer. */}
+        {/* Left: the file-tree toggle. */}
         <div className="topbar-left">
           <button
             type="button"
@@ -593,6 +593,17 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             )}
           </button>
         </div>
+        {/* Center: the global search field, opening the search palette. */}
+        <button
+          type="button"
+          className="topbar-search"
+          onClick={() => setSearchOpen(true)}
+          aria-label="Search workspace (⌘K)"
+        >
+          <Search size={16} aria-hidden="true" className="topbar-search-icon" />
+          <span className="topbar-search-text">Search</span>
+          <kbd className="keycap">⌘K</kbd>
+        </button>
         <div className="topbar-right">
           {repoHealth?.ok && (
             <span className="repo-health" title={repoHealth.detail}>
@@ -692,19 +703,9 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             <RecentList />
           </div>
 
-          {/* Fixed footer — Search (left) + Settings/Admin (right). */}
-          <div className="navrail-footer">
-            <button
-              type="button"
-              className="btn btn-ghost navrail-foot-search"
-              onClick={() => setSearchOpen(true)}
-              aria-label="Search workspace (⌘K)"
-            >
-              <Search size={16} aria-hidden="true" />
-              <span>Search</span>
-              <kbd className="keycap">⌘K</kbd>
-            </button>
-            {isAdmin && (
+          {/* Fixed footer — Settings/Admin. Search now lives in the top bar. */}
+          {isAdmin && (
+            <div className="navrail-footer">
               <button
                 type="button"
                 className="btn btn-ghost icon-btn"
@@ -714,8 +715,8 @@ export default function AppShell({ children }: { children?: ReactNode }) {
               >
                 <Settings size={16} aria-hidden="true" />
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </nav>
 
         <ResizeHandle ariaLabel="Resize sidebar" onResize={nudgeNav} />
