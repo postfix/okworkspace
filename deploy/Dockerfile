@@ -24,7 +24,7 @@ COPY internal/web/ /src/internal/web/
 RUN npm run build
 
 # ---- Stage 2: build the static Go binary ----
-FROM golang:1.26-bookworm AS build
+FROM golang:1.26.4-bookworm AS build
 WORKDIR /src
 # Cache module downloads.
 COPY go.mod go.sum ./
