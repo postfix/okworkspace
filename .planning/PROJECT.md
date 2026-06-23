@@ -8,6 +8,19 @@ OKF Workspace is a lightweight, self-hosted, OKF-native internal wiki built for 
 
 A non-technical teammate can create, edit, and find knowledge — and get useful AI help on it — while every byte stays as plain Markdown + original files on disk, versioned in Git, with no proprietary store to escape. If everything else fails, *the data must remain open, portable, and the wiki usable without Git knowledge.*
 
+## Current Milestone: v1.0 Knowledge Graph & LLM Auto-Tagging
+
+**Goal:** Add Obsidian-style graph visualization and LLM-assisted tagging so the team can *see* how knowledge connects and keep it organized with minimal effort.
+
+**Target features:**
+- Global graph view — full-workspace graph (pages as nodes, links as edges), click-to-navigate, zoom/pan
+- Local graph panel — per-page neighborhood (current page + direct connections) in a side panel
+- Configurable edge types in the graph UI (Obsidian-style toggles): page links, backlinks, shared-tag edges
+- Backlinks — reverse-link tracking feeding both the graph and a page-view backlinks panel
+- LLM tag suggestion (per-page, on demand)
+- LLM bulk tagging sweep over untagged (or all) pages
+- Suggest→approve flow for tags (no silent frontmatter writes; consistent with the agent safety model)
+
 ## Requirements
 
 ### Validated
@@ -27,9 +40,11 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 ### Active
 
-<!-- Next-milestone scope. Empty until the next milestone is defined via /gsd-new-milestone. -->
+<!-- v1.0 scope. Detailed REQ-IDs in REQUIREMENTS.md. -->
 
-(None — v0.9.9 MVP shipped 2026-06-23. Define the next milestone with `/gsd-new-milestone`.)
+- **Knowledge graph** — global graph view + per-page local graph panel; configurable edge types (page links / backlinks / shared tags); click-to-navigate
+- **Backlinks** — reverse-link tracking + page-view backlinks panel
+- **LLM auto-tagging** — per-page on-demand tag suggestion + bulk untagged sweep; suggest→approve (no silent writes)
 
 ### Out of Scope
 
@@ -99,4 +114,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-17 after initialization*
+*Last updated: 2026-06-24 — milestone v1.0 (Knowledge Graph & LLM Auto-Tagging) started*

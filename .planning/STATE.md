@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.9.9
-milestone_name: milestone
-current_phase: "—"
-status: Awaiting next milestone
-stopped_at: v0.9.9 MVP shipped — all 8 phases verified (live UAT 2026-06-24), archived, tagged v0.9.9
-last_updated: "2026-06-24T00:00:00.000Z"
-last_activity: 2026-06-24
-last_activity_desc: Milestone v0.9.9 completed and archived (live UAT closed all verification gaps)
+milestone: v1.0
+milestone_name: Knowledge Graph & LLM Auto-Tagging
+status: planning
+last_updated: "2026-06-23T22:22:30.670Z"
+last_activity: 2026-06-23
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 36
-  completed_plans: 36
-  percent: 100
-current_phase_name: "between milestones"
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: Milestone v0.9.9 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-23 — Milestone v0.9.9 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-23 — Milestone v1.0 started
 
 ### Key decisions (05-04 — the load-bearing slice)
 
