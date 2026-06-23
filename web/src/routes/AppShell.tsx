@@ -17,7 +17,7 @@ import {
   PanelLeftClose,
   PanelRightOpen,
   Search,
-  Shield,
+  Settings,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -45,6 +45,7 @@ import ResizeHandle from "../components/ResizeHandle";
 import { usePanelSizes } from "../stores/panelSizes";
 import { useNavrail } from "../stores/navrail";
 import { useTreeFold } from "../stores/treeFold";
+import { useTreeFilter } from "../stores/treeFilter";
 import SearchPalette from "../components/search/SearchPalette";
 import PromptBar, {
   type AgentMode,
@@ -105,6 +106,11 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   // Tree collapse-all / expand-all toggle (drives every FolderRow).
   const treeCollapsed = useTreeFold((s) => s.collapsed);
   const toggleFold = useTreeFold((s) => s.toggle);
+
+  // File-tree filter query (lives in a store so its input sits in the fixed
+  // navrail header while the tree scrolls below).
+  const filterQuery = useTreeFilter((s) => s.query);
+  const setFilterQuery = useTreeFilter((s) => s.setQuery);
 
   // ── Explicit viewport sizing (extension-proof fill) ─────────────────────────
   // position:fixed + inset:0 normally fills the window, but a browser extension
@@ -570,8 +576,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     >
       <SearchPalette />
       <header className="topbar">
-        {/* Left cluster (Obsidian-style): file-tree toggle + Search sit together
-            at the leading edge of the bar. */}
+        {/* Left: the file-tree toggle. Search now lives in the navrail footer. */}
         <div className="topbar-left">
           <button
             type="button"
@@ -586,16 +591,6 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             ) : (
               <PanelLeft size={16} aria-hidden="true" />
             )}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost topbar-search"
-            onClick={() => setSearchOpen(true)}
-            aria-label="Search workspace (⌘K)"
-          >
-            <Search size={16} aria-hidden="true" />
-            <span>Search</span>
-            <kbd className="keycap">⌘K</kbd>
           </button>
         </div>
         <div className="topbar-right">
@@ -631,70 +626,96 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         {navOpen && (
           <>
         <nav className="navrail" aria-label="Workspace navigation">
-          <div className="navrail-toolbar">
-            {canEdit && (
-              <button
-                type="button"
-                className="navrail-tool"
-                onClick={() => treeRef.current?.openCreatePage()}
-                aria-label="New page"
-                title="New page"
-              >
-                <FilePlus size={16} aria-hidden="true" />
-              </button>
-            )}
-            {canEdit && (
-              <button
-                type="button"
-                className="navrail-tool"
-                onClick={() => treeRef.current?.openCreateFolder()}
-                aria-label="New folder"
-                title="New folder"
-              >
-                <FolderPlus size={16} aria-hidden="true" />
-              </button>
-            )}
-            <button
-              type="button"
-              className="navrail-tool"
-              onClick={toggleFold}
-              aria-label={treeCollapsed ? "Expand all folders" : "Collapse all folders"}
-              title={treeCollapsed ? "Expand all" : "Collapse all"}
-            >
-              {treeCollapsed ? (
-                <ChevronsUpDown size={16} aria-hidden="true" />
-              ) : (
-                <ChevronsDownUp size={16} aria-hidden="true" />
+          {/* Fixed header — toolbar + filter never scroll. */}
+          <div className="navrail-header">
+            <div className="navrail-toolbar">
+              {canEdit && (
+                <button
+                  type="button"
+                  className="navrail-tool"
+                  onClick={() => treeRef.current?.openCreatePage()}
+                  aria-label="New page"
+                  title="New page"
+                >
+                  <FilePlus size={16} aria-hidden="true" />
+                </button>
               )}
-            </button>
-          </div>
-
-          <LeftTree ref={treeRef} />
-          <RecentList />
-
-          <div className="navrail-trash">
-            <button
-              type="button"
-              className="navrow navrow-action"
-              onClick={() => navigate("/trash")}
-            >
-              <Trash2 size={16} aria-hidden="true" />
-              <span>Trash</span>
-            </button>
-          </div>
-
-          {isAdmin && (
-            <div className="navrail-admin">
+              {canEdit && (
+                <button
+                  type="button"
+                  className="navrail-tool"
+                  onClick={() => treeRef.current?.openCreateFolder()}
+                  aria-label="New folder"
+                  title="New folder"
+                >
+                  <FolderPlus size={16} aria-hidden="true" />
+                </button>
+              )}
               <button
                 type="button"
-                className="navrow navrow-action"
-                onClick={() => navigate("/admin")}
+                className="navrail-tool"
+                onClick={toggleFold}
+                aria-label={treeCollapsed ? "Expand all folders" : "Collapse all folders"}
+                title={treeCollapsed ? "Expand all" : "Collapse all"}
               >
-                <Shield size={16} aria-hidden="true" />
-                <span>Admin</span>
+                {treeCollapsed ? (
+                  <ChevronsUpDown size={16} aria-hidden="true" />
+                ) : (
+                  <ChevronsDownUp size={16} aria-hidden="true" />
+                )}
               </button>
             </div>
-          )}
+            <div className="navrail-filter">
+              <Search size={15} aria-hidden="true" className="navrail-filter-icon" />
+              <input
+                type="text"
+                className="navrail-filter-input"
+                placeholder="Filter files…"
+                value={filterQuery}
+                onChange={(e) => setFilterQuery(e.target.value)}
+                aria-label="Filter files"
+              />
+            </div>
+          </div>
+
+          {/* Scrolling body — the file tree (with Trash at its bottom) + recent. */}
+          <div className="navrail-body">
+            <LeftTree ref={treeRef} />
+            <button
+              type="button"
+              className="navrow navrail-trash-row"
+              onClick={() => navigate("/trash")}
+            >
+              <Trash2 size={16} aria-hidden="true" className="tree-icon" />
+              <span className="tree-label">Trash</span>
+            </button>
+            <RecentList />
+          </div>
+
+          {/* Fixed footer — Search (left) + Settings/Admin (right). */}
+          <div className="navrail-footer">
+            <button
+              type="button"
+              className="btn btn-ghost navrail-foot-search"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search workspace (⌘K)"
+            >
+              <Search size={16} aria-hidden="true" />
+              <span>Search</span>
+              <kbd className="keycap">⌘K</kbd>
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                className="btn btn-ghost icon-btn"
+                onClick={() => navigate("/admin")}
+                aria-label="Admin settings"
+                title="Admin settings"
+              >
+                <Settings size={16} aria-hidden="true" />
+              </button>
+            )}
+          </div>
         </nav>
 
         <ResizeHandle ariaLabel="Resize sidebar" onResize={nudgeNav} />

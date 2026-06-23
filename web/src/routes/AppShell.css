@@ -136,20 +136,97 @@
   flex: 0 0 var(--navrail-width);
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
-  padding: var(--space-md);
-  overflow-y: auto;
-  /* Column layout so Trash (and Admin) can be pinned to the bottom of the rail,
-     below the main tree, via margin-top:auto. */
+  /* Three zones: fixed header, scrolling body, fixed footer. The rail itself
+     never scrolls — only .navrail-body does. */
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-/* Trash sits at the bottom of the tree panel — margin-top:auto absorbs the free
-   space above it (collapses to a normal scroll when the tree is long). */
-.navrail-trash {
-  margin-top: auto;
-  padding-top: var(--space-md);
+.navrail-header {
+  flex: 0 0 auto;
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.navrail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.navrail-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   border-top: 1px solid var(--color-border);
+}
+
+/* Search fills the footer (left); the Settings/Admin gear sits at the right. */
+.navrail-foot-search {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  gap: var(--space-sm);
+}
+
+.navrail-foot-search .keycap {
+  margin-left: auto;
+}
+
+/* Filter input in the fixed header. */
+.navrail-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 32px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.navrail-filter:focus-within {
+  border-color: var(--color-accent);
+}
+
+.navrail-filter-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+}
+
+.navrail-filter-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-label);
+}
+
+.navrail-filter-input::placeholder {
+  color: var(--color-faint);
+}
+
+/* Trash as a folder-like row at the bottom of the tree (scrolls with it). */
+.navrail-trash-row {
+  width: 100%;
+  margin-top: var(--space-xs);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-ui);
+  text-align: left;
+}
+
+.navrail-trash-row:hover {
+  background: var(--color-tree-hover);
+  color: var(--color-text);
 }
 
 .navtree {
@@ -183,8 +260,6 @@
   align-items: center;
   gap: var(--space-xs);
   margin-bottom: var(--space-sm);
-  padding-bottom: var(--space-sm);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .navrail-tool {

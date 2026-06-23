@@ -16,7 +16,6 @@ import {
   FileText,
   Folder,
   Paperclip,
-  Search,
 } from "lucide-react";
 
 import {
@@ -34,6 +33,7 @@ import {
   type DragKind,
 } from "./hooks/useTreeMutations";
 import { useTreeFold } from "../stores/treeFold";
+import { useTreeFilter } from "../stores/treeFilter";
 import TreeContextMenu, { type TreeContextMenuItem } from "./TreeContextMenu";
 import CreatePageModal from "./CreatePageModal";
 import CreateFolderModal from "./CreateFolderModal";
@@ -113,9 +113,10 @@ const LeftTree = forwardRef<LeftTreeHandle>(function LeftTree(_props, ref) {
   const nodes = data ?? [];
 
   const [menu, setMenu] = useState<MenuState | null>(null);
-  // Live filter query: typing narrows the tree to matching pages/folders (and the
-  // folders on the path to a match), which are force-expanded while filtering.
-  const [filter, setFilter] = useState("");
+  // The filter query lives in a store so its input can sit in the navrail's fixed
+  // header while this (scrolling) tree consumes it. Typing narrows the tree to
+  // matching pages/folders (force-expanded while filtering).
+  const filter = useTreeFilter((s) => s.query);
   const [create, setCreate] = useState<CreateState>(null);
   const [pageAction, setPageAction] = useState<PageActionState>(null);
   const [folderAction, setFolderAction] = useState<FolderActionState>(null);
@@ -262,17 +263,6 @@ const LeftTree = forwardRef<LeftTreeHandle>(function LeftTree(_props, ref) {
 
   return (
     <div className="lefttree">
-      <div className="lefttree-filter">
-        <Search size={15} aria-hidden="true" className="lefttree-filter-icon" />
-        <input
-          type="text"
-          className="lefttree-filter-input"
-          placeholder="Filter files…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          aria-label="Filter files"
-        />
-      </div>
       {moveError && (
         <div className="lefttree-status" role="alert">
           {moveError}
