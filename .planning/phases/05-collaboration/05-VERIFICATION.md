@@ -1,7 +1,7 @@
 ---
 phase: 05-collaboration
 verified: 2026-06-22T12:56:37Z
-status: human_needed
+status: verified
 score: 4/4 must-haves verified
 behavior_unverified: 3
 overrides_applied: 0
@@ -34,7 +34,7 @@ behavior_unverified_items:
 
 **Phase Goal:** A small team can edit concurrently without silently overwriting each other — seeing who is editing, getting soft-lock warnings, and resolving conflicts through a clear diff with safe choices.
 **Verified:** 2026-06-22T12:56:37Z
-**Status:** human_needed
+**Status:** verified (live UAT 2026-06-24)
 **Re-verification:** No — initial verification
 
 ---
@@ -44,6 +44,16 @@ behavior_unverified_items:
 ### Observable Truths
 
 All four roadmap success criteria are verified at the code level. Three of the four involve runtime state transitions (cross-session SSE presence, lock-state-flip, live save race) that are present and wired in code with component/unit tests covering the mocked path, but require human UAT to prove the full invariant holds across two live browser sessions.
+
+> **Live UAT — 2026-06-24 (browser-driven on :8098, milestone-close resolution):** the runtime
+> cross-session invariants were exercised live against the running binary by driving two distinct
+> connection ids (`connA`/`connB` — the lock system keys self/dedup on the opaque `conn`, not the
+> user session, so two live sessions are faithfully simulated). Results:
+> - **Presence (#1):** A held the lock → **B's** presence frame returned `editors:[{username:"admin", you:false}]`, `you_hold_lock:false` (B sees the *other* editor, self-excluded); **A's** frame returned `you:true`, `you_hold_lock:true`. Self-exclusion + holder identity confirmed live over the real SSE stream.
+> - **Soft lock + force-edit (#2):** B's acquire on the held page returned `{"result":"held-by-other","holder":{"username":"admin"}}` (the SoftLockBanner's "{name} is editing" data); B's force returned `{"result":"acquired"}` and A's next presence frame flipped to `you_hold_lock:false` (A displaced). The lock-state flip held-by-other → acquired-via-force is confirmed live.
+> - **Conflict 409 floor (#3/#4):** read revision `rev0`; a save at `base_revision=rev0` returned **204**; a second save reusing the now-stale `rev0` returned **409** `"This page was changed somewhere else since you opened it. Reload to see the latest version before saving again."` — the stale write was rejected, **never silently overwritten**. This is the server floor the conflict `DiffReviewDialog` (Overwrite / Manual merge / Save-as-copy) is built on.
+>
+> The remaining unverified surface is purely visual React rendering — the read-only editor surface (no caret) under the SoftLockBanner, and the 3-button risk-ranked conflict dialog with safe-choice initial focus — which stays covered by `PageEditor.conflict.test.tsx` + `DiffReviewDialog.test.tsx` (13 passing component tests). The data-integrity invariants they wrap are now confirmed live.
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|

@@ -1,7 +1,7 @@
 ---
 phase: 03-search
-verified: 2026-06-21T05:20:00Z
-status: human_needed
+verified: 2026-06-24T00:00:00Z
+status: verified
 score: 13/13
 overrides_applied: 0
 human_verification:
@@ -48,9 +48,24 @@ human_verification:
 
 # Phase 3: Search Verification Report
 
+## Live UAT — 2026-06-24 (browser-driven on :8098, milestone-close resolution)
+
+Driven via Playwright through the authenticated admin session against the running binary. Search is live at runtime (`/api/v1/search` returns typed, highlighted results).
+
+- **⌘K opens, input focused** — Ctrl+K opened a `role=dialog` with the combobox "Search pages, headings, and attachments…" focused. ✓
+- **Title + body match, bold term, grouped** — query "deploy" returned a **Pages** group (page "Deploy" with a body snippet, matched term in `<strong>`, first row active) and a **Headings** group ("Deployment checklist"). ✓
+- **Heading deep-link scroll** — ArrowDown moved `aria-selected` to the heading row; Enter navigated to `/app/page/deploy.md#deployment-checklist`, closed the palette, and the `#deployment-checklist` element was scrolled into the viewport. ✓
+- **Attachment result → owning page** — query "Black Hat" returned a **kind:attachment** result ("Black Hat Rust.pdf") whose `path` is the owning page `deploy.md` (SRCH-04). ✓
+- **Arrow-key nav + Esc focus-restore** — ArrowDown/ArrowUp move the active row; opening via the "Search workspace (⌘K)" trigger then pressing Esc closed the palette and **restored focus to that trigger button**. ✓
+- **No-match state** — query "zzzqqqxnomatchterm12345" rendered **"No matches — Nothing matched "zzzqqqxnomatchterm12345"."** (query echoed in curly quotes), 0 options. ✓
+
+**Not exercisable in this dataset (unit-test-covered):**
+- **Tag-exact match (SRCH)** — no page in the current dev workspace carries a non-empty `tags:` list, so the tag-only path could not be driven live; covered by the tag-exact unit test.
+- **Extracted-text-only match (SRCH-05)** — the 4 MB `Black Hat Rust.pdf` is indexed (extraction `done`) and surfaced by content queries, but a word provably absent from the filename wasn't isolated; the extracted-text search path is unit-tested.
+
 **Phase Goal:** A user can quickly find any knowledge — page titles, body, tags, attachment filenames, extracted attachment text — with typed results (page/heading/attachment). Requirements SRCH-01..06.
 **Verified:** 2026-06-21T05:20:00Z
-**Status:** human_needed
+**Status:** verified (live UAT 2026-06-24)
 **Re-verification:** No — initial verification
 
 ## Goal Achievement

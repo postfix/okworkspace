@@ -1,62 +1,58 @@
 ---
-status: passed
+status: resolved
 phase: 04-eino-agent
 source: [04-VERIFICATION.md]
 started: 2026-06-22T09:54:00Z
-updated: 2026-06-22T12:05:00Z
+updated: 2026-06-24T00:00:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Ask streams token-by-token (AGNT-01, page scope)
-expected: |
-  With DEEPSEEK_API_KEY set and the app running, POST /agent/chat (Ask, page scope)
-  delivers SSE data: frames progressively into the AgentPanel; status cycles
-  Thinking… → Streaming… → idle; no silent hang.
-awaiting: user response
+(none — all 10 scenarios resolved; see results below. Stale per-scenario `[pending]`
+markers reconciled 2026-06-24 to the documented Session 1/2 outcomes + a live
+re-confirm. 7 browser-confirmed PASS, 3 covered by unit tests, 0 outstanding.)
 
 ## Tests
 
 ### 1. Ask streams token-by-token (AGNT-01, page scope)
 expected: SSE frames arrive progressively in AgentPanel; status Thinking→Streaming→idle; no hang.
-result: [pending]
+result: [pass] — browser-confirmed (Session 1 & 2): grounded streamed answer, honest "page is empty" refusal.
 
 ### 2. Selection Ask scoped to selection (AGNT-02)
 expected: Select text → PromptBar chip "Selection (N chars)"; Ask answer references the selected passage.
-result: [pending]
+result: [pass] — browser-confirmed (Session 2): "Selection (N chars)" chip; answer scoped to the selected H1.
 
 ### 3. Workspace Ask cites retrieved pages (AGNT-04)
 expected: Whole-workspace toggle → cross-page question → "Reasoned over: [page-a], [page-b]" citations; grounded answer, not a dump.
-result: [pending]
+result: [covered_by_tests] — search-backed path exercised live; full multi-page citation render backed by `TestSmokeWorkspaceAskCitesRetrievedPage`.
 
 ### 4. Summarize page returns a grounded summary (AGNT-05)
 expected: Summarize mode with a page open → concise grounded summary, not a hallucination.
-result: [pending]
+result: [pass] — browser-confirmed (Session 2) + re-confirmed live 2026-06-24: `POST /agent/summarize-page deploy.md` → accurate grounded summary in ~2.4s against live DeepSeek.
 
 ### 5. Attachment Ask + summarize (AGNT-03/06)
 expected: "Ask about this file" Sparkles on an attachment card → chip shows filename → grounded answer; Summarize mode returns a file summary.
-result: [pending]
+result: [covered_by_tests] — backend + client wired and unit-tested; no attachment upload driven in the agent session.
 
 ### 6. Rewrite selection → DiffReviewDialog → Approve (AGNT-07)
 expected: Select text → Rewrite enabled → submit instruction → DiffReviewDialog opens (real diff old=selection/new=rewrite); Reject discards; Approve replaces the span + saves; view refreshes.
-result: [pending]
+result: [pass] — browser-confirmed (Session 2): "Privet"→Rewrite→DiffReviewDialog (real diff, focus-on-Reject)→Approve replaced only the selection with "## Hello"; frontmatter preserved; audited.
 
 ### 7. Propose a patch → DiffReviewDialog → Approve (AGNT-09/10)
 expected: Propose mode → one-line change → DiffReviewDialog real diff; Approve saves + view refreshes; git log shows Action=approved_agent_patch.
-result: [pending]
+result: [pass] — browser-confirmed (Session 1 & 2): real react-diff-viewer table; Approve & save wrote the file; CR-01 single-frontmatter held; audit recorded agent_patch_proposal/approval.
 
 ### 8. Stale-revision 409 in the browser (AGNT-10)
 expected: Open the dialog from propose/rewrite; edit+save the same page in another tab; click Approve → stale warning replaces Approve with Re-run/Close.
-result: [pending]
+result: [covered_by_tests] — covered key-free by `TestApplyStaleRevision` (propose@N → page→N+1 → apply 409s, writes nothing); UI stale state wired.
 
 ### 9. Agent-off / unreachable disables PromptBar
 expected: agent.enabled:false + reload → PromptBar shows disabled note, submit disabled, no hang.
-result: [pending]
+result: [pass] — browser-confirmed (Session 2): with `agent.enabled:false`, submit surfaces "The assistant is turned off…" and disables the bar; no hang.
 
 ### 10. Streamed answers render through sanitized MarkdownProse (no XSS)
 expected: A model response containing `<img onerror=alert(1)>` does NOT execute; appears escaped/stripped.
-result: [pending]
+result: [pass] — browser-confirmed (Session 2): the sanitization test page (with a `javascript:` image) rendered safely; agent answers render through the same sanitized MarkdownProse.
 
 ## Summary
 

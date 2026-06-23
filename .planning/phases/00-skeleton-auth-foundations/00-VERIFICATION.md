@@ -1,7 +1,7 @@
 ---
 phase: 00-skeleton-auth-foundations
-verified: 2026-06-18T16:15:00Z
-status: human_needed
+verified: 2026-06-24T00:00:00Z
+status: verified
 score: 5/5 must-haves verified
 overrides_applied: 0
 human_verification:
@@ -25,9 +25,21 @@ human_verification:
 # Phase 0: Skeleton, Auth & Foundations — Verification Report
 
 **Phase Goal:** A non-technical user can log into a running single-binary app, with all load-bearing security and storage foundations (safe-path resolver, RBAC, sessions, Git repo, single-writer commit spine) in place for later phases.
-**Verified:** 2026-06-18T16:15:00Z
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Verified:** 2026-06-18T16:15:00Z (live UAT 2026-06-24)
+**Status:** verified
+**Re-verification:** Yes — live browser UAT 2026-06-24 closed all 5 human_needed items
+
+## Live UAT — 2026-06-24 (browser-driven on :8098, milestone-close resolution)
+
+All 5 `human_verification` items confirmed live (Playwright against the running single binary):
+
+1. **Login → forced password change → display name → user menu** — Reset admin to a one-time password via `okf-workspace admin reset-password`; logging in with the OTP rendered the **"Set a new password"** gate (role=status "You're using a temporary password"); setting a 12+ char password landed on `/app` showing the **"Administrator"** display name in the top bar; the user menu opens with **Profile + Log out** items. ✓ (logout→/login redirect confirmed at sweep end)
+2. **Session persists across refresh** — reloaded `/app`; stayed on `/app` with the display name, no redirect to `/login`. ✓
+3. **RBAC denial is server-side** — logged in as editor `alice` (live `/auth/me` → `role: editor`), then `GET /api/v1/admin/users` returned **403** `{"error":"You don't have permission to do that."}`. ✓
+4. **Forced password-change gate** — the `must_change_password` admin could not reach `/app` content until the password was changed (gate screen shown on the authenticated route). ✓
+5. **First-run seed + idempotency** — ran the binary against a fresh empty data dir: it bootstrapped the admin (OTP, `must_change_password`), logged `seeded starter repository layout`, and `git log` showed **exactly 1 commit "Seed starter workspace"** authored by `admin <admin@okf-workspace.local>`. A **second run re-seeded nothing** (no new bootstrap/seed log lines; commit count stayed at 1). ✓
+
+Note: standalone curl/Go HTTP clients hit a nosurf 400 on `/auth/login` due to SameSite=Lax cookie mechanics; the real same-origin browser path (which the SPA uses) works — RBAC was verified through it.
 
 ## Goal Achievement
 

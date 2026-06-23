@@ -1,7 +1,7 @@
 ---
 phase: 02-attachments-text-extraction
-verified: 2026-06-21T00:16:00Z
-status: human_needed
+verified: 2026-06-24T00:00:00Z
+status: verified
 score: 11/11
 overrides_applied: 0
 human_verification:
@@ -22,9 +22,20 @@ human_verification:
 # Phase 2: Attachments & Text Extraction — Verification Report
 
 **Phase Goal:** A user can attach original files to pages, download them byte-for-byte unchanged, manage them safely (replace, unlink, auto-delete orphans), and have their text extracted (PDF/DOCX/TXT) so search and the agent can read them. Requirements ATT-01..10, SEC-02.
-**Verified:** 2026-06-21T00:16:00Z
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Verified:** 2026-06-21T00:16:00Z (live UAT 2026-06-24)
+**Status:** verified
+**Re-verification:** Yes — live browser UAT 2026-06-24 closed all 4 human_needed items
+
+## Live UAT — 2026-06-24 (browser-driven on :8098, milestone-close resolution)
+
+All 4 `human_verification` items confirmed live (Playwright through the authenticated admin session, real multipart uploads/downloads against the running binary):
+
+1. **Upload + card fields + extraction** — uploaded a PNG to a fresh page: meta returned `original_name`, `mime_type=image/png` (content-sniffed, not from extension), `size_bytes`, `uploader_name=admin`, `uploaded_at` (all four card fields). An uploaded `.txt` and the existing 4 MB `Black Hat Rust.pdf` both reached `extraction_status: "done"` (PDF + TXT extraction pipeline works). ✓
+2. **Image preview vs SVG safety** — PNG download served `Content-Type: image/png`, `Content-Disposition: inline` (previewable inline). SVG download served `Content-Type: application/octet-stream`, `Content-Disposition: attachment; filename*=UTF-8''uat-shape.svg` — i.e. forced download, never rendered as an inline SVG document (SEC-02). ✓
+3. **Replace** — `PUT /attachments/{id}` with new bytes returned 200, **same id**, new `original_name`/`size_bytes`; the subsequent download served the replaced content. ✓
+4. **Byte-exact download + orphan delete** — uploaded PNG SHA-256 equalled the downloaded SHA-256 (byte-exact). Removing the only-referencing page returned `{"deleted_orphan": true}` and the download then 404'd. (The shared-reference "card survives on the other page" branch remains covered by the unit tests for multi-page references.) ✓
+
+Also observed: a `.png`-named file containing text bytes was content-sniffed and stored as `text/plain` / `ext: txt` (filename not trusted — magic-byte classification, mimetype allow-list).
 
 ## Goal Achievement
 
