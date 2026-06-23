@@ -5,6 +5,15 @@
   line-height: var(--line-height-body);
 }
 
+.markdown-prose h1,
+.markdown-prose h2,
+.markdown-prose h3,
+.markdown-prose h4,
+.markdown-prose h5,
+.markdown-prose h6 {
+  letter-spacing: -0.025em;
+}
+
 .markdown-prose h1 {
   font-size: var(--font-size-display);
   font-weight: var(--font-weight-semibold);
@@ -17,6 +26,8 @@
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-heading);
   margin: var(--space-lg) 0 var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .markdown-prose h3,
@@ -36,7 +47,8 @@
 }
 
 .prose-link {
-  color: var(--color-accent);
+  /* Lighter accent reads better than the base purple on the dark canvas. */
+  color: var(--color-accent-2);
   text-decoration: none;
 }
 
@@ -46,28 +58,42 @@
 
 .markdown-prose code {
   font-family: var(--font-family-mono);
+  font-size: 0.9em;
+  color: #d8c8ff;
   background: var(--color-code-bg);
+  border: 1px solid var(--color-accent-soft);
   border-radius: var(--radius-sm);
   padding: 0 var(--space-xs);
 }
 
 .markdown-prose pre {
-  background: var(--color-code-bg);
+  /* A recessed, near-black block that reads as code against the dark page. */
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--space-md);
   overflow-x: auto;
 }
 
 .markdown-prose pre code {
+  color: var(--color-text);
   background: transparent;
+  border: none;
   padding: 0;
 }
 
 .markdown-prose blockquote {
   margin: var(--space-md) 0;
-  padding-left: var(--space-md);
-  border-left: 3px solid var(--color-border);
-  color: var(--color-text-muted);
+  padding: var(--space-sm) var(--space-md);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--color-accent-soft);
+  color: var(--color-text-2);
+}
+
+.markdown-prose input[type="checkbox"] {
+  margin-right: var(--space-sm);
+  accent-color: var(--color-accent);
 }
 
 .markdown-prose table {

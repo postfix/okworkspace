@@ -65,9 +65,21 @@
 }
 
 .navrow-active {
-  background: var(--color-tree-active-bg);
-  box-shadow: inset 2px 0 0 var(--color-accent);
-  color: var(--color-accent);
+  /* Soft horizontal accent wash (Obsidian/Linear), with a hairline accent edge
+     instead of a solid fill block. */
+  background: linear-gradient(
+    90deg,
+    var(--color-tree-active-bg),
+    var(--color-accent-soft)
+  );
+  box-shadow:
+    inset 2px 0 0 var(--color-accent),
+    inset 0 0 0 1px var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+.navrow-active .tree-icon {
+  color: var(--color-accent-2);
 }
 
 .tree-caret {

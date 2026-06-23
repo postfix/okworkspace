@@ -71,8 +71,21 @@
   padding-top: var(--space-2xl);
 }
 
+/* A glowing gradient orb (Raycast-style) instead of a flat muted glyph. */
 .agentpanel-empty-icon {
-  color: var(--color-text-muted);
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: var(--space-sm);
+  color: #fff;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.4), transparent 1rem),
+    linear-gradient(135deg, var(--color-accent-2), #4f46e5);
+  box-shadow:
+    0 0 40px rgba(139, 92, 246, 0.48),
+    0 18px 48px rgba(0, 0, 0, 0.36);
 }
 
 .agentpanel-empty-heading {
@@ -127,6 +140,12 @@
   min-height: var(--hit-min-height);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+}
+
+.agentpanel-suggestion:hover:not(:disabled) {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
 }
 
 @media (prefers-reduced-motion: reduce) {
