@@ -1,14 +1,24 @@
-import { Loader2, PanelRightClose, Sparkles, FileDiff } from "lucide-react";
+import type { ReactNode } from "react";
+import { Loader2, PanelRightClose, Sparkles } from "lucide-react";
 
 import AgentAnswer from "./AgentAnswer";
 import type { AgentMode, PromptBarStatus } from "./PromptBar";
 import "./AgentPanel.css";
 
-// AgentPanel is the right-side collapsible answer column (the third column of
-// .appshell-body). It mirrors the .navrail chrome (a left border instead of the
-// rail's right border) and is a labeled peer landmark (aria-label="Assistant").
-// AppShell owns the session state (answer accumulation, streaming lifecycle) and
-// the open/collapse store; this component renders the states.
+// AgentPanel is the right-side Assistant column (the third column of
+// .appshell-body), modelled on a Cursor/Copilot chat panel: a header, the answer
+// conversation (or an empty state with quick-action suggestions), a row of
+// suggestion chips, and the prompt docked at the very bottom. AppShell owns the
+// session state and passes the prompt input + the suggestions in.
+export interface AgentSuggestion {
+  // key is a stable identity for the chip (and its accessible action).
+  key: string;
+  label: string;
+  // run dispatches the action (Summarize runs immediately; Rewrite/Draft/Propose
+  // prime the prompt for the next message). AppShell wires these to the agent.
+  run: () => void;
+}
+
 export interface AgentPanelProps {
   open: boolean;
   onClose: () => void;
@@ -24,19 +34,21 @@ export interface AgentPanelProps {
   // submitted is true once the user has sent at least one prompt this session
   // (drives the empty vs. loading/answer states).
   submitted: boolean;
-  // canPropose gates the "Propose this as a patch" footer (editor + page scope +
-  // a completed answer). Readers never see it.
-  canPropose: boolean;
-  onProposeFromAnswer: () => void;
+  // suggestions are the quick actions surfaced inside the window (summarize,
+  // rewrite, draft, propose) — gated by role/context upstream. Empty for readers
+  // with nothing actionable.
+  suggestions: AgentSuggestion[];
+  // promptBar is the docked chat input rendered at the bottom of the panel.
+  promptBar: ReactNode;
 }
 
-// MODE_LABEL is the human label for the header meta line (matches PromptBar copy).
+// MODE_LABEL is the human label for the header meta line.
 const MODE_LABEL: Record<AgentMode, string> = {
   ask: "Ask",
   summarize: "Summarize",
   rewrite: "Rewrite",
   draft: "Draft",
-  propose: "Propose a patch",
+  propose: "Propose an edit",
 };
 
 export default function AgentPanel({
@@ -50,14 +62,13 @@ export default function AgentPanel({
   error,
   currentPath,
   submitted,
-  canPropose,
-  onProposeFromAnswer,
+  suggestions,
+  promptBar,
 }: AgentPanelProps) {
   if (!open) return null;
 
   const streaming = status === "streaming";
   const thinking = status === "thinking";
-  const done = submitted && status === "idle";
 
   return (
     <aside className="agentpanel" aria-label="Assistant">
@@ -84,8 +95,9 @@ export default function AgentPanel({
             <Sparkles size={24} className="agentpanel-empty-icon" aria-hidden="true" />
             <h3 className="agentpanel-empty-heading">Ask the assistant anything</h3>
             <p className="agentpanel-empty-body">
-              Choose a mode and ask about this page, your selection, an
-              attachment, or the whole workspace.
+              Type below and press Enter. Ask about this page or the whole
+              workspace — or use a suggestion to summarize, draft, or propose an
+              edit you approve.
             </p>
           </div>
         )}
@@ -108,20 +120,24 @@ export default function AgentPanel({
         )}
       </div>
 
-      {/* Editor + page + a completed answer → offer to turn it into a reviewable
-          patch. Readers never see this (canPropose is false for them). */}
-      {done && canPropose && !error && (
-        <footer className="agentpanel-footer">
-          <button
-            type="button"
-            className="btn btn-secondary agentpanel-propose"
-            onClick={onProposeFromAnswer}
-          >
-            <FileDiff size={16} aria-hidden="true" />
-            Propose this as a patch
-          </button>
-        </footer>
+      {/* The dock: quick-action suggestions surfaced in the window (no mode picker
+          on the prompt), then the chat input at the very bottom. */}
+      {suggestions.length > 0 && (
+        <div className="agentpanel-suggestions" aria-label="Suggested actions">
+          {suggestions.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              className="btn btn-ghost agentpanel-suggestion"
+              onClick={s.run}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
       )}
+
+      {promptBar}
     </aside>
   );
 }

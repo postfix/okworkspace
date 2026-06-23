@@ -1,7 +1,7 @@
 /*
- * PromptBar — the persistent bottom bar (the agent entry point). It sits below
- * .appshell-body as a third flex row: full-width, --color-surface fill, a 1px top
- * border mirroring the topbar's bottom border. Token-only styling.
+ * PromptBar — the chat input docked at the bottom of the Assistant panel
+ * (AgentPanel). A single textarea (Enter to send); no mode/scope/submit buttons.
+ * Token-only styling; a 1px top border separates it from the conversation above.
  */
 
 .promptbar {
@@ -9,79 +9,45 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--space-md);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }
 
-.promptbar-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.promptbar-mode {
-  flex: 0 0 auto;
-}
-
-/* Read-only context chip — surface fill, hairline border, muted Label text. */
-.promptbar-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  min-height: var(--hit-min-height);
-  padding: var(--space-xs) var(--space-sm);
-  font-size: var(--font-size-label);
-  line-height: var(--line-height-label);
-  color: var(--color-text-muted);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  max-width: 220px;
-}
-
-.promptbar-chip-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The "Whole workspace" toggle — a ghost button acting as aria-pressed toggle.
-   Neutral at rest; the pressed state fills with surface + accent-tinted border. */
-.promptbar-workspace {
-  flex: 0 0 auto;
-  font-size: var(--font-size-label);
-}
-
-.promptbar-workspace[aria-pressed="true"] {
-  background: var(--color-tree-active-bg);
-  border-color: var(--color-accent);
-  color: var(--color-text);
-}
-
-/* The prompt input grows to fill the row; it is a one-row textarea so
-   Shift+Enter can insert a newline. */
+/* The prompt input — a small multi-row textarea that fills the panel width.
+   Enter sends; Shift+Enter inserts a newline (handled in the component). */
 .promptbar-input {
-  flex: 1 1 240px;
-  min-width: 180px;
+  width: 100%;
   resize: none;
   font-family: var(--font-family-ui);
   line-height: var(--line-height-body);
 }
 
-.promptbar-status {
-  display: inline-flex;
+/* Footer row under the input: the muted scope hint on the left, the
+   send/streaming hint on the right. Both are read-only Label text. */
+.promptbar-foot {
+  display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  min-width: 0;
+  justify-content: space-between;
+  gap: var(--space-sm);
   font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
   color: var(--color-text-muted);
 }
 
-.promptbar-submit {
-  flex: 0 0 auto;
+.promptbar-context {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.promptbar-hint {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-xs);
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* The disabled / error note — muted by default; error variant is destructive.
@@ -101,9 +67,9 @@
 }
 
 /* Reduced motion: the spinner glyph stops rotating (falls back to the text
-   label) — the .spinner keyframe is global; this disables it on the status. */
+   label) — the .spinner keyframe is global; this disables it on the hint. */
 @media (prefers-reduced-motion: reduce) {
-  .promptbar-status .spinner {
+  .promptbar-hint .spinner {
     animation: none;
   }
 }

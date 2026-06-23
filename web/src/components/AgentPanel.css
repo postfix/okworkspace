@@ -109,6 +109,26 @@
   gap: var(--space-xs);
 }
 
+/* Suggestion chips — the quick actions (summarize / rewrite / draft / propose)
+   surfaced inside the window, just above the docked prompt. A wrapping row of
+   small ghost buttons; the prompt itself stays button-free. */
+.agentpanel-suggestions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md) 0;
+}
+
+.agentpanel-suggestion {
+  flex: 0 0 auto;
+  font-size: var(--font-size-label);
+  padding: var(--space-xs) var(--space-sm);
+  min-height: var(--hit-min-height);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .agentpanel-loading .spinner {
     animation: none;

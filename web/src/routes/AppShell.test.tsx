@@ -6,7 +6,7 @@
  *    attachment-scope Ask, and summarize-attachment to the right client calls.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -75,7 +75,8 @@ beforeEach(() => {
   // Reset the ephemeral agent context + panel between tests.
   useAgentContext.getState().clearSelection();
   useAgentContext.getState().clearAttachment();
-  useAgentPanel.getState().setOpen(false);
+  // The prompt is docked in the Assistant panel now, so it must be open to type.
+  useAgentPanel.getState().setOpen(true);
 });
 
 describe("AppShell — AUTH-06", () => {
@@ -107,9 +108,10 @@ describe("AppShell — agent dispatch (04-07)", () => {
     // Seed a live selection (what the CM6 editor would publish).
     useAgentContext.getState().setSelection("the original span");
 
-    // Choose Rewrite mode, then submit an instruction.
-    const modeSelect = await screen.findByLabelText("Assistant mode");
-    await user.selectOptions(modeSelect, "rewrite");
+    // Prime Rewrite from the in-window suggestion, then submit an instruction.
+    await user.click(
+      await screen.findByRole("button", { name: "Rewrite selection" }),
+    );
     await submitPrompt(user, "make it concise");
 
     expect(client.rewrite).toHaveBeenCalledWith("the original span", "make it concise");
@@ -155,11 +157,15 @@ describe("AppShell — agent dispatch (04-07)", () => {
 
     useAgentContext.getState().setAttachment({ id: "att-42", name: "report.docx" });
 
-    const modeSelect = await screen.findByLabelText("Assistant mode");
-    await user.selectOptions(modeSelect, "summarize");
-    await submitPrompt(user, "summarize");
+    // Summarize runs immediately from the in-window suggestion (no prompt needed);
+    // with an attachment in context the chip names the file and routes to it.
+    await user.click(
+      await screen.findByRole("button", { name: /Summarize report\.docx/i }),
+    );
 
-    expect(client.summarizeAttachment).toHaveBeenCalledWith("att-42");
+    await waitFor(() =>
+      expect(client.summarizeAttachment).toHaveBeenCalledWith("att-42"),
+    );
     expect(client.summarizePage).not.toHaveBeenCalled();
   });
 
@@ -169,12 +175,15 @@ describe("AppShell — agent dispatch (04-07)", () => {
     vi.mocked(client.summarizePage).mockResolvedValue("page summary");
     renderAppShell("/app/page/notes");
 
-    // No attachment context.
-    const modeSelect = await screen.findByLabelText("Assistant mode");
-    await user.selectOptions(modeSelect, "summarize");
-    await submitPrompt(user, "summarize");
+    // No attachment context — Summarize runs immediately on the page from the
+    // in-window suggestion (no prompt needed).
+    await user.click(
+      await screen.findByRole("button", { name: "Summarize this page" }),
+    );
 
-    expect(client.summarizePage).toHaveBeenCalledWith("notes");
+    await waitFor(() =>
+      expect(client.summarizePage).toHaveBeenCalledWith("notes"),
+    );
     expect(client.summarizeAttachment).not.toHaveBeenCalled();
   });
 });

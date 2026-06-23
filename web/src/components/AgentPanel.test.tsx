@@ -1,8 +1,8 @@
 /**
- * AgentPanel — the right-side collapsible answer column. Contracts: it is a
- * labeled "Assistant" landmark, shows the empty state before a prompt, renders
- * the streamed answer after, and the editor-gated "Propose this as a patch"
- * footer appears ONLY for editors with a page in scope (readers never see it).
+ * AgentPanel — the right-side Assistant chat column. Contracts: it is a labeled
+ * "Assistant" landmark, shows the empty state before a prompt, renders the streamed
+ * answer after, docks the prompt at the bottom, and surfaces quick-action
+ * suggestions (summarize / rewrite / draft / propose) inside the window.
  */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -21,8 +21,8 @@ function baseProps() {
     answer: "",
     currentPath: "guides/welcome.md",
     submitted: false,
-    canPropose: true,
-    onProposeFromAnswer: vi.fn(),
+    suggestions: [],
+    promptBar: <div data-testid="dock-prompt">prompt</div>,
   };
 }
 
@@ -38,47 +38,47 @@ describe("AgentPanel", () => {
     expect(container.querySelector(".agentpanel")).toBeNull();
   });
 
-  it("is a labeled Assistant landmark with the empty state before a prompt", () => {
+  it("is a labeled Assistant landmark with the empty state + docked prompt", () => {
     renderPanel(<AgentPanel {...baseProps()} />);
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
     expect(screen.getByText("Ask the assistant anything")).toBeTruthy();
+    // The chat input is docked inside the panel (not a full-width app footer).
+    expect(screen.getByTestId("dock-prompt")).toBeInTheDocument();
   });
 
   it("renders the streamed answer and the mode·scope meta after submit", () => {
     renderPanel(
-      <AgentPanel
-        {...baseProps()}
-        submitted
-        answer="The streamed answer."
-      />,
+      <AgentPanel {...baseProps()} submitted answer="The streamed answer." />,
     );
     expect(screen.getByText("The streamed answer.")).toBeTruthy();
     expect(screen.getByText("Ask · This page")).toBeTruthy();
   });
 
-  it("shows the propose footer for editors (page scope) and fires the handler", async () => {
+  it("surfaces quick-action suggestions inside the window and runs them", async () => {
     const user = userEvent.setup();
-    const props = { ...baseProps(), submitted: true, answer: "Done." };
-    renderPanel(<AgentPanel {...props} />);
-    const propose = screen.getByRole("button", {
-      name: /propose this as a patch/i,
-    });
-    await user.click(propose);
-    expect(props.onProposeFromAnswer).toHaveBeenCalledTimes(1);
-  });
-
-  it("hides the propose footer for readers (canPropose=false)", () => {
+    const run = vi.fn();
     renderPanel(
       <AgentPanel
         {...baseProps()}
-        submitted
-        answer="Done."
-        canPropose={false}
+        suggestions={[
+          { key: "summarize", label: "Summarize this page", run },
+          { key: "draft", label: "Draft a page", run: vi.fn() },
+        ]}
       />,
     );
+    const chip = screen.getByRole("button", { name: "Summarize this page" });
+    await user.click(chip);
+    expect(run).toHaveBeenCalledTimes(1);
     expect(
-      screen.queryByRole("button", { name: /propose this as a patch/i }),
-    ).toBeNull();
+      screen.getByRole("button", { name: "Draft a page" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders no suggestions row when there are none (readers with nothing actionable)", () => {
+    const { container } = renderPanel(
+      <AgentPanel {...baseProps()} suggestions={[]} />,
+    );
+    expect(container.querySelector(".agentpanel-suggestions")).toBeNull();
   });
 
   it("collapses via the header toggle", async () => {

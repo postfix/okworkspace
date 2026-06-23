@@ -1,8 +1,9 @@
 /**
- * PromptBar — the agent entry point. These assertions cover the load-bearing
- * UI-SPEC contracts: editor-gated modes (readers never reach Propose), the
- * fail-closed agent-off state (disabled + explanation, never a silent hang),
- * Enter-submits / Shift+Enter-newlines, and the in-flight Stop affordance.
+ * PromptBar — the chat input docked in the Assistant panel. These assertions
+ * cover the load-bearing contracts of the Cursor-style entry point: Enter submits
+ * (Shift+Enter inserts a newline), the input clears after a send, Esc cancels, the
+ * fail-closed agent-off state (disabled + explanation, never a silent hang), and
+ * the muted context/error hints. There are no mode/scope/submit buttons.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -12,13 +13,8 @@ import PromptBar from "./PromptBar";
 
 function baseProps() {
   return {
-    mode: "ask" as const,
-    onModeChange: vi.fn(),
-    canEdit: true,
-    hasPage: true,
-    pageTitle: "This page",
-    workspace: false,
-    onWorkspaceToggle: vi.fn(),
+    placeholder: "Ask anything…",
+    contextLabel: "This page",
     status: "idle" as const,
     onSubmit: vi.fn(),
     onCancel: vi.fn(),
@@ -47,116 +43,69 @@ describe("PromptBar", () => {
     expect(props.onSubmit.mock.calls[0][0]).toContain("line two");
   });
 
-  it("disables Propose for readers (editor-gated) and enables it for editors", () => {
-    const reader = { ...baseProps(), canEdit: false };
-    const { rerender } = render(<PromptBar {...reader} />);
-    const proposeReader = screen.getByRole("option", {
-      name: "Propose a patch",
-    }) as HTMLOptionElement;
-    expect(proposeReader.disabled).toBe(true);
+  it("clears the input after a successful send", async () => {
+    const user = userEvent.setup();
+    const props = baseProps();
+    render(<PromptBar {...props} />);
 
-    rerender(<PromptBar {...baseProps()} canEdit hasPage workspace={false} />);
-    const proposeEditor = screen.getByRole("option", {
-      name: "Propose a patch",
-    }) as HTMLOptionElement;
-    expect(proposeEditor.disabled).toBe(false);
+    const input = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+    await user.click(input);
+    await user.keyboard("what is this page about?{Enter}");
+    expect(props.onSubmit).toHaveBeenCalledWith("what is this page about?");
+    expect(input.value).toBe("");
   });
 
-  it("fails closed when the agent is off: disabled controls + explanation", () => {
-    render(
-      <PromptBar
-        {...baseProps()}
-        disabledReason="The assistant is turned off."
-      />,
-    );
+  it("does not submit a blank/whitespace-only prompt", async () => {
+    const user = userEvent.setup();
+    const props = baseProps();
+    render(<PromptBar {...props} />);
 
-    expect(screen.getByText("The assistant is turned off.")).toBeTruthy();
-    expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).disabled).toBe(
-      true,
-    );
-    expect(
-      (screen.getByLabelText("Assistant mode") as HTMLSelectElement).disabled,
-    ).toBe(true);
+    const input = screen.getByLabelText("Prompt");
+    await user.click(input);
+    await user.keyboard("   {Enter}");
+    expect(props.onSubmit).not.toHaveBeenCalled();
   });
 
-  it("shows a Stop affordance while in-flight and cancels on click", async () => {
+  it("cancels on Escape (stop stream / clear primed action)", async () => {
     const user = userEvent.setup();
     const props = { ...baseProps(), status: "streaming" as const };
     render(<PromptBar {...props} />);
 
-    const stop = screen.getByRole("button", { name: "Stop" });
-    await user.click(stop);
+    const input = screen.getByLabelText("Prompt");
+    await user.click(input);
+    await user.keyboard("{Escape}");
     expect(props.onCancel).toHaveBeenCalledTimes(1);
-    // The streaming status label is announced.
-    expect(screen.getByText("Streaming…")).toBeTruthy();
   });
 
-  it("reflects the Whole-workspace toggle in the read-only context chip", () => {
-    const { rerender } = render(<PromptBar {...baseProps()} workspace={false} />);
-    // Page scope by default.
-    expect(screen.getByTitle("This page")).toBeTruthy();
-    rerender(<PromptBar {...baseProps()} workspace />);
-    expect(screen.getByTitle("Whole workspace")).toBeTruthy();
+  it("fails closed when the agent is off: disabled input + explanation", () => {
+    const props = {
+      ...baseProps(),
+      disabledReason: "The assistant is turned off.",
+    };
+    render(<PromptBar {...props} />);
+
+    expect(screen.getByLabelText("Prompt")).toBeDisabled();
+    expect(screen.getByText("The assistant is turned off.")).toBeInTheDocument();
   });
 
-  // --- AGNT-07: rewriteAvailable driven by a real selection (not hardcoded) ---
-  it("enables Rewrite only when a non-empty selection is present", () => {
-    // No selection → Rewrite disabled with the "select text first" hint.
-    const { rerender } = render(
-      <PromptBar {...baseProps()} selectionLength={0} />,
-    );
-    const rewriteEmpty = screen.getByRole("option", {
-      name: /Rewrite/,
-    }) as HTMLOptionElement;
-    expect(rewriteEmpty.disabled).toBe(true);
+  it("shows a transient error note when a request fails", () => {
+    const props = { ...baseProps(), error: "The assistant couldn't answer. Try again." };
+    render(<PromptBar {...props} />);
 
-    // selectionLength undefined behaves like 0 (still disabled).
-    rerender(<PromptBar {...baseProps()} />);
     expect(
-      (screen.getByRole("option", { name: /Rewrite/ }) as HTMLOptionElement)
-        .disabled,
-    ).toBe(true);
-
-    // A real selection enables Rewrite.
-    rerender(<PromptBar {...baseProps()} selectionLength={12} />);
-    expect(
-      (screen.getByRole("option", { name: /Rewrite/ }) as HTMLOptionElement)
-        .disabled,
-    ).toBe(false);
+      screen.getByText("The assistant couldn't answer. Try again."),
+    ).toBeInTheDocument();
   });
 
-  // --- AGNT-02: selection context chip ---
-  it("renders a 'Selection (N chars)' chip when a selection is present", () => {
-    render(
-      <PromptBar {...baseProps()} workspace={false} selectionLength={7} />,
-    );
-    expect(screen.getByTitle("Selection (7 chars)")).toBeTruthy();
-  });
+  it("shows the muted context label and a streaming hint", () => {
+    const props = {
+      ...baseProps(),
+      contextLabel: "Whole workspace",
+      status: "streaming" as const,
+    };
+    render(<PromptBar {...props} />);
 
-  // --- AGNT-03/06: attachment context chip ---
-  it("renders the attachment name chip when an attachment is set and no selection", () => {
-    render(
-      <PromptBar
-        {...baseProps()}
-        workspace={false}
-        selectionLength={0}
-        attachmentName="notes.pdf"
-      />,
-    );
-    expect(screen.getByTitle("notes.pdf")).toBeTruthy();
-  });
-
-  it("workspace toggle ON overrides both the selection and attachment chips", () => {
-    render(
-      <PromptBar
-        {...baseProps()}
-        workspace
-        selectionLength={20}
-        attachmentName="notes.pdf"
-      />,
-    );
-    expect(screen.getByTitle("Whole workspace")).toBeTruthy();
-    expect(screen.queryByTitle("Selection (20 chars)")).toBeNull();
-    expect(screen.queryByTitle("notes.pdf")).toBeNull();
+    expect(screen.getByText("Whole workspace")).toBeInTheDocument();
+    expect(screen.getByText(/Streaming/)).toBeInTheDocument();
   });
 });

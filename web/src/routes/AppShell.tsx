@@ -35,12 +35,22 @@ import PromptBar, {
   type AgentMode,
   type PromptBarStatus,
 } from "../components/PromptBar";
-import AgentPanel from "../components/AgentPanel";
+import AgentPanel, { type AgentSuggestion } from "../components/AgentPanel";
 import DiffReviewDialog from "../components/DiffReviewDialog";
 import { useAgentPanel } from "../stores/agentPanel";
 import { useAgentContext } from "../stores/agentContext";
 import { useSearchStore } from "../store/searchStore";
 import "./AppShell.css";
+
+// PROMPT_PLACEHOLDER is the chat input hint per active action. Plain ask by
+// default; a suggestion chip primes one of the others for the next message.
+const PROMPT_PLACEHOLDER: Record<AgentMode, string> = {
+  ask: "Ask anything…",
+  summarize: "Summarize this page…",
+  rewrite: "Describe the rewrite…",
+  draft: "Describe the page to draft…",
+  propose: "Describe the change to propose…",
+};
 
 // AppShell is the authenticated chrome (top bar + nav rail + main pane) and the
 // AGENT SESSION OWNER: it holds the prompt/answer streaming state, drives the
@@ -87,7 +97,6 @@ export default function AppShell({ children }: { children?: ReactNode }) {
 
   // ── Agent prompt session state ──────────────────────────────────────────────
   const [mode, setMode] = useState<AgentMode>("ask");
-  const [workspace, setWorkspace] = useState(false);
   const [status, setStatus] = useState<PromptBarStatus>("idle");
   const [answer, setAnswer] = useState("");
   const [citations, setCitations] = useState<string[]>([]);
@@ -104,20 +113,17 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   // Tear the stream down on unmount.
   useEffect(() => () => unsubRef.current?.(), []);
 
-  // Effective scope precedence (mirrors the PromptBar chip precedence): an
-  // explicit Whole-workspace toggle wins; then a live selection (AGNT-02); then a
-  // chosen attachment (AGNT-03); then the open page; then the workspace default
-  // when nothing else is in scope. The server still derives the retrieval ROLE
-  // from the session — this only chooses what context the prompt runs against.
-  const effectiveScope: AgentScope = workspace
-    ? "workspace"
-    : hasSelection
-      ? "selection"
-      : attachment
-        ? "attachment"
-        : hasPage
-          ? "page"
-          : "workspace";
+  // Effective scope is auto-detected (no toggle): a live selection (AGNT-02) wins,
+  // then a chosen attachment (AGNT-03), then the open page, then the whole
+  // workspace when nothing else is in scope. The server still derives the retrieval
+  // ROLE from the session — this only chooses what context the prompt runs against.
+  const effectiveScope: AgentScope = hasSelection
+    ? "selection"
+    : attachment
+      ? "attachment"
+      : hasPage
+        ? "page"
+        : "workspace";
 
   const scopeLabel =
     effectiveScope === "workspace"
@@ -352,14 +358,14 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       });
   }, []);
 
-  // handleSubmit dispatches on the selected mode (WR-01): Ask streams; Summarize
-  // and Draft are awaited single-shot calls; Propose opens the diff flow. Rewrite
-  // needs a captured editor selection (not yet plumbed), so the PromptBar disables
-  // it — it never reaches here. A mode never silently runs the wrong action.
-  const handleSubmit = useCallback(
-    (prompt: string) => {
+  // runAgent dispatches one action (WR-01): Ask streams; Summarize and Draft are
+  // awaited single-shot calls; Rewrite/Propose open the diff flow. The action is
+  // explicit (not read from state) so a suggestion chip can run the right thing
+  // without racing a setMode. A mode never silently runs the wrong action.
+  const runAgent = useCallback(
+    (prompt: string, action: AgentMode) => {
       resetSubmitState();
-      switch (mode) {
+      switch (action) {
         case "summarize":
           // An attachment in context summarizes the file (AGNT-06); otherwise an
           // open page summarizes the page (AGNT-05, unchanged).
@@ -409,7 +415,6 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     },
     [
       resetSubmitState,
-      mode,
       hasPage,
       currentPath,
       canEdit,
@@ -423,6 +428,17 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     ],
   );
 
+  // handleSubmit runs the chat input. It dispatches the active action — plain ask
+  // by default, or whatever a suggestion chip primed (rewrite/draft/propose) for
+  // this one message — then returns the prompt to conversational ask.
+  const handleSubmit = useCallback(
+    (prompt: string) => {
+      runAgent(prompt, mode);
+      if (mode !== "ask") setMode("ask");
+    },
+    [runAgent, mode],
+  );
+
   // Propose from a completed Ask/Summarize answer: re-use the answer as the
   // instruction so the assistant proposes a concrete page change.
   const proposeFromAnswer = useCallback(() => {
@@ -431,6 +447,47 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     setStale(false);
     proposeMutation.mutate(answerRef.current || "Apply the change discussed above.");
   }, [canEdit, hasPage, proposeMutation]);
+
+  // The chat placeholder reflects a primed action (default conversational ask).
+  const promptPlaceholder = PROMPT_PLACEHOLDER[mode];
+
+  // Quick-action suggestions surfaced INSIDE the Assistant window — the prompt
+  // itself has no mode buttons. Summarize runs immediately; rewrite/draft/propose
+  // prime the prompt for the next message. Gated by role + context so readers never
+  // see a write action and Rewrite only appears with a live selection.
+  const suggestions: AgentSuggestion[] = [];
+  if (hasPage) {
+    suggestions.push({
+      key: "summarize",
+      label: attachment ? `Summarize ${attachment.name}` : "Summarize this page",
+      run: () => runAgent("", "summarize"),
+    });
+  }
+  if (canEdit && hasSelection) {
+    suggestions.push({
+      key: "rewrite",
+      label: "Rewrite selection",
+      run: () => setMode("rewrite"),
+    });
+  }
+  if (canEdit) {
+    suggestions.push({ key: "draft", label: "Draft a page", run: () => setMode("draft") });
+  }
+  if (canEdit && hasPage) {
+    suggestions.push({
+      key: "propose",
+      label: "Propose an edit",
+      run: () => setMode("propose"),
+    });
+  }
+  // Once an answer has streamed, offer to turn it into a reviewable patch.
+  if (submitted && status === "idle" && answer && !answerError && canEdit && hasPage) {
+    suggestions.push({
+      key: "propose-answer",
+      label: "Propose this as an edit",
+      run: proposeFromAnswer,
+    });
+  }
 
   // Global ⌘K / Ctrl K opens the search palette from anywhere.
   useEffect(() => {
@@ -593,28 +650,24 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           error={answerError}
           currentPath={currentPath}
           submitted={submitted}
-          canPropose={canEdit && hasPage}
-          onProposeFromAnswer={proposeFromAnswer}
+          suggestions={suggestions}
+          promptBar={
+            <PromptBar
+              placeholder={promptPlaceholder}
+              contextLabel={scopeLabel}
+              status={status}
+              disabledReason={disabledReason}
+              unreachable={unreachable}
+              error={barError}
+              onSubmit={handleSubmit}
+              onCancel={() => {
+                cancelStream();
+                setMode("ask");
+              }}
+            />
+          }
         />
       </div>
-
-      <PromptBar
-        mode={mode}
-        onModeChange={setMode}
-        canEdit={canEdit}
-        hasPage={hasPage}
-        pageTitle={hasPage ? "This page" : undefined}
-        workspace={workspace}
-        onWorkspaceToggle={() => setWorkspace((w) => !w)}
-        status={status}
-        disabledReason={disabledReason}
-        unreachable={unreachable}
-        error={barError}
-        selectionLength={selectionLength}
-        attachmentName={attachment?.name ?? null}
-        onSubmit={handleSubmit}
-        onCancel={cancelStream}
-      />
 
       {/* The trust gate (ONE dialog, two drivers). Opens with a real diff once a
           propose patch OR a rewrite returns; a 409 flips it into the stale state
