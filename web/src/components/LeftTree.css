@@ -97,6 +97,17 @@
   text-align: left;
 }
 
+/* Attachment leaf under a page: a download link, muted until hovered. */
+.navrow-attachment {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.navrow-attachment:hover {
+  background: var(--color-tree-hover);
+  color: var(--color-text);
+}
+
 .navrow-page:hover {
   background: var(--color-tree-hover);
 }

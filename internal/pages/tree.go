@@ -17,10 +17,14 @@ import (
 // (falling back to the base filename) for pages, and the directory name for
 // folders. Path is repo-relative and slash-separated.
 type Node struct {
-	Type     string `json:"type"` // "folder" | "page"
+	Type     string `json:"type"` // "folder" | "page" | "attachment"
 	Path     string `json:"path"`
 	Title    string `json:"title"`
 	Children []Node `json:"children,omitempty"`
+	// Attachments lists a page's uploaded files as leaf nodes (type "attachment",
+	// Path = attachment id, Title = original filename). Populated by the tree
+	// handler, not the walk. Empty/omitted for folders.
+	Attachments []Node `json:"attachments,omitempty"`
 }
 
 // Tree walks the repo and returns the nested page/folder tree. It skips both the
@@ -121,6 +125,12 @@ func isSkippedDir(slashRel string) bool {
 		return true
 	}
 	if slashRel == ".okf-workspace" || strings.HasPrefix(slashRel, ".okf-workspace/") {
+		return true
+	}
+	// The reserved attachment store ("attachments/" at the repo root) holds
+	// ULID-named blobs/sidecars, not pages — it must not surface as a navigable
+	// folder. Attachments reach the tree as leaves under their owning page.
+	if slashRel == "attachments" || strings.HasPrefix(slashRel, "attachments/") {
 		return true
 	}
 	return false

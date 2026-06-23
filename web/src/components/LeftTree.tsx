@@ -10,9 +10,22 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, ChevronDown, FileText, Folder, Search } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronDown,
+  FileText,
+  Folder,
+  Paperclip,
+  Search,
+} from "lucide-react";
 
-import { getTree, me, type Me, type TreeNode } from "../api/client";
+import {
+  downloadAttachmentUrl,
+  getTree,
+  me,
+  type Me,
+  type TreeNode,
+} from "../api/client";
 import {
   PAGE_DRAG_TYPE,
   FOLDER_DRAG_TYPE,
@@ -399,8 +412,18 @@ function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
       if (selfMatch || kids.length > 0) {
         out.push({ ...node, children: selfMatch ? node.children ?? [] : kids });
       }
-    } else if (selfMatch) {
-      out.push(node);
+    } else {
+      // Page leaf: keep it when its title matches (showing all attachments) or
+      // when an attachment's filename matches (showing only those attachments).
+      const attMatches = (node.attachments ?? []).filter((a) =>
+        a.title.toLowerCase().includes(q),
+      );
+      if (selfMatch || attMatches.length > 0) {
+        out.push({
+          ...node,
+          attachments: selfMatch ? node.attachments : attMatches,
+        });
+      }
     }
   }
   return out;
@@ -545,10 +568,37 @@ function TreeRow({
   return (
     <PageRow
       node={node}
+      depth={depth}
       indentStyle={indentStyle}
       canEdit={canEdit}
       onContext={onContext}
     />
+  );
+}
+
+// AttachmentRow renders a page's uploaded file as a leaf under the page: a
+// download link (byte-exact original) with a paperclip. Not draggable, no
+// context menu — attachments are managed from the page's Attachments panel.
+function AttachmentRow({
+  node,
+  indentStyle,
+}: {
+  node: TreeNode;
+  indentStyle: { paddingLeft: string };
+}) {
+  return (
+    <li>
+      <a
+        className="navrow navrow-attachment"
+        style={indentStyle}
+        href={downloadAttachmentUrl(node.path)}
+        download={node.title}
+        title={node.title}
+      >
+        <Paperclip size={16} aria-hidden="true" className="tree-icon" />
+        <span className="tree-label">{node.title}</span>
+      </a>
+    </li>
   );
 }
 
@@ -656,11 +706,13 @@ function FolderRow({
 
 function PageRow({
   node,
+  depth,
   indentStyle,
   canEdit,
   onContext,
 }: {
   node: TreeNode;
+  depth: number;
   indentStyle: { paddingLeft: string };
   canEdit: boolean;
   onContext: (e: MouseEvent, target: MenuTarget) => void;
@@ -671,6 +723,11 @@ function PageRow({
   // The active page is the one whose path matches the /app/page/:path route.
   const activePath = params["*"] ?? params.path ?? "";
   const isActive = activePath === node.path;
+
+  // Attachments render one level deeper than the page.
+  const attachmentIndent = {
+    paddingLeft: `calc(${depth + 1} * var(--tree-indent) + var(--space-sm))`,
+  };
 
   return (
     <li>
@@ -697,6 +754,17 @@ function PageRow({
         <FileText size={16} aria-hidden="true" className="tree-icon" />
         <span className="tree-label">{node.title}</span>
       </button>
+      {node.attachments && node.attachments.length > 0 && (
+        <ul className="navtree">
+          {node.attachments.map((att) => (
+            <AttachmentRow
+              key={att.path}
+              node={att}
+              indentStyle={attachmentIndent}
+            />
+          ))}
+        </ul>
+      )}
     </li>
   );
 }

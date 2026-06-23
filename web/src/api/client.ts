@@ -195,10 +195,13 @@ export async function deactivateUser(id: number): Promise<void> {
 // carries children; a page is a leaf. The user never sees the path/filename —
 // only the title — but the path is the route token the SPA navigates to.
 export interface TreeNode {
-  type: "folder" | "page";
+  type: "folder" | "page" | "attachment";
   path: string;
   title: string;
   children?: TreeNode[];
+  // Attachments hang off a page node as leaf children (type "attachment", where
+  // `path` is the attachment id and `title` is the original filename).
+  attachments?: TreeNode[];
 }
 
 // Page mirrors the GET /pages response: the frontmatter region (raw YAML text),
