@@ -1,0 +1,368 @@
+.appshell {
+  /* Pinned to the top-left of the viewport; the exact width/height come from JS
+     (window.innerWidth/Height, set inline) so the shell fills the real window
+     even when a transform'd extension wrapper would otherwise re-anchor a
+     fixed/inset:0 element to a shrunk container. The panes scroll internally. */
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topbar {
+  position: relative;
+  height: var(--topbar-height);
+  flex: 0 0 var(--topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 0 var(--space-lg);
+  /* Translucent, blurred bar so content scrolls subtly beneath it. */
+  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--color-border);
+  z-index: 20;
+}
+
+/* Centered search field in the top bar — opens the search palette. Absolutely
+   centered so it stays in the middle regardless of left/right cluster widths. */
+.topbar-search {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: min(420px, 40vw);
+  height: 32px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-label);
+  cursor: text;
+}
+
+.topbar-search:hover {
+  border-color: var(--color-text-muted);
+}
+
+.topbar-search:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.topbar-search-icon {
+  flex: 0 0 auto;
+}
+
+.topbar-search-text {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.topbar-search .keycap {
+  flex: 0 0 auto;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.topbar-displayname {
+  font-size: var(--font-size-body);
+  color: var(--color-text);
+}
+
+.repo-health {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.repo-health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.banner {
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.banner-warning {
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+  background: var(--color-bg);
+}
+
+/* .btn-ghost is a shared primitive declared in styles/controls.css. */
+
+/* Top-bar search trigger (left of UserMenu, like repo-health). A ghost button
+   with a Search icon + label + a muted ⌘K keycap. */
+.topbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--hit-min-height);
+}
+
+/* A muted keyboard-shortcut keycap. Surface fill + hairline border, label type —
+   neutral, never accent. All values from tokens. */
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-label);
+  font-family: var(--font-family-ui);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+/* The Assistant toggle in the topbar cluster. Neutral ghost at rest; its icon
+   tints accent ONLY while an answer is actively streaming (a quiet "working"
+   cue — never a filled accent button). */
+.topbar-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--hit-min-height);
+}
+
+.topbar-agent.is-active {
+  color: var(--color-accent);
+}
+
+.appshell-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The propose/apply error banner floats above the bottom bar so a failed
+   proposal is visible without stealing the PromptBar row. */
+.agent-propose-error {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-2xl) + var(--space-lg));
+  transform: translateX(-50%);
+  max-width: 480px;
+  z-index: 60;
+  box-shadow: var(--shadow-popover);
+}
+
+.navrail {
+  width: var(--navrail-width);
+  flex: 0 0 var(--navrail-width);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  /* Three zones: fixed header, scrolling body, fixed footer. The rail itself
+     never scrolls — only .navrail-body does. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.navrail-header {
+  flex: 0 0 auto;
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.navrail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.navrail-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+/* Filter input in the fixed header. */
+.navrail-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 32px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.navrail-filter:focus-within {
+  border-color: var(--color-accent);
+}
+
+.navrail-filter-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+}
+
+.navrail-filter-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-label);
+}
+
+.navrail-filter-input::placeholder {
+  color: var(--color-faint);
+}
+
+/* Trash as a folder-like row at the bottom of the tree (scrolls with it). */
+.navrail-trash-row {
+  width: 100%;
+  margin-top: var(--space-xs);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-ui);
+  text-align: left;
+}
+
+.navrail-trash-row:hover {
+  background: var(--color-tree-hover);
+  color: var(--color-text);
+}
+
+.navtree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.navrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--hit-min-height);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-body);
+}
+
+.navrow-disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+/* Obsidian-style compact icon toolbar at the top of the tree panel: new page,
+   new folder, collapse-all. Icon-only buttons with title tooltips. */
+.navrail-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+}
+
+.navrail-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.navrail-tool:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.navrail-admin {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.navrow-action {
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text);
+  font-family: var(--font-family-ui);
+  text-align: left;
+}
+
+.navrow-action:hover {
+  background: var(--color-hover);
+}
+
+.mainpane {
+  flex: 1 1 auto;
+  padding: var(--space-md);
+  background: var(--color-bg);
+  overflow-y: auto;
+  /* Let children (the editor) stretch to the full pane height. */
+  display: flex;
+  flex-direction: column;
+}
+
+.empty-state {
+  max-width: 560px;
+  margin: var(--space-2xl) auto 0 auto;
+  text-align: center;
+}
+
+.empty-state-heading {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-display);
+  margin: 0 0 var(--space-md) 0;
+}
+
+.empty-state-body {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-muted);
+  margin: 0;
+}

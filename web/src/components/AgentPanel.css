@@ -1,0 +1,190 @@
+/*
+ * AgentPanel — the right-side collapsible answer column. It is the symmetric
+ * mirror of .navrail: a fixed-width column with a left border (the rail has a
+ * right border). Token-only styling; the one additive token is --agentpanel-width.
+ */
+
+.agentpanel {
+  width: var(--agentpanel-width);
+  flex: 0 0 var(--agentpanel-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-bg);
+  border-left: 1px solid var(--color-border);
+}
+
+.agentpanel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.agentpanel-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.agentpanel-title {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+}
+
+.agentpanel-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+
+/* The ✕ that clears a pinned file/selection context, returning to page scope. */
+.agentpanel-clear-scope {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.agentpanel-clear-scope:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.agentpanel-collapse {
+  flex: 0 0 auto;
+  min-width: var(--hit-min-icon);
+  min-height: var(--hit-min-icon);
+  padding: var(--space-sm);
+}
+
+.agentpanel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+/* Empty state — centered, muted, with the Sparkles affordance icon. */
+.agentpanel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-sm);
+  padding-top: var(--space-2xl);
+}
+
+/* A glowing gradient orb (Raycast-style) instead of a flat muted glyph. */
+.agentpanel-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: var(--space-sm);
+  color: #fff;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.4), transparent 1rem),
+    linear-gradient(135deg, var(--color-accent-2), #4f46e5);
+  box-shadow:
+    0 0 40px rgba(139, 92, 246, 0.48),
+    0 18px 48px rgba(0, 0, 0, 0.36);
+}
+
+.agentpanel-empty-heading {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-body);
+}
+
+.agentpanel-empty-body {
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+.agentpanel-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.agentpanel-footer {
+  flex: 0 0 auto;
+  padding: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.agentpanel-propose {
+  width: 100%;
+  gap: var(--space-xs);
+}
+
+/* Suggestion chips — the quick actions (summarize / rewrite / draft / propose)
+   surfaced inside the window, just above the docked prompt. A wrapping row of
+   small ghost buttons; the prompt itself stays button-free. */
+.agentpanel-suggestions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md) 0;
+}
+
+.agentpanel-suggestion {
+  flex: 0 0 auto;
+  font-size: var(--font-size-label);
+  padding: var(--space-xs) var(--space-sm);
+  min-height: var(--hit-min-height);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.agentpanel-suggestion:hover:not(:disabled) {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agentpanel-loading .spinner {
+    animation: none;
+  }
+}
+
+/* Narrow widths: the docked panel overlays the right edge as a floating column
+   rather than squeezing the editor below its readable prose width. */
+@media (max-width: 1280px) {
+  .agentpanel {
+    position: fixed;
+    top: var(--topbar-height);
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    box-shadow: var(--shadow-popover);
+  }
+}

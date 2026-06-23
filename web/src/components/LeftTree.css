@@ -1,0 +1,154 @@
+.lefttree {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Live filter input at the top of the file panel. */
+.lefttree-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  padding: 0 var(--space-sm);
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.lefttree-filter:focus-within {
+  border-color: var(--color-accent);
+}
+
+.lefttree-filter-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+}
+
+.lefttree-filter-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-label);
+}
+
+.lefttree-filter-input::placeholder {
+  color: var(--color-faint);
+}
+
+.lefttree-status {
+  padding: var(--space-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+}
+
+/* Blank nav space below the tree: a drop target for "move to root" and a
+   right-click surface for root-scoped create. Min-height gives a usable hit
+   area even when the tree is short. */
+.lefttree-root-drop {
+  min-height: var(--space-xl);
+  flex: 1 0 auto;
+  border-radius: var(--radius-sm);
+}
+
+/* Drag-over highlight, shared by folder rows and the root drop zone. */
+.lefttree-droptarget {
+  background: var(--color-tree-active-bg);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.navrow-page[draggable="true"] {
+  cursor: pointer;
+}
+
+.navrow-folder {
+  cursor: default;
+}
+
+/* Folder rows get the same hover affordance as page rows so hovering anywhere in
+   the tree gives feedback (the "feels like Obsidian" bar). */
+.navrow-folder:hover {
+  background: var(--color-tree-hover);
+}
+
+/* A draggable folder row hints it can be picked up to relocate its subtree. The
+   browser shows the native not-allowed cursor over an invalid drop target on its
+   own (we don't preventDefault those dragovers — UI-SPEC), so no extra rule is
+   needed for the invalid affordance; this only sets the resting grab hint. */
+.navrow-folder[draggable="true"] {
+  cursor: grab;
+}
+
+.navrow-folder[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.navrow-page {
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text);
+  font-family: var(--font-family-ui);
+  text-align: left;
+}
+
+/* Attachment leaf under a page: a download link, muted until hovered. */
+.navrow-attachment {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.navrow-attachment:hover {
+  background: var(--color-tree-hover);
+  color: var(--color-text);
+}
+
+.navrow-page:hover {
+  background: var(--color-tree-hover);
+}
+
+.navrow-active {
+  /* Soft horizontal accent wash (Obsidian/Linear), with a hairline accent edge
+     instead of a solid fill block. */
+  background: linear-gradient(
+    90deg,
+    var(--color-tree-active-bg),
+    var(--color-accent-soft)
+  );
+  box-shadow:
+    inset 2px 0 0 var(--color-accent),
+    inset 0 0 0 1px var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+.navrow-active .tree-icon {
+  color: var(--color-accent-2);
+}
+
+.tree-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--color-text-muted);
+  min-width: var(--space-md);
+}
+
+.tree-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+}
+
+.tree-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

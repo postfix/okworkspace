@@ -1,0 +1,25 @@
+.autosave-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-label);
+  min-height: var(--font-size-heading);
+}
+
+.autosave-muted {
+  color: var(--color-text-muted);
+}
+
+.autosave-saved {
+  color: var(--color-success);
+}
+
+.autosave-spinner {
+  animation: autosave-spin 1s linear infinite;
+}
+
+@keyframes autosave-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

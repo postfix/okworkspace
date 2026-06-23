@@ -1,0 +1,73 @@
+/*
+ * LivePreviewEditor surface styling. Token-var only (mirrors MarkdownProse.css /
+ * the tokens.css design contract) — no hard-coded hex/px so a future dark theme
+ * needs no edits here. The CM6 EditorView theme (web/src/lib/cm/theme.ts) handles
+ * the inner content typography; this file styles the host wrapper.
+ */
+.livepreview-editor {
+  min-height: var(--editor-min-height);
+  background: var(--color-bg);
+}
+
+.livepreview-editor .cm-editor {
+  min-height: var(--editor-min-height);
+}
+
+/*
+ * No focus ring around the editor surface itself — a full-bleed editor wrapped in
+ * a 2px accent outline reads as a stray "violet box/line" that tracks the content
+ * as it grows. The focus cue lives on the surrounding .pageeditor-surface border
+ * instead (a subtle accent border on :focus-within). CM6's own default outline is
+ * suppressed here.
+ */
+.livepreview-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+/*
+ * Centre the prose content column (the theme caps .cm-content at
+ * --prose-max-width; centring it mirrors read mode's centred `.markdown-prose`).
+ * Vertical rhythm for heading lines lives in the CM6 theme line decorations and
+ * is layout-neutral with respect to marker reveal (a heading line is a heading
+ * line whether or not its "# " marker shows), so neighbours never reflow.
+ */
+.livepreview-editor .cm-content {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/*
+ * Inline image widget (ImageWidget.toDOM → <img class="cm-md-image">). Constrain to
+ * the content column so a large image never overflows the editor; tokens only.
+ */
+.livepreview-editor .cm-md-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+/*
+ * Blocked-src fallback span (ImageWidget renders the RAW `![alt](src)` markdown as
+ * plain mono text when sanitizeImageSrc rejects the src — never a broken <img>).
+ */
+.livepreview-editor .cm-md-image-raw {
+  font-family: var(--font-family-mono);
+  color: var(--color-text);
+}
+
+/*
+ * GFM table widget (TableWidget.toDOM → <table class="cm-md-table">). Matches
+ * MarkdownProse.css table styling token-for-token (border-collapse, 1px border in
+ * --color-border, xs/sm cell padding) so Live mode renders a table identically to
+ * read mode and the server's Goldmark GFM.
+ */
+.livepreview-editor .cm-md-table {
+  border-collapse: collapse;
+  margin: var(--space-md) 0;
+}
+
+.livepreview-editor .cm-md-table th,
+.livepreview-editor .cm-md-table td {
+  border: 1px solid var(--color-border);
+  padding: var(--space-xs) var(--space-sm);
+}

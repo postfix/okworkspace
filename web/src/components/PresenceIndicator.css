@@ -1,0 +1,32 @@
+/* PresenceIndicator — the quiet "who else is editing" line in the editor toolbar
+   (COLL-01). Token-only: it mirrors AutosaveStatus's restraint (inline-flex,
+   Label size, muted color) and adds the single warning state for the transient
+   "Reconnecting…" SSE-drop. No hard-coded hex/px — every value is a token. */
+
+.presence-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-regular);
+  min-height: var(--font-size-heading);
+}
+
+/* Presence is ambient awareness — muted in every state except reconnecting. */
+.presence-muted {
+  color: var(--color-text-muted);
+}
+
+/* The transient SSE-drop state is the one warning-tinted presence state: degraded
+   awareness, NOT an error toast. */
+.presence-warning {
+  color: var(--color-warning);
+}
+
+/* Reduced motion: the Loader2 connecting glyph falls back to a static icon while
+   the "Connecting…" label remains. Mirrors the established .spinner suppression. */
+@media (prefers-reduced-motion: reduce) {
+  .presence-indicator .spinner {
+    animation: none;
+  }
+}

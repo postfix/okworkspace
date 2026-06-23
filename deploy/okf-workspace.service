@@ -1,0 +1,50 @@
+# OKF Workspace systemd unit (SPEC §20.4).
+#
+# Runs the single static binary as a dedicated NON-root user with a scoped data
+# directory. The LLM API key is supplied via the environment at runtime (never
+# baked into a config file or image, T-00.04-05) — set it in an EnvironmentFile
+# so it never appears in `systemctl show` for unprivileged users.
+#
+# Install:
+#   sudo useradd --system --home /var/lib/okf-workspace --shell /usr/sbin/nologin okf
+#   sudo install -m 0755 okf-workspace /usr/local/bin/okf-workspace
+#   sudo mkdir -p /etc/okf-workspace /var/lib/okf-workspace
+#   sudo cp config.example.yaml /etc/okf-workspace/config.yaml   # then edit
+#   sudo chown -R okf:okf /var/lib/okf-workspace
+#   sudo install -m 0600 -o root okf-workspace.env /etc/okf-workspace/okf-workspace.env  # OKF_LLM_API_KEY=...
+#   sudo cp okf-workspace.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now okf-workspace
+#
+# The one-time admin password is printed ONCE to the journal on first run:
+#   sudo journalctl -u okf-workspace | grep one_time_password
+
+[Unit]
+Description=OKF Workspace — self-hosted OKF-native wiki
+Documentation=https://github.com/postfix/okworkspace
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=okf
+Group=okf
+WorkingDirectory=/var/lib/okf-workspace
+ExecStart=/usr/local/bin/okf-workspace serve --config /etc/okf-workspace/config.yaml
+
+# LLM API key (and any other secrets) live here, mode 0600, root-owned.
+# api_key_env in config.yaml names the variable (default OKF_LLM_API_KEY).
+EnvironmentFile=-/etc/okf-workspace/okf-workspace.env
+
+Restart=always
+RestartSec=2
+
+# Hardening: the process needs only its data directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/okf-workspace
+# A git binary must be on PATH (LOCKED: shell-out git CLI).
+
+[Install]
+WantedBy=multi-user.target

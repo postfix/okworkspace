@@ -1,0 +1,48 @@
+/* SoftLockBanner — the warning banner shown when another session holds the page
+   lock (COLL-02). It composes the shared `.banner banner-warning` primitive
+   (warning border on --color-bg, NEVER a filled destructive block) and lays its
+   children out as a single flex row. Token-only: no hard-coded hex/px. */
+
+.softlock-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* The leading Lock / AlertTriangle / spinner glyph sits at warning hue (inherited
+   from .banner-warning's color) and does not shrink when the text wraps. */
+.softlock-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Lead clause ("{name} is editing this page.") is semibold so ownership is
+   scannable; the trailing body sentence stays regular weight (inherited). */
+.softlock-lead {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The text column takes the remaining width and may wrap at narrow widths; the
+   spacer then pushes "Force edit" to the row end (or below, when it wraps). */
+.softlock-text {
+  flex: 1 1 auto;
+}
+
+.softlock-spacer {
+  flex: 0 1 auto;
+}
+
+/* "Force edit" never shrinks below its label/hit size and stays right-aligned,
+   mirroring the existing "Reload page" placement. */
+.softlock-force {
+  flex-shrink: 0;
+}
+
+/* Reduced motion: the "Taking over…" spinner glyph falls back to a static icon
+   (the label still reads "Taking over…"), matching the established pattern. */
+@media (prefers-reduced-motion: reduce) {
+  .softlock-banner .spinner {
+    animation: none;
+  }
+}

@@ -1,0 +1,43 @@
+.login-screen {
+  min-height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: var(--space-3xl);
+  background: var(--color-surface);
+}
+
+.login-card {
+  width: 100%;
+  max-width: var(--login-card-width);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.login-wordmark {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-display);
+  text-align: center;
+}
+
+.login-subtitle {
+  margin: 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+}
+
+/* .field, .field-label, .input, .btn, .btn-primary, .spinner are shared
+ * primitives declared in styles/controls.css. */
+
+.login-error {
+  font-size: var(--font-size-label);
+  color: var(--color-destructive);
+}

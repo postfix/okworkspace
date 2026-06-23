@@ -1,0 +1,117 @@
+.admin {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.admin-back {
+  align-self: flex-start;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.admin-heading {
+  margin: 0;
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-display);
+}
+
+.admin-muted {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.admin-empty {
+  text-align: center;
+  margin-top: var(--space-2xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.admin-empty-heading {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+}
+
+.admin-otp {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.admin-otp-code {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-label);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+}
+
+.admin-otp-dismiss {
+  margin-left: auto;
+}
+
+.admin-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.admin-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.admin-section-heading {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+}
+
+.admin-section-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.status-active {
+  color: var(--color-text);
+}
+
+.status-inactive {
+  color: var(--color-text-muted);
+}
+
+.banner {
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.banner-success {
+  color: var(--color-text);
+  border: 1px solid var(--color-success);
+  background: var(--color-bg);
+}

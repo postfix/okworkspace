@@ -1,0 +1,114 @@
+.pageeditor {
+  /* The editor fills ALL available main-pane space — full width (no cap) AND
+     full height (the surface grows to fill), reflowing with the window. */
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* Top-right corner controls row (save state + Live/Source toggle + Save +
+   Read-view), right-aligned above the page. */
+.pageeditor-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.pageeditor-status {
+  color: var(--color-text-muted);
+}
+
+.pageeditor-frontmatter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.pageeditor-surface {
+  /* Grow to fill the leftover vertical space so the editor is full-height. */
+  flex: 1 1 auto;
+  min-height: var(--editor-min-height);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* CodeMirror fills the (now-growing) surface so the whole box is the editor. */
+.pageeditor-surface .cm-editor {
+  height: 100%;
+}
+
+/* Subtle focus cue: the surface border tints accent while editing (replaces the
+   old heavy accent outline ring around the editor). */
+.pageeditor-surface:focus-within {
+  border-color: var(--color-accent);
+}
+
+.pageeditor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+/* The active Live/Source toggle reads as pressed: accent icon tint. */
+.pageeditor-topbar .icon-btn[aria-pressed="true"] {
+  color: var(--color-accent);
+}
+
+.pageeditor-reload {
+  margin-left: var(--space-md);
+}
+
+/* Read-only-under-another's-lock (COLL-02). The editor surface is GENUINELY
+   read-only (LivePreviewEditor readOnly → no caret); this wash makes that
+   visible — a faint --color-surface fill + reduced text contrast so it reads
+   "not yours to type in," paired with the muted hint below. Token-only. */
+.pageeditor-readonly-hint {
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+.pageeditor-surface-readonly {
+  background: var(--color-surface);
+  opacity: 0.85;
+}
+
+/* Manual-merge reference pane (COLL-04). After "Manual merge" the dialog closes and
+   the server's version stays visible here for reference while you reconcile your
+   own body. A collapsible <details> (open by default) keeps it from crowding the
+   editor; token-only, mono body so the reference reads as content not chrome. */
+.pageeditor-merge-reference {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  background: var(--color-surface);
+}
+
+.pageeditor-merge-reference > summary {
+  cursor: pointer;
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.pageeditor-merge-reference-body {
+  margin: var(--space-sm) 0;
+  max-height: 40vh;
+  overflow: auto;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  white-space: pre-wrap;
+  color: var(--color-text);
+}
+
+.pageeditor-merge-reference-dismiss {
+  font-size: var(--font-size-label);
+}

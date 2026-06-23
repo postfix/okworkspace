@@ -30,3 +30,18 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# --- OKF Workspace ---
+# Runtime config (copy config.example.yaml -> config.yaml)
+config.yaml
+# Local data directory (SQLite app.db, repo, logs, tmp)
+/data/
+# Built binary
+/okf-workspace
+# Frontend deps + TS incremental build cache
+web/node_modules/
+web/*.tsbuildinfo
+# Built SPA embed target (internal/web/dist is committed only via .gitkeep;
+# Go's //go:embed cannot traverse "..", so vite builds here)
+internal/web/dist/*
+!internal/web/dist/.gitkeep
