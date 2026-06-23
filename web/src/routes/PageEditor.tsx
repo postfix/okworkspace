@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { BookOpen, Code, Eye, Save } from "lucide-react";
 
 import {
   acquireLock,
@@ -595,27 +596,44 @@ export default function PageEditor() {
             tabs are distinguishable. The component owns its own subscribe/
             unsubscribe lifecycle; PageEditor only mounts it. */}
         <PresenceIndicator path={path} conn={connId.current} />
-        <div
-          className="pageeditor-mode"
-          role="group"
-          aria-label="Editor mode"
-          title="Toggle live preview (⌘E / Ctrl+E)"
-        >
+        {/* Corner icon cluster (Obsidian-style): save state, the Live/Source
+            single-toggle, an explicit Save, and the switch-to-reading-view book.
+            All icon-only with title tooltips; the Save keeps its "Save page"
+            accessible name. */}
+        <div className="pageeditor-toolbar-right">
+          <AutosaveStatus state={saveState} />
           <button
             type="button"
-            className="btn btn-secondary pageeditor-mode-btn"
-            aria-pressed={mode === "live"}
-            onClick={() => setMode("live")}
+            className="btn btn-ghost icon-btn"
+            aria-pressed={mode === "source"}
+            aria-label={mode === "live" ? "Switch to source" : "Switch to live preview"}
+            title={mode === "live" ? "Source · ⌘E" : "Live preview · ⌘E"}
+            onClick={() => setMode(mode === "live" ? "source" : "live")}
           >
-            Live
+            {mode === "live" ? (
+              <Code size={18} aria-hidden="true" />
+            ) : (
+              <Eye size={18} aria-hidden="true" />
+            )}
           </button>
           <button
             type="button"
-            className="btn btn-secondary pageeditor-mode-btn"
-            aria-pressed={mode === "source"}
-            onClick={() => setMode("source")}
+            className="btn btn-ghost icon-btn"
+            onClick={onSaveClick}
+            disabled={readOnly}
+            aria-label="Save page"
+            title="Save"
           >
-            Source
+            <Save size={18} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn"
+            onClick={() => navigate(`/app/page/${path}`)}
+            aria-label="Switch to reading view"
+            title="Read view"
+          >
+            <BookOpen size={18} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -641,17 +659,6 @@ export default function PageEditor() {
         />
       </div>
 
-      <div className="pageeditor-actions">
-        <AutosaveStatus state={saveState} />
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={onSaveClick}
-          disabled={readOnly}
-        >
-          Save page
-        </button>
-      </div>
     </div>
   );
 }

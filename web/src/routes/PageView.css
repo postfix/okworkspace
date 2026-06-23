@@ -1,5 +1,8 @@
 .pageview {
   max-width: var(--prose-max-width);
+  /* Center the reading column in the main pane (balanced whether or not the
+     assistant panel is open). */
+  margin-inline: auto;
 }
 
 .pageview-header {

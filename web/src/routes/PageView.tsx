@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Paperclip, Pencil } from "lucide-react";
 
 import { getPage, me, type Me, type Page } from "../api/client";
 import { okfTitle } from "../lib/frontmatter";
@@ -26,6 +26,8 @@ export default function PageView() {
   const navigate = useNavigate();
   const path = params["*"] ?? "";
   const visit = useRecent((s) => s.visit);
+  // Ref to the attachments block so the header paperclip can jump to it.
+  const attachmentsRef = useRef<HTMLDivElement>(null);
 
   const { data: meData } = useQuery<Me>({ queryKey: ["me"], queryFn: me });
   const canEdit = meData?.role === "editor" || meData?.role === "admin";
@@ -84,13 +86,28 @@ export default function PageView() {
           {canEdit && (
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-ghost icon-btn"
               onClick={() => navigate(`/app/edit/${path}`)}
+              aria-label="Edit page"
+              title="Edit"
             >
-              <Pencil size={16} aria-hidden="true" />
-              <span>Edit page</span>
+              <Pencil size={18} aria-hidden="true" />
             </button>
           )}
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn"
+            onClick={() =>
+              attachmentsRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              })
+            }
+            aria-label="Attachments"
+            title="Attachments"
+          >
+            <Paperclip size={18} aria-hidden="true" />
+          </button>
           <PageActionMenu
             canEdit={canEdit}
             onEdit={() => navigate(`/app/edit/${path}`)}
@@ -112,12 +129,14 @@ export default function PageView() {
           readOnly
         />
       )}
-      <AttachmentsSection
-        pagePath={path}
-        canEdit={canEdit}
-        maxUploadMB={100}
-        allowedTypes={["pdf", "docx", "txt", "png", "jpg", "svg"]}
-      />
+      <div ref={attachmentsRef}>
+        <AttachmentsSection
+          pagePath={path}
+          canEdit={canEdit}
+          maxUploadMB={100}
+          allowedTypes={["pdf", "docx", "txt", "png", "jpg", "svg"]}
+        />
+      </div>
       <RenameModal
         open={renameOpen}
         path={path}

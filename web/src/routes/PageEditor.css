@@ -1,5 +1,9 @@
 .pageeditor {
-  max-width: var(--prose-max-width);
+  /* The editor fills the available main-pane width (a wide editing surface uses
+     the screen instead of floating as a narrow column), capped only so it never
+     gets uncomfortably long on an ultra-wide monitor. */
+  width: 100%;
+  max-width: 1400px;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -29,26 +33,18 @@
   margin-bottom: var(--space-sm);
 }
 
-.pageeditor-mode {
+/* Right-aligned corner cluster: autosave status + Live/Source toggle + Save +
+   Read-view, all icon buttons (Obsidian-style). */
+.pageeditor-toolbar-right {
   display: inline-flex;
-  margin-left: auto;
-  gap: var(--space-xs);
-}
-
-/* The active segment reads as pressed via aria-pressed: accent text + a 2px
-   accent underline (NOT a full accent fill — UI-SPEC reserves accent fill for
-   the single "Save page" CTA). */
-.pageeditor-mode-btn[aria-pressed="true"] {
-  color: var(--color-accent);
-  font-weight: var(--font-weight-semibold);
-  border-bottom: 2px solid var(--color-accent);
-}
-
-.pageeditor-actions {
-  display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-md);
+  margin-left: auto;
+  gap: var(--space-sm);
+}
+
+/* The active Live/Source toggle reads as pressed: accent icon tint. */
+.pageeditor-toolbar-right .icon-btn[aria-pressed="true"] {
+  color: var(--color-accent);
 }
 
 .pageeditor-reload {
