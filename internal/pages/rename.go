@@ -33,6 +33,11 @@ var ErrFolderExists = errors.New("folder target already exists")
 // okf path (okf.RewriteLinks on the opaque body, re-emitted via okf.Emit) so no
 // unrelated Markdown bytes are ever corrupted.
 func (s *Service) Rename(ctx context.Context, oldPath, newTitle, user string) (string, error) {
+	// Serialize against all namespace mutations so the source-exists + unique-target
+	// check is atomic with the commit (no concurrent rename can duplicate the page or
+	// resolve the same target).
+	defer s.lockMutation()()
+
 	newTitle = strings.TrimSpace(newTitle)
 	if newTitle == "" {
 		return "", ErrTitleRequired
@@ -61,6 +66,10 @@ func (s *Service) Rename(ctx context.Context, oldPath, newTitle, user string) (s
 // rewritten across the workspace and committed atomically with the move (D-07);
 // history stays continuous via git rename detection. Returns the new path.
 func (s *Service) Move(ctx context.Context, oldPath, newParentDir, user string) (string, error) {
+	// Serialize against all namespace mutations (see lockMutation): the
+	// source-exists + unique-destination check must be atomic with the commit.
+	defer s.lockMutation()()
+
 	exists, err := s.repo.Exists(oldPath)
 	if err != nil {
 		return "", err
@@ -98,6 +107,10 @@ func (s *Service) Move(ctx context.Context, oldPath, newParentDir, user string) 
 // exists (folders never auto-suffix or merge — TREE-06). dir not existing returns
 // ErrPageNotFound.
 func (s *Service) RenameFolder(ctx context.Context, dir, newName, user string) (string, error) {
+	// Serialize against all namespace mutations (see lockMutation): a concurrent
+	// folder rename/move on the same subtree must not duplicate it.
+	defer s.lockMutation()()
+
 	dir = strings.Trim(strings.TrimSpace(dir), "/")
 	exists, err := s.repo.Exists(dir + "/index.md")
 	if err != nil {
@@ -134,6 +147,10 @@ func (s *Service) RenameFolder(ctx context.Context, dir, newName, user string) (
 // folder dir. Rejects with ErrFolderExists if the destination dir already exists
 // (TREE-06). dir not existing returns ErrPageNotFound.
 func (s *Service) MoveFolder(ctx context.Context, dir, newParentDir, user string) (string, error) {
+	// Serialize against all namespace mutations (see lockMutation): a concurrent
+	// folder move/rename on the same subtree must not duplicate it.
+	defer s.lockMutation()()
+
 	dir = strings.Trim(strings.TrimSpace(dir), "/")
 	exists, err := s.repo.Exists(dir + "/index.md")
 	if err != nil {

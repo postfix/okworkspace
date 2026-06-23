@@ -50,6 +50,11 @@ type TrashEntry struct {
 // path). The trash directory is created defensively on first delete (RESEARCH
 // A1). ErrPageNotFound is returned when the page does not exist.
 func (s *Service) Delete(ctx context.Context, pagePath, user string) error {
+	// Serialize against all namespace mutations (see lockMutation) so a concurrent
+	// double-delete sees the page already trashed and 404s on the second attempt
+	// instead of writing a duplicate trash row.
+	defer s.lockMutation()()
+
 	// A solo per-page delete stores delete_group_id = NULL (empty group id binds as
 	// SQL NULL via deleteWithGroup), so the per-page row is byte-identical to before
 	// the grouped-delete refactor.
@@ -151,6 +156,11 @@ func (s *Service) deleteWithGroup(ctx context.Context, pagePath, user, groupID s
 // recoverable by the group id (mirrors ReconcileTrash WR-01). Returns
 // ErrPageNotFound when the folder has no pages.
 func (s *Service) DeleteFolder(ctx context.Context, dir, user string) error {
+	// Serialize against all namespace mutations (see lockMutation): the descendant
+	// scan + grouped trash write must be atomic against a concurrent rename/move/
+	// delete touching the same subtree.
+	defer s.lockMutation()()
+
 	dir = strings.Trim(strings.TrimSpace(dir), "/")
 	pages, err := s.descendantPages(dir)
 	if err != nil {
@@ -323,6 +333,18 @@ func (s *Service) ListTrash(ctx context.Context) ([]TrashEntry, error) {
 // suffixed with " (restored)" and its filename re-slugged, and the suffixed path
 // is returned. Returns ErrTrashNotFound when no row matches id.
 func (s *Service) Restore(ctx context.Context, id int64, user string) (string, error) {
+	// Serialize against all namespace mutations (see lockMutation): the collision
+	// check + restore-commit must be atomic so a double-restore of the same row
+	// cannot write the page twice. RestoreGroup holds this same lock and calls the
+	// UNLOCKED restoreInner in a loop, so it must not call Restore (self-deadlock).
+	defer s.lockMutation()()
+	return s.restoreInner(ctx, id, user)
+}
+
+// restoreInner is the unlocked restore body shared by Restore (which takes the
+// mutation lock) and RestoreGroup (which already holds it). It must never acquire
+// the mutation lock itself.
+func (s *Service) restoreInner(ctx context.Context, id int64, user string) (string, error) {
 	var originalPath, trashPath string
 	err := s.db.QueryRowContext(ctx,
 		`SELECT original_path, trash_path FROM trash WHERE id = ?`, id).
@@ -393,6 +415,11 @@ func (s *Service) Restore(ctx context.Context, id int64, user string) (string, e
 // restored paths (so the handler can surface a collision notice) and
 // ErrTrashNotFound when no row matches groupID.
 func (s *Service) RestoreGroup(ctx context.Context, groupID, user string) ([]string, error) {
+	// Serialize against all namespace mutations (see lockMutation). Held across the
+	// whole group; the loop below calls the UNLOCKED restoreInner, not Restore, so
+	// this non-reentrant lock is never re-acquired.
+	defer s.lockMutation()()
+
 	if strings.TrimSpace(groupID) == "" {
 		return nil, ErrTrashNotFound
 	}
@@ -439,9 +466,10 @@ func (s *Service) RestoreGroup(ctx context.Context, groupID, user string) ([]str
 
 	restored := make([]string, 0, len(members))
 	for _, m := range members {
-		// Reuse the EXISTING per-page Restore: it auto-suffixes on a live-page
-		// collision (restoredAlternative) so a live page is never clobbered, per page.
-		path, err := s.Restore(ctx, m.id, user)
+		// Reuse the unlocked restore core: it auto-suffixes on a live-page collision
+		// (restoredAlternative) so a live page is never clobbered, per page. Must be
+		// restoreInner (NOT Restore) — we already hold the mutation lock.
+		path, err := s.restoreInner(ctx, m.id, user)
 		if err != nil {
 			// A mid-group failure leaves the rest of the group still restorable (the
 			// remaining rows survive); surface the error with what was restored so far.

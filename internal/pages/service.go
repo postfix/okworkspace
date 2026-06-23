@@ -82,6 +82,14 @@ type Service struct {
 	// now is the clock used for scaffolded/repaired timestamps. Overridable in
 	// tests for deterministic frontmatter.
 	now func() time.Time
+
+	// keyed serializes same-target mutations so the precondition check (revision
+	// for Save, uniqueness/existence for Create/CreateFolder) is atomic with the
+	// commit. Without it, concurrent requests can both pass the check before either
+	// commits, producing a silent lost update or path clobber (the single-writer
+	// commit queue serializes git, but not the service-level decision). Held by
+	// value so the zero value is usable; *Service is never copied (pointer methods).
+	keyed keyedMutex
 }
 
 // NewService constructs the page service. pushOnCommit is config.Git.PushOnCommit
@@ -107,6 +115,17 @@ type Page struct {
 	Revision    string `json:"revision"`
 }
 
+// lockMutation serializes every namespace-changing mutation (create, rename,
+// move, delete, restore — for pages AND folders) on one global key, so each op's
+// precondition check (uniqueness, existence, source-present) is atomic with its
+// commit. The git layer is already single-writer; this just extends that
+// serialization to cover the check, closing the structural TOCTOU races where two
+// concurrent ops both pass their check and the second silently duplicates or
+// clobbers. Content edits (Save) deliberately use a per-page key instead so
+// independent pages still save concurrently. The returned func MUST be called once
+// (defer it).
+func (s *Service) lockMutation() func() { return s.keyed.lock("mutation") }
+
 // Create slugifies title into a filename inside folder (D-12), scaffolds valid
 // required frontmatter (D-13), and enqueues a single CommitJob that writes the
 // new .md and cuts a hidden commit. It returns the repo-relative path of the new
@@ -117,6 +136,12 @@ func (s *Service) Create(ctx context.Context, folder, title, user string) (strin
 	if title == "" {
 		return "", ErrTitleRequired
 	}
+
+	// Serialize against all namespace mutations so uniquePath's existence check is
+	// atomic with the commit: two creates of the same title (or a create racing a
+	// rename/restore onto the same path) resolve to distinct paths (foo.md, foo-2.md)
+	// instead of both picking foo.md and one silently clobbering the other.
+	defer s.lockMutation()()
 
 	path, err := s.uniquePath(folder, title)
 	if err != nil {
@@ -184,6 +209,14 @@ func (s *Service) Revision(ctx context.Context, path string) (string, error) {
 // incoming bytes, repairs any missing required frontmatter (PAGE-09, byte-safe
 // via okf.Repair), and enqueues a single edit CommitJob.
 func (s *Service) Save(ctx context.Context, path, body, frontmatter, baseRevision, user string) error {
+	// Serialize concurrent saves to the SAME page so the revision check is atomic
+	// with the commit: a second writer cannot read the stale revision until the
+	// first writer's commit has landed, at which point its base_revision no longer
+	// matches and it correctly 409s instead of silently overwriting (the COLL-04
+	// no-lost-update floor under true concurrency).
+	unlock := s.keyed.lock("page:" + path)
+	defer unlock()
+
 	exists, err := s.repo.Exists(path)
 	if err != nil {
 		return err
@@ -239,6 +272,10 @@ func (s *Service) CreateFolder(ctx context.Context, parent, name string, user st
 		dir = strings.TrimSuffix(parent, "/") + "/" + dir
 	}
 	indexPath := dir + "/index.md"
+
+	// Serialize against all namespace mutations so a concurrent folder create cannot
+	// clobber a page (or another folder's index.md) at a colliding path.
+	defer s.lockMutation()()
 
 	doc := &okf.Doc{}
 	okf.Repair(doc, s.now())

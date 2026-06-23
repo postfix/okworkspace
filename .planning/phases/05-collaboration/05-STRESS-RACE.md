@@ -2,8 +2,9 @@
 title: Phase 05 Collaboration — concurrency / race-condition stress test
 date: 2026-06-23T19:57:39Z
 method: 6 real Playwright browser sessions (distinct accounts) + focused API repro
-harness: .smtc-cache/uat_stress.mjs, .smtc-cache/repro_lostupdate.mjs
-verdict: 2 confirmed lost-update races (silent data loss); no crashes, state stays coherent
+harness: .smtc-cache/uat_stress.mjs, .smtc-cache/uat_stress2.mjs, .smtc-cache/repro_lostupdate.mjs
+verdict: 6 TOCTOU races found (save, create, +4 structural) — ALL FIXED & retested green
+status: RESOLVED 2026-06-23 (per-page + global structural mutex in pages.Service)
 ---
 
 ## Scope & method
@@ -84,3 +85,43 @@ folder-move-vs-edit, and copy-vs-delete all resolved to coherent states; git rep
 tree, and search index were all intact and responsive afterward. The races are confined to
 the two TOCTOU windows above and require sub-second concurrent timing (low probability at
 ~5 users, but a real correctness hole against the COLL-04 no-data-loss promise).
+
+---
+
+## Resolution (2026-06-23)
+
+Root cause for ALL races was one TOCTOU pattern: `pages.Service` ran its precondition
+check (revision for Save; uniqueness/existence for Create; source-present for
+rename/move/delete/restore) and THEN enqueued the commit, with no lock spanning
+check→commit. The git layer is single-writer, but two requests both passed the check
+before either committed.
+
+### Fix — `internal/pages/` (`pathlock.go` + service.go/rename.go/trash.go)
+- Added a small reference-counted `keyedMutex` (`pathlock.go`).
+- **Save**: takes a per-page key `"page:<path>"` across the revision check → commit, so
+  independent pages still save concurrently but same-page saves serialize → the 2nd
+  writer reads the now-current revision and correctly 409s.
+- **All namespace mutations** (Create, CreateFolder, Rename, Move, RenameFolder,
+  MoveFolder, Delete, DeleteFolder, Restore, RestoreGroup) take ONE global key
+  `"mutation"` across check → commit. This is effectively free: commits were already
+  globally serialized by the single-writer git mutex; we just extend that to the check.
+- Reentrancy: `RestoreGroup` (which loops `Restore`) and `Restore` were split so both
+  call an unlocked `restoreInner`; only the public entry points take the lock → no
+  self-deadlock.
+
+### Expanded coverage added (structural races R1–R7)
+Beyond the original save/create, a second suite (`uat_stress2.mjs`) covers: double
+rename of one page (R1), two pages → one title (R2), double delete (R3), rename-vs-delete
+(R4), move-into-deleting-folder (R5), folder-rename-vs-folder-move (R6), double restore
+(R7) — each asserting tree integrity (no dup/ghost/clobber, no 5xx).
+
+### Retest — all green
+| Suite | Result |
+|-------|--------|
+| `repro_lostupdate.mjs` (save + create) | 1 winner / 2×409; distinct create paths — 3/3 runs |
+| `uat_stress2.mjs` (R1–R7 structural) | 23/23 invariants, 0 × 5xx |
+| `uat_stress.mjs` (S1–S8 mixed storm) | 18/18 invariants, 0 × 5xx |
+| Go regression tests (`-race`) | `TestSave_ConcurrentSameBaseRevision_OneWinner`, `TestCreate_ConcurrentSameTitle_DistinctPaths`, `TestRename_ConcurrentSamePage_NoDuplicate` — PASS |
+
+Durable Go tests live in `internal/pages/concurrency_test.go` (real single-writer worker
+drain via `CommitHandler`, start-barrier goroutines) so the fix can't silently regress.
