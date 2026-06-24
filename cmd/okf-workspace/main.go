@@ -384,6 +384,7 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		Attachments: attachSvc,
 		Search:      searchIdx,
 		SearchJobs:  worker,
+		GraphJobs:   worker,
 		Agent:       agentSvc,
 		Locks:       lockStore,
 	})

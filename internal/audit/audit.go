@@ -51,6 +51,7 @@ const (
 	ActionAttachReplace     = "attach_replace"
 	ActionAttachDelete      = "attach_delete"
 	ActionSearchReindex     = "search_reindex"
+	ActionGraphReindex      = "graph_reindex"
 
 	// Agent actions (Phase 4). Recorded non-fatally; callers MUST NOT place the
 	// prompt's secret-shaped content or the LLM API key in Event.Detail.

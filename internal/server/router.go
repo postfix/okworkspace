@@ -49,6 +49,11 @@ type Deps struct {
 	// SearchJobs enqueues the rebuild job for POST /admin/search/reindex
 	// (fire-and-forget). Optional; when nil reindex returns a 500.
 	SearchJobs searchEnqueuer
+	// GraphJobs enqueues the from-files rebuild job for POST /admin/graph/reindex
+	// (fire-and-forget). Optional; when nil the graph reindex returns a 500. In
+	// main.go this is the SAME single worker passed as SearchJobs (the KindGraph
+	// handler is registered on it), not a second store/worker.
+	GraphJobs graphEnqueuer
 	// Agent is the Eino agent service backing POST /agent/chat (Ask). Optional;
 	// when nil the route returns a 500. When constructed-but-disabled (cfg.Agent.
 	// Enabled false) the handler returns a structured "agent off" error.
@@ -81,6 +86,7 @@ func New(deps Deps) (http.Handler, error) {
 		attachments: deps.Attachments,
 		search:      deps.Search,
 		searchJobs:  deps.SearchJobs,
+		graphJobs:   deps.GraphJobs,
 		agent:       deps.Agent,
 		locks:       deps.Locks,
 	}
@@ -229,6 +235,11 @@ func New(deps Deps) (http.Handler, error) {
 				// Rebuild the search index from files — admin-only operational
 				// action (T-03-07), already behind RequireRole(admin) + nosurf CSRF.
 				admin.Post("/admin/search/reindex", h.handleReindex)
+				// Rebuild the derived link/tag graph from files — admin-only
+				// operational action (LINK-03), inheriting the SAME RequireRole(admin)
+				// gate + nosurf CSRF; RBAC is read from the session role, never client
+				// input. Enqueues a from-files rebuild fire-and-forget (202).
+				admin.Post("/admin/graph/reindex", h.handleGraphReindex)
 			})
 		})
 	})

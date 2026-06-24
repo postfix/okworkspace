@@ -58,6 +58,9 @@ type authHandlers struct {
 	// searchJobs enqueues the rebuild job for the admin reindex (fire-and-forget).
 	// Optional: when nil reindex returns a 500.
 	searchJobs searchEnqueuer
+	// graphJobs enqueues the from-files rebuild job for the admin graph reindex
+	// (fire-and-forget). Optional: when nil the graph reindex returns a 500.
+	graphJobs graphEnqueuer
 	// agent is the Eino agent service backing POST /agent/chat (Ask). Optional:
 	// when nil the handler returns a 500; when constructed-but-disabled the
 	// handler returns a structured "agent off" error rather than hanging.
