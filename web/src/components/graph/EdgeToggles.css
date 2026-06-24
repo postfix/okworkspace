@@ -1,0 +1,35 @@
+/* EdgeToggles (GRAPH-04) — the Links / Backlinks / Shared tags chip cluster.
+   Clones the .agentpanel-suggestion ghost-chip pattern: OFF uses --color-border,
+   ON uses --color-accent-soft bg + --color-accent-border (mirroring the
+   .agentpanel-suggestion:hover treatment) so the active edge type reads as the
+   reserved accent. Token-only — no hard-coded color/px (min-height is the shared
+   --hit-min-height interactive target). */
+.edgetoggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.edgetoggle-chip {
+  flex: 0 0 auto;
+  font-size: var(--font-size-label);
+  padding: var(--space-xs) var(--space-sm);
+  min-height: var(--hit-min-height);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-ui);
+  cursor: pointer;
+}
+
+.edgetoggle-chip:hover {
+  border-color: var(--color-accent-border);
+  color: var(--color-text);
+}
+
+.edgetoggle-chip-on {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
