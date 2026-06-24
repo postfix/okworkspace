@@ -129,7 +129,10 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
   3. Approvals from the queue route through the same byte-stable frontmatter apply path as per-page tagging, committed in batches (not one commit per page)
   4. The sweep is resumable and never bypasses human approval — killing and restarting the worker does not auto-write tags
 
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 12-01-PLAN.md — KindTagSuggest job + tag_suggestions staging table (migration 0010) + admin sweep-start & review-queue read endpoints; writes nothing, go/no-go safety gate (TAG-05) [wave 1]
+- [ ] 12-02-PLAN.md — batched single-writer tag apply (one commit, stale-page 409s individually) + admin batched approve endpoint, server re-validates per page (TAG-06) [wave 2]
+- [ ] 12-03-PLAN.md — admin sweep-start control + lazy /app/tag-review route + nav entry + TagReviewView (backlog, reuse TagSuggestList, batched Apply approved, states) (TAG-05, TAG-06) [wave 3]
 **UI hint**: yes
 
 ## Progress
