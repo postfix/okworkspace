@@ -66,20 +66,36 @@ type BacklinkEntry struct {
 // tagNodeID namespaces a tag id so it can never collide with a page path.
 func tagNodeID(tag string) string { return "tag:" + tag }
 
-// GraphData returns the whole derived graph: every page node (label = its title)
-// plus every surviving tag node, the page->page link edges, and the page->tag
-// membership edges. It is built ONLY from the page_links/page_tags cache tables
-// (no .md body reads in the request path; titles are the sole file touch, via the
-// SEC-01 resolver). Popular tags are excluded per the cap above.
+// GraphData returns the whole derived graph: every live page node (label = its
+// title) plus every surviving tag node, the page->page link edges, and the
+// page->tag membership edges. The page-node set is the UNION of every live page
+// on disk (enumerated from the repo Tree with the SAME skip rules as
+// RebuildGraph — dirs, non-.md, trashed) and every page referenced by the
+// page_links/page_tags cache tables (belt-and-suspenders). Including the live
+// set guarantees ORPHAN pages (no links, no tags) still appear as nodes —
+// without it a page that is never a link src/dst and carries no tag is invisible
+// (the Phase-9 "returns ALL pages as nodes" criterion / Phase-10 GRAPH-02
+// orphan-visibility dependency). Edges and tag nodes are unchanged: still built
+// ONLY from the cache tables (no .md body reads in the request path; titles are
+// the sole file touch, via the SEC-01 resolver), and popular tags are excluded
+// per the cap above. The live walk reads no bodies — only path enumeration.
 func (s *Store) GraphData(ctx context.Context) (GraphData, error) {
 	g := GraphData{Nodes: []GraphNode{}, Edges: []GraphEdge{}}
 	if s.db == nil {
 		return g, nil
 	}
 
+	// Cache-referenced pages (any link src/dst, any tagged page).
 	pageSet, err := s.allPages(ctx)
 	if err != nil {
 		return g, err
+	}
+	// Union in every live page on disk so orphans (no links, no tags) are nodes.
+	// If the repo is not wired (nil) we fall back to the cache-derived set rather
+	// than erroring — the server path wires the repo (main.go SetRepo), so
+	// production always returns all live pages.
+	for p := range s.livePages() {
+		pageSet[p] = struct{}{}
 	}
 	for _, p := range sortedKeys(pageSet) {
 		g.Nodes = append(g.Nodes, GraphNode{ID: p, Label: s.titleFor(p), Type: "page"})
@@ -214,6 +230,32 @@ func (s *Store) allPages(ctx context.Context) (map[string]struct{}, error) {
 		_ = rows.Close()
 	}
 	return set, nil
+}
+
+// livePages enumerates every live page on disk from the repo Tree, applying the
+// SAME skip rules as RebuildGraph (skip directories, non-.md files, and anything
+// under the trash prefix). It reads NO bodies — only path enumeration — so it
+// preserves the lean request-path invariant (titles remain the sole file touch,
+// via titleFor). A nil repo (no-repo harness) or a Tree() error returns an empty
+// set so GraphData degrades to the cache-derived node set rather than erroring;
+// the server path wires the repo (main.go SetRepo) so production enumerates all
+// live pages.
+func (s *Store) livePages() map[string]struct{} {
+	live := map[string]struct{}{}
+	if s.repo == nil {
+		return live
+	}
+	items, err := s.repo.Tree()
+	if err != nil {
+		return live
+	}
+	for _, it := range items {
+		if it.IsDir || isTrashed(it.Path) || !strings.HasSuffix(it.Path, ".md") {
+			continue
+		}
+		live[it.Path] = struct{}{}
+	}
+	return live
 }
 
 // linkEdges returns all page->page link edges, optionally restricted to a page

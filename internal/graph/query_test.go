@@ -103,6 +103,41 @@ func TestGraphData_BipartiteLeanShape(t *testing.T) {
 	}
 }
 
+// TestGraphData_OrphanPageIsNode: a page with NO links and NO tags must still
+// appear as a page node in the GLOBAL graph. Before the gap-closure fix the node
+// set was built only from page_links/page_tags, so an orphan was invisible —
+// breaking the Phase-9 "returns ALL pages as nodes" criterion and Phase-10
+// GRAPH-02 orphan-visibility. The fix unions the live-on-disk page set (repo
+// Tree) into the node set, so the orphan appears with its title label.
+func TestGraphData_OrphanPageIsNode(t *testing.T) {
+	h := newHarness(t)
+	// linked pair (a->b) plus a true orphan with no links and no tags.
+	h.writePage(t, "a.md", "Alpha", nil, "see [b](b.md)")
+	h.writePage(t, "b.md", "Bravo", nil, "x")
+	h.writePage(t, "orphan.md", "Orphan", nil, "no links and no tags")
+	h.rebuild(t)
+
+	g, err := h.st.GraphData(context.Background())
+	if err != nil {
+		t.Fatalf("GraphData: %v", err)
+	}
+
+	// All three live pages must be nodes — including the orphan.
+	if got, want := nodeIDsByType(g, "page"), []string{"a.md", "b.md", "orphan.md"}; !equalSlices(got, want) {
+		t.Fatalf("page nodes = %v, want %v (orphan must be a node)", got, want)
+	}
+	// The orphan node carries its frontmatter title as the label.
+	if lbl, ok := nodeLabel(g, "orphan.md"); !ok || lbl != "Orphan" {
+		t.Fatalf("orphan.md node label = %q (present=%v), want Orphan", lbl, ok)
+	}
+	// The orphan participates in no edges (still lean / unchanged edge logic).
+	for _, e := range g.Edges {
+		if e.Source == "orphan.md" || e.Target == "orphan.md" {
+			t.Fatalf("orphan.md must have no edges, found %v", e)
+		}
+	}
+}
+
 // TestGraphData_PopularTagCap: 10 pages, "common" on 9 (> 25%), "rare" on 2.
 // The common tag node and its edges are excluded; rare survives.
 func TestGraphData_PopularTagCap(t *testing.T) {

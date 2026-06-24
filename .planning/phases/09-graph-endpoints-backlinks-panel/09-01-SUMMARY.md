@@ -133,6 +133,32 @@ All are any-authed reads; tag node ids are namespaced `tag:<name>`.
 
 All 3 created files + 4 modified files exist; all 3 task commits (`d603be1`, `8f54285`, `456ac0e`) are present in `git log`.
 
+## Gap Closure (2026-06-24)
+
+**Gap (live verification):** `GET /api/v1/graph` omitted ORPHAN pages. `GraphData`'s
+node set was built only from `page_links` (src+dst) and `page_tags`, so a page with
+no links and no tags never appeared as a node. Live proof: 127 `.md` files on disk
+but the endpoint returned only 2 nodes (the single linked pair). This broke the
+Phase-9 "returns ALL pages as nodes" criterion and Phase-10 GRAPH-02 orphan visibility.
+
+**Fix (`internal/graph/query.go`):** `GraphData`'s page-node set is now the UNION of
+(a) every live page on disk — enumerated from the repo Tree via the new `livePages()`
+helper using the SAME skip rules as `RebuildGraph` (skip dirs, non-`.md`, trashed) —
+and (b) every page referenced by the cache tables (belt-and-suspenders). `livePages()`
+reads NO bodies (path enumeration only), preserving the lean request-path invariant
+(titles remain the sole file touch). A nil repo or `Tree()` error degrades gracefully
+to the cache-derived set; the server path wires the repo (`main.go` `SetRepo`), so
+production returns all live pages. `Neighborhood` (anchor traversal) and `Backlinks`
+are unchanged; the popular-tag cap and lean payload are intact.
+
+**Test:** added `TestGraphData_OrphanPageIsNode` (`internal/graph/query_test.go`) —
+seeds a linked pair plus a true orphan (no links, no tags) and asserts the orphan
+appears as a `type:"page"` node with its title label and zero edges.
+
+**Verification (actually run):**
+- `CGO_ENABLED=0 go build ./...` → exit 0
+- `go test ./internal/graph/ ./internal/server/` → both `ok` (incl. new orphan test)
+
 ---
 *Phase: 09-graph-endpoints-backlinks-panel*
 *Completed: 2026-06-24*
