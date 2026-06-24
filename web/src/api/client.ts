@@ -923,6 +923,62 @@ export async function applyPatch(payload: {
   await mutate<void>("/api/v1/agent/apply-patch", payload);
 }
 
+// --- Per-page tag suggestion: suggest (read) + apply (write) (TAG-01/TAG-02) ---
+//
+// These mirror the single-shot agent modes above: suggestTags is an awaited
+// read-side POST (capped, vocab-biased suggestions produced server-side; it NEVER
+// writes); applyTags is the consequential editor+CSRF write that re-uses the same
+// optimistic-concurrency floor as applyPatch. The server is authoritative on both
+// sides — it caps/normalizes the suggestions and RE-validates the apply list (the
+// client's checked set is never trusted verbatim).
+
+// TagSuggestion is one suggested tag plus its server-computed existing-vs-new flag.
+// `existing` is true when the tag already appears in the workspace vocabulary; a
+// false value marks an invented tag the approval UI badges "new" and defaults
+// UNCHECKED (the user opts in to new vocabulary). Tags render as React text
+// children only — NEVER dangerouslySetInnerHTML (the locked stored-XSS guard).
+export interface TagSuggestion {
+  tag: string;
+  existing: boolean;
+}
+
+// SuggestTagsResult mirrors POST /agent/suggest-tags exactly: the capped
+// suggestions + the page's base_revision captured at suggest time. The approval
+// surface echoes base_revision back to applyTags so a moved revision 409s instead
+// of clobbering a concurrent edit.
+export interface SuggestTagsResult {
+  suggestions: TagSuggestion[];
+  base_revision: string;
+}
+
+// suggestTags asks the assistant to suggest tags for a page (TAG-01, any-authed
+// read server-side). It returns the capped, vocab-biased suggestions + the base
+// revision; it NEVER writes — apply is the separate editor-gated endpoint below.
+// A fail-closed status (503 agent off, 502 unreachable, 422 the model could not
+// produce a clean list) rejects with the server's generic, hidden-Git-safe message
+// via mutate(), exactly like rewrite/proposePatch.
+export async function suggestTags(pagePath: string): Promise<SuggestTagsResult> {
+  return mutate<SuggestTagsResult>("/api/v1/agent/suggest-tags", {
+    page_path: pagePath,
+  });
+}
+
+// applyTags applies the user-approved tag set (TAG-02/TAG-03, editor + CSRF).
+// `tags` is ONLY the checked tags (never the full suggestion list, never an
+// unchecked tag); base_revision is the token suggestTags captured. A stale value
+// (the page moved while the user reviewed) surfaces as a 409 (err.status === 409)
+// so the approval surface shows its "page changed — re-run" stale state and never
+// overwrites a concurrent edit — exactly the applyPatch contract. The server
+// re-validates+normalizes the tags server-side (the client list is never trusted)
+// and owns the byte-stable okf.SetTags write.
+export async function applyTags(payload: {
+  page_path: string;
+  tags: string[];
+  base_revision: string;
+}): Promise<void> {
+  await mutate<void>("/api/v1/agent/apply-tags", payload);
+}
+
 // humanFileSize formats a byte count as a short, human-friendly string using the
 // DECIMAL (SI, 1000-based) convention so "1.4 MB" reads the way the UI-SPEC shows
 // it (matches what most users and OS file managers display). Sub-KB values are

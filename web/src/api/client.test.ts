@@ -131,3 +131,98 @@ describe("admin rebuild api fns POST the right route", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 });
+
+describe("tag suggestion api fns (TAG-01/TAG-02)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("suggestTags POSTs /agent/suggest-tags and returns the typed result", async () => {
+    let hit: string | null = null;
+    installFetch((url) => {
+      hit = url;
+      return makeRes({
+        status: 200,
+        body: JSON.stringify({
+          page_path: "notes/a.md",
+          suggestions: [
+            { tag: "release", existing: true },
+            { tag: "q3-launch", existing: false },
+          ],
+          base_revision: "rev-1",
+        }),
+      });
+    });
+    const client = await freshClient();
+    const res = await client.suggestTags("notes/a.md");
+    expect(hit).toBe("/api/v1/agent/suggest-tags");
+    expect(res.base_revision).toBe("rev-1");
+    expect(res.suggestions).toEqual([
+      { tag: "release", existing: true },
+      { tag: "q3-launch", existing: false },
+    ]);
+  });
+
+  it("suggestTags rejects with the server message on a fail-closed status", async () => {
+    installFetch(() =>
+      makeRes({
+        status: 422,
+        body: JSON.stringify({ error: "Couldn't suggest tags. Try again." }),
+      }),
+    );
+    const client = await freshClient();
+    await expect(client.suggestTags("notes/a.md")).rejects.toThrow(
+      "Couldn't suggest tags. Try again.",
+    );
+  });
+
+  it("applyTags POSTs /agent/apply-tags with the checked tags + base_revision and resolves on 204", async () => {
+    let hit: string | null = null;
+    let sentBody: unknown = null;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/v1/csrf") {
+        return makeRes({ status: 200, body: JSON.stringify({ csrf_token: "t0ken" }) });
+      }
+      hit = url;
+      sentBody = init?.body ? JSON.parse(init.body as string) : null;
+      return makeRes({ status: 204, body: "" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = await freshClient();
+    await expect(
+      client.applyTags({
+        page_path: "notes/a.md",
+        tags: ["release"],
+        base_revision: "rev-1",
+      }),
+    ).resolves.toBeUndefined();
+    expect(hit).toBe("/api/v1/agent/apply-tags");
+    expect(sentBody).toEqual({
+      page_path: "notes/a.md",
+      tags: ["release"],
+      base_revision: "rev-1",
+    });
+  });
+
+  it("applyTags surfaces a 409 stale revision via err.status === 409 (no clobber)", async () => {
+    installFetch(() =>
+      makeRes({
+        status: 409,
+        body: JSON.stringify({ error: "This page changed since the tags were suggested." }),
+      }),
+    );
+    const client = await freshClient();
+    await expect(
+      client
+        .applyTags({ page_path: "notes/a.md", tags: ["release"], base_revision: "stale" })
+        .catch((e: Error & { status?: number }) => {
+          throw e;
+        }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+});
