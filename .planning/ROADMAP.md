@@ -109,7 +109,10 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
   3. Approving tags changes only the `tags` lines of the page's YAML frontmatter (body and other frontmatter byte-unchanged), commits through the single-writer Git path, and a stale page revision 409s rather than clobbering
   4. Suggestions are biased toward the existing workspace tag vocabulary, capped at max 5 per page, and normalized on write (lowercase, trimmed, deduped)
 
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 11-01-PLAN.md — Byte-stable okf.SetTags (TAG-03) + Store.Vocabulary for vocab biasing (TAG-04) [wave 1]
+- [ ] 11-02-PLAN.md — SuggestTags single-shot mode + suggest/apply endpoints (apply: editor+CSRF→okf.SetTags→pages.Save, 409 on stale) (TAG-01) [wave 2]
+- [ ] 11-03-PLAN.md — Suggest-tags trigger + per-tag approval UI (new-default-unchecked, Apply-not-autofocused, 409 stale state) (TAG-01, TAG-02) [wave 3]
 **UI hint**: yes
 
 ### Phase 12: Bulk Sweep & Batch Review Queue
