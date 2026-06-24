@@ -187,6 +187,14 @@ func New(deps Deps) (http.Handler, error) {
 			authed.Post("/agent/rewrite", h.handleRewrite)
 			authed.Post("/agent/draft", h.handleDraft)
 
+			// Per-page tag suggestion (TAG-01) — suggest is READ-ONLY (any-authed,
+			// like rewrite): it returns a vocab-biased capped proposal + the base
+			// revision + per-tag existing flags and NEVER writes. Apply is the
+			// consequential editor+CSRF write (registered in the editor subgroup
+			// below). NEITHER is an Eino tool — the read-only 5-tool boundary is
+			// unchanged (AGNT-11).
+			authed.Post("/agent/suggest-tags", h.handleSuggestTags)
+
 			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin
 			// subgroup). Authorization is read from the session role via
 			// RequireRole, never client input (T-02-02). Admin passes the editor
@@ -203,6 +211,13 @@ func New(deps Deps) (http.Handler, error) {
 				// unchanged (apply/write is never tool-reachable, AGNT-11).
 				editor.Post("/agent/propose-patch", h.handleProposePatch)
 				editor.Post("/agent/apply-patch", h.handleApplyPatch)
+
+				// Apply approved tags (TAG-01 write / TAG-03 reuse) — the consequential
+				// editor+CSRF write. It re-validates+normalizes the client tags
+				// server-side (the client list is never trusted), writes ONLY the tags
+				// lines byte-stably via okf.SetTags through pages.Save → the single-
+				// writer commit, and 409s on a moved base revision. NOT an Eino tool.
+				editor.Post("/agent/apply-tags", h.handleApplyTags)
 
 				editor.Post("/pages", h.handleCreatePage)
 				editor.Put("/pages/*", h.handleSavePage)

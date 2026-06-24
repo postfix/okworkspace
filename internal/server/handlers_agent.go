@@ -390,6 +390,8 @@ func writeAgentModeError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusServiceUnavailable, "The assistant is turned off. Ask an administrator to enable it.")
 	case errors.Is(err, agent.ErrProposalInvalid):
 		writeError(w, http.StatusUnprocessableEntity, "The assistant couldn't produce a clean result. Try rephrasing your request.")
+	case errors.Is(err, agent.ErrTagsInvalid):
+		writeError(w, http.StatusUnprocessableEntity, "The assistant couldn't produce a clean set of tags. Try again.")
 	default:
 		writeError(w, http.StatusBadGateway, "The assistant is unavailable right now. Try again in a moment.")
 	}
@@ -606,6 +608,222 @@ func hasLeadingFrontmatterFence(body string) bool {
 		return true
 	}
 	return doc.HasFrontmatter
+}
+
+// ─── Suggest / Apply tags: per-page LLM tag suggestion (TAG-01) ──────────────
+//
+// /suggest-tags (any-authed read) calls the agent's SuggestTags MODE — a single-
+// shot, vocab-biased, capped (MaxSuggestedTags), validated proposal — returning the
+// suggested tags + their existing-vs-new flags + the page's base revision captured
+// at suggest time. It NEVER writes. /apply-tags (editor + CSRF) is the consequential
+// write: it RE-validates+normalizes the client tags server-side (the client list is
+// never trusted), writes ONLY the tags lines byte-stably via okf.SetTags through
+// pages.Save → the single-writer commit, and 409s on a moved revision (mirrors
+// /apply-patch). NEITHER is an Eino tool — the read-only 5-tool allow-list is
+// unchanged (suggestion is a mode, apply is a non-tool endpoint, AGNT-11).
+
+// suggestTagsRequest is the POST /agent/suggest-tags body. page_path is the page to
+// suggest tags for (read via the role-scoped pages service).
+type suggestTagsRequest struct {
+	PagePath string `json:"page_path"`
+}
+
+// suggestedTag is one suggestion: the normalized tag plus whether it already exists
+// in the workspace vocabulary (so the approval UI can default new tags unchecked).
+type suggestedTag struct {
+	Tag      string `json:"tag"`
+	Existing bool   `json:"existing"`
+}
+
+// suggestTagsResponse carries the suggestions + the base revision the eventual
+// /apply-tags must echo back for the stale-revision floor. Tags render as plain
+// strings (the frontend renders them as React text — no HTML).
+type suggestTagsResponse struct {
+	PagePath     string         `json:"page_path"`
+	Suggestions  []suggestedTag `json:"suggestions"`
+	BaseRevision string         `json:"base_revision"`
+}
+
+// handleSuggestTags suggests tags for a page (TAG-01). Any-authed, read-only — it
+// returns a proposal the approval UI drives; it never writes. Fails closed when the
+// agent is off/unreachable or could not produce a clean set (mirrors handleRewrite).
+func (h *authHandlers) handleSuggestTags(w http.ResponseWriter, r *http.Request) {
+	if h.agent == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req suggestTagsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	path := strings.TrimSpace(req.PagePath)
+	if path == "" || !validIdentifier(path) {
+		writeError(w, http.StatusBadRequest, "Choose a page to suggest tags for.")
+		return
+	}
+
+	h.auditAgentMode(r, "suggest-tags", path)
+
+	tags, existing, baseRev, err := h.agent.SuggestTags(r.Context(), path)
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		writeAgentModeError(w, err)
+		return
+	}
+
+	suggestions := make([]suggestedTag, 0, len(tags))
+	for i, t := range tags {
+		suggestions = append(suggestions, suggestedTag{Tag: t, Existing: existing[i]})
+	}
+	writeJSON(w, http.StatusOK, suggestTagsResponse{
+		PagePath:     path,
+		Suggestions:  suggestions,
+		BaseRevision: baseRev,
+	})
+}
+
+// applyTagsRequest is the POST /agent/apply-tags body. tags is the client-approved
+// list (NEVER trusted verbatim — re-validated+normalized server-side); base_revision
+// is the token captured at suggest time, re-checked by pages.Save so a moved
+// revision 409s instead of overwriting.
+type applyTagsRequest struct {
+	PagePath     string   `json:"page_path"`
+	Tags         []string `json:"tags"`
+	BaseRevision string   `json:"base_revision"`
+}
+
+// maxApplyTags caps the size of the incoming tag list (a tag list is tiny; this
+// bounds an asymmetric oversized request). Far above MaxSuggestedTags so a legit
+// approval is never rejected on size, but a multi-thousand-entry payload is.
+const maxApplyTags = 100
+
+// handleApplyTags applies an approved set of tags (TAG-01 write half / TAG-03 reuse).
+// Editor-gated + CSRF (the global nosurf middleware covers the mutating method). It
+// RE-validates+normalizes the client tags server-side (defense in depth — the client
+// list is NEVER written verbatim), writes ONLY the tags lines byte-stably via
+// okf.SetTags, and reuses pages.Save with the suggest-time base_revision: a moved
+// revision returns ErrStaleRevision → 409 and writes nothing (mirrors handleApplyPatch).
+func (h *authHandlers) handleApplyTags(w http.ResponseWriter, r *http.Request) {
+	if h.pages == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req applyTagsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	path := strings.TrimSpace(req.PagePath)
+	if path == "" || !validIdentifier(path) {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	if len(req.Tags) == 0 {
+		writeError(w, http.StatusBadRequest, "There are no tags to apply.")
+		return
+	}
+	if len(req.Tags) > maxApplyTags {
+		writeError(w, http.StatusBadRequest, "Too many tags to apply.")
+		return
+	}
+	// Reject NUL in any raw tag before normalization (an asymmetric byte that the
+	// token check would drop anyway, but a fast explicit 400 is clearer).
+	for _, t := range req.Tags {
+		if strings.ContainsRune(t, '\x00') {
+			writeError(w, http.StatusBadRequest, "Invalid request.")
+			return
+		}
+	}
+
+	// RE-VALIDATE + RE-NORMALIZE the client tags server-side (T-11-01 — never trust
+	// the client). vocab is nil here: the existing-vs-new flag is irrelevant on the
+	// write (we write exactly the normalized set), and the same cap/normalize/dedupe/
+	// filter the suggest path ran is reapplied. A list that normalizes to empty → 422.
+	normalized, _, err := agent.ValidateTags(req.Tags, nil)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "There are no valid tags to apply.")
+		return
+	}
+
+	// Fetch the current page (404 on not-found). We need its frontmatter region + body
+	// to produce the new frontmatter byte-stably.
+	pg, err := h.pages.Get(r.Context(), path)
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+
+	// Produce the NEW frontmatter region with the normalized tags set byte-stably via
+	// okf.SetTags (TAG-03). The body is passed through unchanged — only the tags lines
+	// change. pages.Save owns the final ---fence--- assembly (we hand it the region).
+	newFrontmatter, err := setTagsFrontmatter(pg.Frontmatter, pg.Body, normalized)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "We couldn't apply those tags just now. Try again.")
+		return
+	}
+
+	actor := h.actorUsername(r.Context())
+	// pages.Save reuses the SAME single-writer commit + 409 floor /apply-patch uses.
+	err = h.pages.Save(r.Context(), path, pg.Body, newFrontmatter, req.BaseRevision, actor)
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		if errors.Is(err, pages.ErrStaleRevision) {
+			// The page changed since the assistant read it — block, never overwrite.
+			writeError(w, http.StatusConflict, "This page changed since the assistant suggested tags. Re-run the suggestion against the latest version.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "We couldn't apply those tags just now. Check your connection and try again.")
+		return
+	}
+
+	// Audit the approval (non-fatal). Detail carries only the non-secret role — never
+	// the tags or the page content (mirrors handleApplyPatch's discipline).
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionAgentPatchApproval,
+		Actor:  actor,
+		Target: path,
+		Detail: "mode=apply-tags role=" + h.actorRole(r.Context()),
+		Source: auditSourceWeb,
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setTagsFrontmatter returns the new frontmatter REGION string for a page whose
+// `tags` key is set to the given normalized tags byte-stably via okf.SetTags — the
+// body and every other frontmatter key stay unchanged. It is the ONE place the
+// byte-stable tags write is owned, so it is unit-testable in isolation.
+//
+// It assembles the page from its original frontmatter + body (via the canonical
+// pages assembler so it never drifts from the writer), parses it, sets the tags
+// sequence, re-emits ONLY the frontmatter (FrontDirty), then re-parses the emitted
+// bytes and returns string(doc.RawFront) as the region to hand to pages.Save. The
+// handler does NOT hand-roll a second ---fence---; pages.Save owns final assembly.
+func setTagsFrontmatter(frontmatter, body string, tags []string) (string, error) {
+	doc, err := okf.Parse(pages.AssembleSource(frontmatter, body))
+	if err != nil {
+		return "", fmt.Errorf("apply-tags: parse page: %w", err)
+	}
+	okf.SetTags(doc, tags)
+	emitted, err := doc.Emit()
+	if err != nil {
+		return "", fmt.Errorf("apply-tags: emit: %w", err)
+	}
+	doc2, err := okf.Parse(emitted)
+	if err != nil {
+		return "", fmt.Errorf("apply-tags: re-parse emitted: %w", err)
+	}
+	return string(doc2.RawFront), nil
 }
 
 // actorRole resolves the session-bound user's role for the audit Detail. It
