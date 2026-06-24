@@ -18,6 +18,7 @@ import (
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/config"
 	"github.com/postfix/okworkspace/internal/gitstore"
+	"github.com/postfix/okworkspace/internal/graph"
 	"github.com/postfix/okworkspace/internal/jobs"
 	"github.com/postfix/okworkspace/internal/locks"
 	"github.com/postfix/okworkspace/internal/pages"
@@ -232,6 +233,21 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	searchIdx.SetGit(gs)
 	worker.Register(search.KindIndex, search.IndexHandler(searchIdx, contentRepo))
 
+	// Derived link/tag graph (Phase 8, LINK-01). Unlike Bleve, the graph adjacency
+	// (page_links/page_tags) lives in the operational SQLite db — the tables are
+	// created by migration 0009 applied at store open, so there is no separate index
+	// dir to manage. The Store is opened over the shared *sql.DB and wired to the
+	// content repo (read .md files through the SEC-01 resolver during rebuild/upsert)
+	// and the same Git HEAD provider search uses (record last_graphed_head after a
+	// rebuild for the startup drift backstop). The KindGraph handler maintains the
+	// adjacency on the SAME single drain goroutine; a startup HEAD-drift check (below,
+	// beside the search drift block) triggers a rebuild-from-files when the working
+	// tree moved out-of-band — which also self-heals an empty graph on a fresh boot.
+	graphStore := graph.OpenStore(st.DB())
+	graphStore.SetRepo(contentRepo)
+	graphStore.SetGit(gs)
+	worker.Register(graph.KindGraph, graph.GraphHandler(graphStore, contentRepo))
+
 	// Soft-lock store (COLL-02): the server-authoritative, file-backed lock store
 	// every later collaboration slice (soft locks, presence) depends on. All lock
 	// I/O routes through contentRepo (SEC-01), never os.*. Locks live under
@@ -332,6 +348,24 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 			logger.Warn("search rebuild enqueue failed at startup", slog.String("error", eerr.Error()))
 		} else {
 			logger.Info("search index drift detected — rebuild enqueued")
+		}
+	}
+
+	// Link/tag graph drift recovery: if the graph was built against a different Git
+	// HEAD than the current working tree (an out-of-band pull/restore, a crash
+	// between commit and graph update, or simply a fresh install with an empty
+	// graph_meta over a populated repo), enqueue a rebuild-from-files. This mirrors
+	// the search drift block exactly: best-effort and fire-and-forget — a startup
+	// goroutine, so Enqueue (NOT EnqueueAndWait) is correct (CR-01), and a drift-check
+	// error must never block startup. A fresh boot reads as drift and self-heals the
+	// empty graph into the initial adjacency build.
+	if drifted, derr := graphStore.DriftCheck(context.Background(), gs); derr != nil {
+		logger.Warn("link graph drift check failed at startup", slog.String("error", derr.Error()))
+	} else if drifted {
+		if eerr := worker.Enqueue(context.Background(), graph.KindGraph, graph.RebuildPayload()); eerr != nil {
+			logger.Warn("link graph rebuild enqueue failed at startup", slog.String("error", eerr.Error()))
+		} else {
+			logger.Info("link graph drift detected — rebuild enqueued")
 		}
 	}
 
