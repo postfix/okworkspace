@@ -30,7 +30,7 @@ Obsidian-style force-directed visualization. 2D Canvas renderer (`react-force-gr
 Suggest→approve only — no silent frontmatter writes. Reuses the existing Eino single-shot path + propose→approve→apply→commit safety flow.
 
 - [x] **TAG-01**: User can request LLM tag suggestions on demand for the page they are viewing/editing
-- [ ] **TAG-02**: Suggested tags are presented for human review and approved/rejected per tag before anything is written; new vs. already-existing tags are distinguished and newly-invented tags default to unchecked
+- [x] **TAG-02**: Suggested tags are presented for human review and approved/rejected per tag before anything is written; new vs. already-existing tags are distinguished and newly-invented tags default to unchecked
 - [x] **TAG-03**: Approved tags are merged into the page's YAML frontmatter `tags` field byte-stably (only the `tags` lines change; body and other frontmatter untouched) and committed through the single-writer Git path; a stale page revision 409s rather than clobbering
 - [x] **TAG-04**: Tag suggestions are biased toward the existing workspace tag vocabulary (existing tags fed into the prompt) and capped in count (max 5 per page), normalized on write (lowercase, trimmed, deduped) to prevent tag explosion
 - [ ] **TAG-05**: Admin can run a bulk tagging sweep over untagged (or all) pages that enqueues per-page suggestion jobs on the existing async worker and produces a queue of pending suggestions — writing nothing automatically
@@ -83,7 +83,7 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | GRAPH-04 | Phase 10 | Complete |
 | GRAPH-05 | Phase 10 | Complete |
 | TAG-01 | Phase 11 | Complete |
-| TAG-02 | Phase 11 | Pending |
+| TAG-02 | Phase 11 | Complete |
 | TAG-03 | Phase 11 | Complete |
 | TAG-04 | Phase 11 | Complete |
 | TAG-05 | Phase 12 | Pending |
