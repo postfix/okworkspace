@@ -5,15 +5,15 @@ milestone_name: Knowledge Graph & LLM Auto-Tagging
 current_phase: 11
 current_phase_name: Per-Page LLM Tag Suggestion
 status: executing
-stopped_at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
-last_updated: "2026-06-24T10:29:55.971Z"
+stopped_at: Completed 11-02-PLAN.md (SuggestTags mode + suggest/apply-tags endpoints); 11-03 (UI) remains
+last_updated: "2026-06-24T10:41:10.308Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 11 execution started
+last_activity_desc: Completed Phase 11 Plan 02 (backend tag suggestion: mode + endpoints)
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
   percent: 60
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 ## Current Position
 
 Phase: 11 (Per-Page LLM Tag Suggestion) — EXECUTING
-Plan: 2 of 3
-Status: Ready to execute
-Last activity: 2026-06-24 — Phase 11 execution started
+Plan: 3 of 3 (11-01 + 11-02 complete; 11-03 UI remains)
+Status: Ready to execute 11-03
+Last activity: 2026-06-24 — Completed Phase 11 Plan 02 (backend tag suggestion)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 10 P01 | 5min | 3 tasks | 15 files |
 | Phase 10 P03 | 4min | 2 tasks | 9 files |
 | Phase 11 P01 | 12 | 3 tasks | 7 files |
+| Phase 11 P02 | 25m | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,7 @@ Recent decisions affecting v1.0 work:
 - [Phase ?]: GraphCanvas closes stored-XSS sink at the wrapper: nodeLabel empty (no DOM tooltip), labels drawn only as canvas text
 - [Phase 10]: Local-graph dock collapsed by default; fetch gated to empty path while collapsed (no /graph/local cost until revealed)
 - [Phase 10]: EdgeToggles imported from 10-02 and bound to the shared graphEdges slice — global + local graph views stay in lock-step
+- [Phase ?]: 11-02: SuggestTags is a single-shot Generate MODE (validate-and-retry, JSON-array not response_format), never a 6th Eino tool; apply-tags is a non-tool editor+CSRF endpoint reusing pages.Save→single-writer + 409 floor
 
 ### Pending Todos
 
@@ -122,7 +124,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-24T10:29:48.565Z
+Last session: 2026-06-24T10:40:50.527Z
 Stopped at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
 Resume file: None
 
