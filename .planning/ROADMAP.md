@@ -69,9 +69,9 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
   3. A local graph endpoint returns a given page's neighborhood (the page plus its direct neighbors)
   4. Shared-tag edges are computed with a popular-tag cap / threshold so the payload never explodes into a hairball on common tags
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
-- [ ] 09-01-PLAN.md — read-only `internal/graph` query layer (GraphData/Neighborhood/Backlinks, popular-tag cap) + authed `/api/v1/graph`, `/graph/local`, `/graph/backlinks` endpoints (LINK-02)
+- [x] 09-01-PLAN.md — read-only `internal/graph` query layer (GraphData/Neighborhood/Backlinks, popular-tag cap) + authed `/api/v1/graph`, `/graph/local`, `/graph/backlinks` endpoints (LINK-02)
 - [ ] 09-02-PLAN.md — collapsible "Referenced by (N)" backlinks panel in PageView + getBacklinks api fn + useBacklinks hook (LINK-02)
 
 **UI hint**: yes
@@ -138,7 +138,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 6. Live-Preview Editor (Obsidian-style) | v0.9.9 | 4/4 | Complete | 2026-06-21 |
 | 7. Obsidian-style File Tree | v0.9.9 | 4/4 | Complete | 2026-06-21 |
 | 8. Derived Link/Tag Store & Maintenance | v1.0 | 3/3 | Complete    | 2026-06-24 |
-| 9. Graph Endpoints & Backlinks Panel | v1.0 | 0/2 | Planned | - |
+| 9. Graph Endpoints & Backlinks Panel | v1.0 | 1/2 | In Progress|  |
 | 10. Graph UI | v1.0 | 0/TBD | Not started | - |
 | 11. Per-Page LLM Tag Suggestion | v1.0 | 0/TBD | Not started | - |
 | 12. Bulk Sweep & Batch Review Queue | v1.0 | 0/TBD | Not started | - |
