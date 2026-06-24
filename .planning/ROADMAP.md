@@ -138,7 +138,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 6. Live-Preview Editor (Obsidian-style) | v0.9.9 | 4/4 | Complete | 2026-06-21 |
 | 7. Obsidian-style File Tree | v0.9.9 | 4/4 | Complete | 2026-06-21 |
 | 8. Derived Link/Tag Store & Maintenance | v1.0 | 3/3 | Complete    | 2026-06-24 |
-| 9. Graph Endpoints & Backlinks Panel | v1.0 | 2/2 | Complete   | 2026-06-24 |
+| 9. Graph Endpoints & Backlinks Panel | v1.0 | 2/2 | Complete    | 2026-06-24 |
 | 10. Graph UI | v1.0 | 0/TBD | Not started | - |
 | 11. Per-Page LLM Tag Suggestion | v1.0 | 0/TBD | Not started | - |
 | 12. Bulk Sweep & Batch Review Queue | v1.0 | 0/TBD | Not started | - |
