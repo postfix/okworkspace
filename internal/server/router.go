@@ -17,6 +17,7 @@ import (
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/store"
+	"github.com/postfix/okworkspace/internal/tagsweep"
 	"github.com/postfix/okworkspace/internal/users"
 )
 
@@ -69,6 +70,16 @@ type Deps struct {
 	// (COLL-02). Optional; when nil those routes return a 500, following the
 	// optional-dependency pattern.
 	Locks *locks.Service
+	// TagSuggestions is the bulk-sweep staging store backing the admin sweep-start
+	// (target enumeration) + review-queue read endpoints (TAG-05). Optional; when
+	// nil those routes return a 500. In main.go this is the SAME tagsweep store the
+	// KindTagSuggest handler stages into — reused for the reads, not a second store.
+	TagSuggestions *tagsweep.Store
+	// TagSweepJobs enqueues one KindTagSuggest job per target page for the admin
+	// sweep-start (fire-and-forget). Optional; when nil sweep-start returns a 500. In
+	// main.go this is the SAME single worker passed as SearchJobs/GraphJobs (the
+	// KindTagSuggest handler is registered on it), not a second worker.
+	TagSweepJobs tagSweepEnqueuer
 }
 
 // New builds the HTTP handler: chi mux with the middleware stack (recover,
@@ -85,18 +96,20 @@ func New(deps Deps) (http.Handler, error) {
 		rec = nopAudit{}
 	}
 	h := &authHandlers{
-		sessions:    sm,
-		users:       deps.UserRepo,
-		config:      deps.Config,
-		audit:       rec,
-		pages:       deps.Pages,
-		attachments: deps.Attachments,
-		search:      deps.Search,
-		searchJobs:  deps.SearchJobs,
-		graphJobs:   deps.GraphJobs,
-		graph:       deps.Graph,
-		agent:       deps.Agent,
-		locks:       deps.Locks,
+		sessions:       sm,
+		users:          deps.UserRepo,
+		config:         deps.Config,
+		audit:          rec,
+		pages:          deps.Pages,
+		attachments:    deps.Attachments,
+		search:         deps.Search,
+		searchJobs:     deps.SearchJobs,
+		graphJobs:      deps.GraphJobs,
+		graph:          deps.Graph,
+		agent:          deps.Agent,
+		locks:          deps.Locks,
+		tagSuggestions: deps.TagSuggestions,
+		tagSweepJobs:   deps.TagSweepJobs,
 	}
 	health := &healthHandler{checker: deps.Health}
 
@@ -275,6 +288,14 @@ func New(deps Deps) (http.Handler, error) {
 				// gate + nosurf CSRF; RBAC is read from the session role, never client
 				// input. Enqueues a from-files rebuild fire-and-forget (202).
 				admin.Post("/admin/graph/reindex", h.handleGraphReindex)
+				// Bulk tagging sweep (TAG-05) — admin-only: admin STARTS the sweep
+				// AND reviews the queue (CONTEXT decision). Both inherit the SAME
+				// RequireRole(admin) gate; RBAC is read from the SESSION role, never
+				// client input. Sweep-start enumerates targets server-side and enqueues
+				// one KindTagSuggest job per page fire-and-forget (202, writes nothing);
+				// the review-queue read lists pages with pending staged suggestions.
+				admin.Post("/admin/tags/sweep", h.handleStartTagSweep)
+				admin.Get("/admin/tags/suggestions", h.handleListTagSuggestions)
 			})
 		})
 	})

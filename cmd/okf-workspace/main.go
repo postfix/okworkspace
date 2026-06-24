@@ -26,6 +26,7 @@ import (
 	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
+	"github.com/postfix/okworkspace/internal/tagsweep"
 	"github.com/postfix/okworkspace/internal/users"
 	"github.com/postfix/okworkspace/internal/web"
 )
@@ -318,6 +319,20 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		Vocabulary: graphStore,
 	})
 
+	// Bulk tagging sweep staging (TAG-05): the tagsweep store stages pending tag
+	// suggestions and enumerates sweep targets (untagged-or-all) against the live
+	// page set. Its KindTagSuggest handler calls the SAME agentSvc just constructed
+	// (the Phase-11 SuggestTags mode) for ONE page and stages a pending row — it
+	// WRITES NO frontmatter and triggers NO commit (Pitfall 5 go/no-go). It rides
+	// the SAME single drain worker (serial = the natural LLM rate-limiter); there is
+	// NO parallel LLM caller. Registered AFTER agentSvc (its suggester dependency) is
+	// built — unlike the other kinds (registered before Start) because agentSvc is
+	// constructed post-Start; Worker.Register is mutex-safe and no KindTagSuggest job
+	// can be enqueued until the admin sweep endpoint is reachable (after wiring).
+	tagsweepStore := tagsweep.OpenStore(st.DB())
+	tagsweepStore.SetRepo(contentRepo)
+	worker.Register(tagsweep.KindTagSuggest, tagsweep.SuggestHandler(tagsweepStore, agentSvc))
+
 	// Reconcile the trash table against the working tree at startup: a prior
 	// Delete/Restore whose async commit failed can leave a SQLite trash row that
 	// points at a trash_path never written to disk (WR-01). Prune those phantom
@@ -378,20 +393,22 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		return fmt.Errorf("build SPA handler: %w", err)
 	}
 	handler, err := server.New(server.Deps{
-		Store:       st,
-		Config:      cfg,
-		UserRepo:    userRepo,
-		SPAHandler:  spa,
-		Health:      healthAdapter{gs: gs},
-		Audit:       auditLog,
-		Pages:       pagesSvc,
-		Attachments: attachSvc,
-		Search:      searchIdx,
-		SearchJobs:  worker,
-		GraphJobs:   worker,
-		Graph:       graphStore,
-		Agent:       agentSvc,
-		Locks:       lockStore,
+		Store:          st,
+		Config:         cfg,
+		UserRepo:       userRepo,
+		SPAHandler:     spa,
+		Health:         healthAdapter{gs: gs},
+		Audit:          auditLog,
+		Pages:          pagesSvc,
+		Attachments:    attachSvc,
+		Search:         searchIdx,
+		SearchJobs:     worker,
+		GraphJobs:      worker,
+		Graph:          graphStore,
+		Agent:          agentSvc,
+		Locks:          lockStore,
+		TagSuggestions: tagsweepStore,
+		TagSweepJobs:   worker,
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)

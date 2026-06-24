@@ -18,6 +18,7 @@ import (
 	"github.com/postfix/okworkspace/internal/locks"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
+	"github.com/postfix/okworkspace/internal/tagsweep"
 	"github.com/postfix/okworkspace/internal/users"
 )
 
@@ -76,6 +77,14 @@ type authHandlers struct {
 	// same optional-dependency pattern as pages. The HTTP layer fills Owner's
 	// identity FROM THE SESSION; only the opaque connection id comes from the body.
 	locks *locks.Service
+	// tagSuggestions is the bulk-sweep staging store backing the admin sweep-start
+	// (target enumeration) + review-queue read endpoints (TAG-05). Optional: when
+	// nil those routes return a 500, following the same optional-dependency pattern.
+	tagSuggestions *tagsweep.Store
+	// tagSweepJobs enqueues one KindTagSuggest job per target page for the admin
+	// sweep-start (fire-and-forget). Optional: when nil sweep-start returns a 500. In
+	// main.go this is the SAME single worker passed as SearchJobs/GraphJobs.
+	tagSweepJobs tagSweepEnqueuer
 }
 
 type loginRequest struct {
