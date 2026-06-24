@@ -34,7 +34,7 @@ Suggest→approve only — no silent frontmatter writes. Reuses the existing Ein
 - [x] **TAG-03**: Approved tags are merged into the page's YAML frontmatter `tags` field byte-stably (only the `tags` lines change; body and other frontmatter untouched) and committed through the single-writer Git path; a stale page revision 409s rather than clobbering
 - [x] **TAG-04**: Tag suggestions are biased toward the existing workspace tag vocabulary (existing tags fed into the prompt) and capped in count (max 5 per page), normalized on write (lowercase, trimmed, deduped) to prevent tag explosion
 - [x] **TAG-05**: Admin can run a bulk tagging sweep over untagged (or all) pages that enqueues per-page suggestion jobs on the existing async worker and produces a queue of pending suggestions — writing nothing automatically
-- [ ] **TAG-06**: User can review the bulk-sweep suggestion queue and approve/reject suggestions per page, with approvals routed through the same byte-stable TAG-03 apply path and batched commits
+- [x] **TAG-06**: User can review the bulk-sweep suggestion queue and approve/reject suggestions per page, with approvals routed through the same byte-stable TAG-03 apply path and batched commits
 
 ## v2 Requirements
 
@@ -87,4 +87,4 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | TAG-03 | Phase 11 | Complete |
 | TAG-04 | Phase 11 | Complete |
 | TAG-05 | Phase 12 | Complete |
-| TAG-06 | Phase 12 | Pending |
+| TAG-06 | Phase 12 | Complete |
