@@ -221,6 +221,28 @@ export async function getTree(): Promise<TreeNode[]> {
   return (await res.json()) as TreeNode[];
 }
 
+// Backlink is one entry of the backlinks endpoint (GET /api/v1/graph/backlinks),
+// matching the 09-01 BacklinkEntry JSON: the linking page's repo-relative path and
+// its resolved title (frontmatter title or path basename fallback).
+export interface Backlink {
+  path: string;
+  title: string;
+}
+
+// getBacklinks fetches the pages that link to `path` (a GET — no CSRF needed). The
+// path is URL-encoded into the query string. On failure it throws generic copy
+// (hidden-Git safe — the panel surfaces it as the muted error line).
+export async function getBacklinks(path: string): Promise<Backlink[]> {
+  const res = await fetch(
+    `/api/v1/graph/backlinks?path=${encodeURIComponent(path)}`,
+    { credentials: "same-origin" },
+  );
+  if (!res.ok) {
+    throw new Error("Couldn't load backlinks.");
+  }
+  return (await res.json()) as Backlink[];
+}
+
 // getPage fetches a single page by its repo-relative path (a GET).
 export async function getPage(path: string): Promise<Page> {
   const res = await fetch(`/api/v1/pages/${path}`, { credentials: "same-origin" });
