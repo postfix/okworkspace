@@ -174,6 +174,19 @@ type pageReader interface {
 	Revision(ctx context.Context, path string) (string, error)
 }
 
+// vocabularyReader backs SuggestTags' prompt biasing (TAG-04). Vocabulary returns
+// the distinct existing workspace tag vocabulary so the suggest prompt can prefer
+// reusing existing tags over inventing near-synonyms. It is a NARROW one-method
+// interface declared HERE (mirroring pageReader/searcher) and satisfied
+// structurally by 11-01's *graph.Store.Vocabulary — internal/graph is deliberately
+// NOT imported into internal/agent (the agent has no graph dependency; the wiring
+// happens in main.go). A nil dep means "no bias available": SuggestTags still
+// produces validated tags, just without the biasing hint (best-effort, never a
+// hard error).
+type vocabularyReader interface {
+	Vocabulary(ctx context.Context) ([]string, error)
+}
+
 // attachmentReader backs read_attachment_text (slice 2). ExtractedText returns
 // the repo.Resolve-backed `.txt` extraction sidecar for an attachment id (empty
 // when extraction is pending/absent — never an error, never raw bytes off a
@@ -200,6 +213,10 @@ type Deps struct {
 	Search      searcher
 	Attachments attachmentReader
 	Audit       auditRecorder
+	// Vocabulary supplies the existing workspace tag vocabulary used to bias the
+	// SuggestTags prompt (TAG-04). Optional/best-effort: a nil reader means no bias
+	// is available. *graph.Store satisfies it (wired in main.go from graphStore).
+	Vocabulary vocabularyReader
 }
 
 // Service is the agent orchestration service. In slice 1 it holds only the

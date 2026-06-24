@@ -312,6 +312,10 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		Search:      searchIdx,
 		Attachments: attachSvc,
 		Audit:       auditLog,
+		// SuggestTags (TAG-01) biases its prompt with the existing workspace tag
+		// vocabulary (TAG-04). graphStore.Vocabulary satisfies the narrow
+		// vocabularyReader interface declared in package agent (best-effort bias).
+		Vocabulary: graphStore,
 	})
 
 	// Reconcile the trash table against the working tree at startup: a prior
