@@ -232,3 +232,87 @@ func TestTargetsNilRepoEmpty(t *testing.T) {
 		t.Fatalf("Targets with nil repo = %v, want empty", got)
 	}
 }
+
+// TestGetPendingReturnsStagedRow asserts GetPending returns a page's staged
+// suggestions + base_revision, and (false,nil) when there is no pending row —
+// the server reads the STAGED base_revision from here (never a client value).
+func TestGetPendingReturnsStagedRow(t *testing.T) {
+	ts, _, _ := newTestStore(t)
+	ctx := context.Background()
+
+	sugg := []Suggestion{{Tag: "ops", Existing: true}}
+	if err := ts.StagePending(ctx, "a.md", sugg, "rev-staged"); err != nil {
+		t.Fatalf("StagePending: %v", err)
+	}
+
+	got, ok, err := ts.GetPending(ctx, "a.md")
+	if err != nil {
+		t.Fatalf("GetPending: %v", err)
+	}
+	if !ok {
+		t.Fatal("GetPending found=false, want true")
+	}
+	want := PendingEntry{PagePath: "a.md", Suggestions: sugg, BaseRevision: "rev-staged"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("GetPending = %+v, want %+v", got, want)
+	}
+
+	// Absent page → (_, false, nil).
+	_, ok, err = ts.GetPending(ctx, "missing.md")
+	if err != nil {
+		t.Fatalf("GetPending missing: %v", err)
+	}
+	if ok {
+		t.Fatal("GetPending missing found=true, want false")
+	}
+}
+
+// TestResolvePendingFlipsOnlyNamed asserts ResolvePending flips only the named
+// pending rows to resolved (others stay pending; ListPending shrinks).
+func TestResolvePendingFlipsOnlyNamed(t *testing.T) {
+	ts, _, _ := newTestStore(t)
+	ctx := context.Background()
+
+	for _, p := range []string{"a.md", "b.md", "c.md"} {
+		if err := ts.StagePending(ctx, p, []Suggestion{{Tag: "ops"}}, "r"); err != nil {
+			t.Fatalf("StagePending %q: %v", p, err)
+		}
+	}
+
+	if err := ts.ResolvePending(ctx, []string{"a.md", "c.md"}); err != nil {
+		t.Fatalf("ResolvePending: %v", err)
+	}
+
+	got, err := ts.ListPending(ctx)
+	if err != nil {
+		t.Fatalf("ListPending: %v", err)
+	}
+	if len(got) != 1 || got[0].PagePath != "b.md" {
+		t.Fatalf("after resolve ListPending = %+v, want only [b.md]", got)
+	}
+
+	// The resolved pages are no longer pending (GetPending returns false).
+	if _, ok, _ := ts.GetPending(ctx, "a.md"); ok {
+		t.Fatal("a.md still pending after ResolvePending")
+	}
+	if _, ok, _ := ts.GetPending(ctx, "b.md"); !ok {
+		t.Fatal("b.md was wrongly resolved")
+	}
+}
+
+// TestResolvePendingEmptyNoop asserts an empty slice is a no-op (no error, no
+// rows touched).
+func TestResolvePendingEmptyNoop(t *testing.T) {
+	ts, _, _ := newTestStore(t)
+	ctx := context.Background()
+	if err := ts.StagePending(ctx, "a.md", []Suggestion{{Tag: "ops"}}, "r"); err != nil {
+		t.Fatalf("StagePending: %v", err)
+	}
+	if err := ts.ResolvePending(ctx, nil); err != nil {
+		t.Fatalf("ResolvePending(nil): %v", err)
+	}
+	got, _ := ts.ListPending(ctx)
+	if len(got) != 1 {
+		t.Fatalf("empty ResolvePending changed pending count: %+v", got)
+	}
+}

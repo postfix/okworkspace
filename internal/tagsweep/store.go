@@ -139,6 +139,63 @@ func (s *Store) ListPending(ctx context.Context) ([]PendingEntry, error) {
 	return out, nil
 }
 
+// GetPending returns the single PENDING staged entry for pagePath (suggestions +
+// the STAGED base_revision the suggestion was captured against). The found bool is
+// false (with a nil error and a zero PendingEntry) when the page has no pending
+// row. The approve handler reads the staged base_revision from HERE — it is the
+// server's record of which revision a suggestion was made against, so the apply
+// re-checks against that staged value and NEVER trusts a client-supplied revision
+// (T-12-07). pagePath is bound as a parameter (no SQLi).
+func (s *Store) GetPending(ctx context.Context, pagePath string) (PendingEntry, bool, error) {
+	if s.db == nil {
+		return PendingEntry{}, false, nil
+	}
+	row := s.db.QueryRowContext(ctx,
+		`SELECT page_path, suggestions, base_revision FROM tag_suggestions
+		 WHERE page_path=? AND status='pending'`, pagePath)
+	var gotPath, raw, baseRev string
+	if err := row.Scan(&gotPath, &raw, &baseRev); err != nil {
+		if err == sql.ErrNoRows {
+			return PendingEntry{}, false, nil
+		}
+		return PendingEntry{}, false, err
+	}
+	var sugg []Suggestion
+	if err := json.Unmarshal([]byte(raw), &sugg); err != nil {
+		return PendingEntry{}, false, fmt.Errorf("tagsweep: unmarshal suggestions for %q: %w", gotPath, err)
+	}
+	return PendingEntry{PagePath: gotPath, Suggestions: sugg, BaseRevision: baseRev}, true, nil
+}
+
+// ResolvePending flips the PENDING rows for the named pages to status='resolved'
+// in one statement so ListPending no longer returns them (the queue shrinks). It
+// is called by the approve handler AFTER a successful apply (the applied pages) or
+// on an explicit reject. Only rows currently 'pending' are touched (a stale/
+// notfound page left pending for a re-run is NOT resolved unless its path is
+// passed). An empty pagePaths slice is a no-op (no error). The IN list is built
+// from parameter placeholders bound positionally — the page paths are NEVER
+// interpolated into the SQL text (no SQLi, T-12-06 boundary).
+func (s *Store) ResolvePending(ctx context.Context, pagePaths []string) error {
+	if s.db == nil {
+		return fmt.Errorf("tagsweep: ResolvePending requires a database")
+	}
+	if len(pagePaths) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(pagePaths))
+	args := make([]any, 0, len(pagePaths))
+	for i, p := range pagePaths {
+		placeholders[i] = "?"
+		args = append(args, p)
+	}
+	query := `UPDATE tag_suggestions SET status='resolved'
+		 WHERE status='pending' AND page_path IN (` + strings.Join(placeholders, ",") + `)`
+	if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Targets returns the pages a sweep should enqueue jobs for, as a sorted slice.
 // When allPages is false it returns live pages absent from page_tags (the
 // untagged backfill case — the default). When allPages is true it returns ALL

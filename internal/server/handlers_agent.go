@@ -801,29 +801,13 @@ func (h *authHandlers) handleApplyTags(w http.ResponseWriter, r *http.Request) {
 
 // setTagsFrontmatter returns the new frontmatter REGION string for a page whose
 // `tags` key is set to the given normalized tags byte-stably via okf.SetTags — the
-// body and every other frontmatter key stay unchanged. It is the ONE place the
-// byte-stable tags write is owned, so it is unit-testable in isolation.
-//
-// It assembles the page from its original frontmatter + body (via the canonical
-// pages assembler so it never drifts from the writer), parses it, sets the tags
-// sequence, re-emits ONLY the frontmatter (FrontDirty), then re-parses the emitted
-// bytes and returns string(doc.RawFront) as the region to hand to pages.Save. The
-// handler does NOT hand-roll a second ---fence---; pages.Save owns final assembly.
+// body and every other frontmatter key stay unchanged. It delegates to
+// pages.SetTagsFrontmatter so the per-page apply (here) AND the batched apply
+// (internal/pages/batch.go) share ONE byte-stable tags-region implementation and
+// cannot drift. The handler does NOT hand-roll a second ---fence---; pages.Save
+// owns final assembly.
 func setTagsFrontmatter(frontmatter, body string, tags []string) (string, error) {
-	doc, err := okf.Parse(pages.AssembleSource(frontmatter, body))
-	if err != nil {
-		return "", fmt.Errorf("apply-tags: parse page: %w", err)
-	}
-	okf.SetTags(doc, tags)
-	emitted, err := doc.Emit()
-	if err != nil {
-		return "", fmt.Errorf("apply-tags: emit: %w", err)
-	}
-	doc2, err := okf.Parse(emitted)
-	if err != nil {
-		return "", fmt.Errorf("apply-tags: re-parse emitted: %w", err)
-	}
-	return string(doc2.RawFront), nil
+	return pages.SetTagsFrontmatter(frontmatter, body, tags)
 }
 
 // actorRole resolves the session-bound user's role for the audit Detail. It
