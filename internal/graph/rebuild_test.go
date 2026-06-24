@@ -209,10 +209,13 @@ func TestGraphHandler_Dispatch(t *testing.T) {
 	if got := h.snapshotLinks(t); !reflect.DeepEqual(got, []string{"b.md|c.md"}) {
 		t.Fatalf("after delete payload, links = %v", got)
 	}
+	// Re-upserting a.md restores ONLY a's outbound edges (a->b, a->c). The inbound
+	// edge c->a belongs to page c and is NOT resurrected by upserting a — a full
+	// rebuild (or re-upserting c) would restore it. This proves per-page scope.
 	if err := handler(ctx, UpsertPagePayload("a.md")); err != nil {
 		t.Fatalf("upsert payload: %v", err)
 	}
-	if got := h.snapshotLinks(t); len(got) != 4 {
+	if got := h.snapshotLinks(t); !reflect.DeepEqual(got, []string{"a.md|b.md", "a.md|c.md", "b.md|c.md"}) {
 		t.Fatalf("after re-upsert payload, links = %v", got)
 	}
 }
