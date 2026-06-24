@@ -8,6 +8,7 @@ import {
   deactivateUser,
   listUsers,
   me,
+  reindexGraph,
   reindexSearch,
   resetUserPassword,
   setUserRole,
@@ -148,6 +149,25 @@ export default function Admin() {
     },
   });
 
+  // Rebuild-graph-index action (LINK-03 admin operational story). The endpoint is
+  // admin-only + CSRF on the server; the button only renders in this admin route.
+  // The rebuild is async (202), so success shows a brief muted confirmation rather
+  // than blocking. Hidden-Git rule: the label says "Rebuild graph index", never
+  // "Reindex"; errors carry no Git/index vocabulary.
+  const [graphReindexNotice, setGraphReindexNotice] = useState<string | null>(null);
+  const [graphReindexError, setGraphReindexError] = useState<string | null>(null);
+  const reindexGraphMut = useMutation({
+    mutationFn: () => reindexGraph(),
+    onSuccess: () => {
+      setGraphReindexError(null);
+      setGraphReindexNotice("Graph index rebuild started.");
+    },
+    onError: (err: Error) => {
+      setGraphReindexNotice(null);
+      setGraphReindexError(err.message);
+    },
+  });
+
   function openRoleDialog(u: AdminUser) {
     setRoleTarget(u);
     setRoleValue(u.role as UserRole);
@@ -240,6 +260,34 @@ export default function Admin() {
         {reindexError && (
           <div className="field-error" role="alert">
             {reindexError}
+          </div>
+        )}
+      </section>
+
+      <section className="admin-section">
+        <h2 className="admin-section-heading">Graph</h2>
+        <p className="admin-muted">
+          Rebuild the graph index if links or tags look out of date. This runs in
+          the background and won't interrupt anyone.
+        </p>
+        <div className="admin-section-row">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => reindexGraphMut.mutate()}
+            disabled={reindexGraphMut.isPending}
+          >
+            {reindexGraphMut.isPending ? "Starting…" : "Rebuild graph index"}
+          </button>
+          {graphReindexNotice && (
+            <span className="admin-muted" role="status">
+              {graphReindexNotice}
+            </span>
+          )}
+        </div>
+        {graphReindexError && (
+          <div className="field-error" role="alert">
+            {graphReindexError}
           </div>
         )}
       </section>

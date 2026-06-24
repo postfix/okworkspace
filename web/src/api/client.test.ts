@@ -97,3 +97,37 @@ describe("mutate() empty-body tolerance (UAT blocker)", () => {
     );
   });
 });
+
+describe("admin rebuild api fns POST the right route", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("reindexSearch POSTs /api/v1/admin/search/reindex and resolves on 202", async () => {
+    let hit: string | null = null;
+    const fetchMock = installFetch((url) => {
+      hit = url;
+      return makeRes({ status: 202, body: "" });
+    });
+    const client = await freshClient();
+    await expect(client.reindexSearch()).resolves.toBeUndefined();
+    expect(hit).toBe("/api/v1/admin/search/reindex");
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("reindexGraph POSTs /api/v1/admin/graph/reindex and resolves on 202", async () => {
+    let hit: string | null = null;
+    const fetchMock = installFetch((url) => {
+      hit = url;
+      return makeRes({ status: 202, body: "" });
+    });
+    const client = await freshClient();
+    await expect(client.reindexGraph()).resolves.toBeUndefined();
+    expect(hit).toBe("/api/v1/admin/graph/reindex");
+    expect(fetchMock).toHaveBeenCalled();
+  });
+});

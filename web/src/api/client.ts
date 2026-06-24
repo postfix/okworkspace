@@ -1024,6 +1024,15 @@ export async function reindexSearch(): Promise<void> {
   await mutate<void>("/api/v1/admin/search/reindex", undefined);
 }
 
+// reindexGraph triggers an admin rebuild of the derived link/graph store from
+// files (POST, CSRF-protected, admin-only server-side). The endpoint returns 202
+// (async — the rebuild runs in the background), so this resolves once the request
+// is accepted. Uses no Git/index/Bleve vocabulary in the thrown error (hidden-Git
+// rule).
+export async function reindexGraph(): Promise<void> {
+  await mutate<void>("/api/v1/admin/graph/reindex", undefined);
+}
+
 // relativeMdLink computes a relative `.md` link destination from the page at
 // fromPath to the page at toPath (both repo-relative slash paths), matching the
 // canonical on-disk link format (D-05). Used by the LinkPicker so an inserted
