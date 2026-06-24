@@ -145,6 +145,51 @@ func SetField(d *Doc, field, value string) {
 	d.FrontDirty = true
 }
 
+// SetTags surgically sets the top-level `tags` key to a BLOCK-style YAML
+// sequence (one `- tag` per line), creating the key if it is absent. It is the
+// yaml.SequenceNode analog of SetField and the byte-stable write primitive for
+// the per-page tag-apply path (TAG-03): it mutates ONLY the tags value node and
+// marks the document FrontDirty so Emit re-marshals the frontmatter, leaving the
+// body and every other frontmatter key byte-identical.
+//
+// Per the locked Phase-11 CONTEXT decision the canonical style for a NON-empty
+// tags key is block style (distinct from appendField's empty-`[]` flow style).
+// SetTags writes EXACTLY the slice it is given, in order — it does NOT normalize,
+// dedupe, lowercase, or cap. Normalization is the caller's (Wave-2 handler's)
+// responsibility; SetTags is a pure structural editor.
+func SetTags(d *Doc, tags []string) {
+	mapping := topMapping(d)
+	if mapping == nil {
+		mapping = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		d.Front = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{mapping}}
+		if !d.HasFrontmatter {
+			d.HasFrontmatter = true
+			d.openFence = fenceLine(d.EOLStyle)
+			d.closeFence = fenceLine(d.EOLStyle)
+		}
+	}
+
+	// Build the block-style sequence value node: Style 0 (NOT FlowStyle) so it
+	// renders as one `- tag` per line, with one !!str scalar per tag in order.
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	for _, tag := range tags {
+		seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: tag})
+	}
+
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == FieldTags {
+			// Replace the value node in place so the key keeps its position and
+			// the surrounding keys/comments are untouched.
+			mapping.Content[i+1] = seq
+			d.FrontDirty = true
+			return
+		}
+	}
+	key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: FieldTags}
+	mapping.Content = append(mapping.Content, key, seq)
+	d.FrontDirty = true
+}
+
 // fenceLine returns a "---" fence line terminated with the document's EOL.
 func fenceLine(style EOLStyle) []byte {
 	if style == EOLCRLF {
