@@ -150,7 +150,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 8. Derived Link/Tag Store & Maintenance | v1.0 | 3/3 | Complete    | 2026-06-24 |
 | 9. Graph Endpoints & Backlinks Panel | v1.0 | 2/2 | Complete    | 2026-06-24 |
 | 10. Graph UI | v1.0 | 3/3 | Complete    | 2026-06-24 |
-| 11. Per-Page LLM Tag Suggestion | v1.0 | 3/3 | Complete   | 2026-06-24 |
+| 11. Per-Page LLM Tag Suggestion | v1.0 | 3/3 | Complete    | 2026-06-24 |
 | 12. Bulk Sweep & Batch Review Queue | v1.0 | 0/TBD | Not started | - |
 
 **v0.9.9 MVP: 8/8 phases, 36/36 plans complete — shipped 2026-06-23.** All phase verifications closed (live browser UAT 2026-06-24).
