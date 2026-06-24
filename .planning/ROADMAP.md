@@ -51,10 +51,10 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
   3. An admin can rebuild the link/graph index from files via an affordance consistent with the existing "Rebuild search index" button
   4. Tag membership per page is queryable, giving the workspace's existing tag vocabulary for downstream prompting
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 - [x] 08-01-PLAN.md — `internal/graph` derived store (page_links/page_tags + migration 0009), KindGraph job + RebuildGraph data layer (LINK-01)
-- [ ] 08-02-PLAN.md — startup handler registration + drift rebuild + per-mutation fire-and-forget graph enqueue across all mutation kinds (LINK-01)
+- [x] 08-02-PLAN.md — startup handler registration + drift rebuild + per-mutation fire-and-forget graph enqueue across all mutation kinds (LINK-01)
 - [ ] 08-03-PLAN.md — admin "Rebuild graph index" affordance: POST /admin/graph/reindex + ActionGraphReindex + Admin.tsx button (LINK-03)
 
 ### Phase 9: Graph Endpoints & Backlinks Panel
@@ -133,7 +133,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 5. Collaboration | v0.9.9 | 4/4 | Complete | 2026-06-22 |
 | 6. Live-Preview Editor (Obsidian-style) | v0.9.9 | 4/4 | Complete | 2026-06-21 |
 | 7. Obsidian-style File Tree | v0.9.9 | 4/4 | Complete | 2026-06-21 |
-| 8. Derived Link/Tag Store & Maintenance | v1.0 | 1/3 | In Progress|  |
+| 8. Derived Link/Tag Store & Maintenance | v1.0 | 2/3 | In Progress|  |
 | 9. Graph Endpoints & Backlinks Panel | v1.0 | 0/TBD | Not started | - |
 | 10. Graph UI | v1.0 | 0/TBD | Not started | - |
 | 11. Per-Page LLM Tag Suggestion | v1.0 | 0/TBD | Not started | - |
