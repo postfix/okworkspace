@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Knowledge Graph & LLM Auto-Tagging
-current_phase: 12
-current_phase_name: Bulk Sweep & Batch Review Queue
-status: executing
+current_phase: 0
+status: Awaiting next milestone
 stopped_at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
-last_updated: "2026-06-24T12:19:56.105Z"
+last_updated: "2026-06-24T14:42:03.703Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 12 execution started
+last_activity_desc: Milestone v1.0 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 14
   completed_plans: 14
   percent: 100
+current_phase_name: Bulk Sweep & Batch Review Queue
 ---
 
 # Project State
@@ -24,16 +24,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-24)
 
 **Core value:** A non-technical teammate can create, edit, and find knowledge — and get useful AI help on it — while every byte stays as plain Markdown + original files on disk, versioned in Git, with no proprietary store to escape.
-**Current focus:** Phase 12 — Bulk Sweep & Batch Review Queue
+**Current focus:** Planning next milestone (v1.0 shipped)
 
 ## Current Position
 
-Phase: 12 (Bulk Sweep & Batch Review Queue) — COMPLETE
-Plan: 3 of 3 (all complete)
-Status: Phase 12 complete — milestone v1.0 ready to close
-Last activity: 2026-06-24 — Phase 12 plan 03 executed (TAG-05 sweep-start UI + TAG-06 review route)
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-24 — Milestone v1.0 completed and archived
 
-Progress: [██████████] 100%
+## Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-06-24:
+
+| Category | Item | Status |
+|----------|------|--------|
+| uat | Phase 10 canvas-pixel visual UAT (global + local graph render, zoom/pan, hover-highlight) — needs a human browser | deferred (wiring verified; visuals unasserted) |
+| uat | Phases 08/09/11 UAT | passed (0 pending scenarios — recorded for completeness) |
+| tech_debt | GraphCanvas bundle lazy-load (react-force-graph-2d runtime out of initial chunk) — P10 follow-up | deferred (non-blocking polish) |
+| tech_debt | Phase 12 eventual-consistency latency: under a saturated single worker the bulk-approve response reports `applied` before the commit physically lands (job is durable, re-drains) | accepted (not data loss) |
+| docs | Standing-team `docs/` refresh (contributor architecture + public surfaces for the v1.0 graph/tag subsystems) — `docs/` not yet authored | deferred (security review was run at close; docs deferred by choice) |
+| hardening | 3 informational security notes: uncapped admin-only sweep fan-out, tag charset permits HTML metachars (every sink output-encodes correctly), `govulncheck` inconclusive (Go 1.26/x-tools toolchain panic; `go vet` clean) | deferred (no defect; hardening only) |
 
 ## Performance Metrics
 
@@ -140,4 +151,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan the first v1.0 phase with `/gsd-plan-phase 8`
+- Start the next milestone with /gsd-new-milestone

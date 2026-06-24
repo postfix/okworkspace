@@ -1,5 +1,27 @@
 # Milestones
 
+## v1.0 Knowledge Graph & LLM Auto-Tagging (Shipped: 2026-06-24)
+
+**Phases completed:** 5 phases, 14 plans, 34 tasks
+**Git range:** v0.9.9..HEAD — 85 commits over 2026-06-23 → 2026-06-24
+**Audit:** [`milestones/v1.0-MILESTONE-AUDIT.md`](milestones/v1.0-MILESTONE-AUDIT.md) — passed (14/14 requirements, 5/5 integration seams, security review passed)
+
+**Key accomplishments:**
+
+- **Derived link/tag store (Phase 8, LINK-01/03):** a new `internal/graph` package with SQLite `page_links`/`page_tags` derived-cache tables and a `KindGraph` job (cloning `search.KindIndex`) wired into the single jobs worker beside search at every one of the eight page-mutation sites — kept fresh incrementally, fully rebuildable from on-disk `.md` files (byte-identical adjacency, `-race` clean), with an admin `POST /admin/graph/reindex` backstop. Never source of truth.
+- **Graph endpoints + backlinks (Phase 9, LINK-02):** a read-only query layer (`GraphData`/`Neighborhood`/`Backlinks`) exposed as three authed reads (`/graph`, `/graph/local`, `/graph/backlinks`) returning a lean bipartite typed-edge payload with a popular-tag hairball cap, plus a collapsible "Referenced by (N)" backlinks panel on the page read view.
+- **Obsidian-style graph UI (Phase 10, GRAPH-01..05):** a lazy-loaded `/app/graph` global force-directed view (single Canvas-only `react-force-graph-2d` dep, code-split into its own chunk; three.js provably absent) — degree-sized nodes, orphan distinction, edge-type toggle chips (shared-tag OFF by default), hover-neighbor highlight, click-to-open — plus a per-page collapsible Local-graph dock with a 1/2/3-hop depth control.
+- **Per-page LLM tag suggestion (Phase 11, TAG-01..04):** a byte-stable `okf.SetTags` frontmatter primitive (`yaml.Marshal`, only the `tags` region changes) feeding an on-demand suggest→review→approve chain through the existing single-writer commit path — vocabulary-biased, capped at 5, normalized on write, stale-revision 409, model output always re-validated server-side. Live-verified end-to-end against real DeepSeek.
+- **Bulk sweep + batch review queue (Phase 12, TAG-05/06):** an admin bulk untagged-pages sweep that enqueues per-page `KindTagSuggest` jobs on the async worker (writing nothing automatically) into a review queue, approved per page through the SAME byte-stable apply path with batched commits (N pages → 1 commit), per-page stale 409 that doesn't sink the batch.
+
+**Quality gates at close:**
+- Independent cross-phase integration check — `integration_ok` (5/5 seams wired, both E2E chains connect; `go build ./...` + `tsc -b` green).
+- Independent v1.0 security review (ASVS L1, block-on-high) — **passed**, zero HIGH/CRITICAL; all declared mitigations (path resolver on graph paths, server-side `ValidateTags`, byte-stable `SetTags`, session RBAC, stale-revision 409) confirmed in code. 3 informational hardening notes only.
+
+**Known deferred items at close: 3** (see STATE.md Deferred Items) — P10 canvas-pixel visual UAT (human browser), optional GraphCanvas bundle lazy-load, and the standing-team `docs/` refresh (security review was run; docs deferred by choice).
+
+---
+
 ## v0.9.9 MVP (Shipped: 2026-06-23)
 
 **Phases completed:** 8 phases, 36 plans, 82 tasks

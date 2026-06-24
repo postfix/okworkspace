@@ -7,7 +7,7 @@ OKF Workspace is built dependency-first: a safe foundation (single binary, auth,
 ## Milestones
 
 - ✅ **v0.9.9 MVP** — Phases 0–7 (shipped 2026-06-23) — full self-hosted OKF wiki: auth/RBAC, pages+hidden Git, attachments+extraction, search, approval-gated Eino agent, soft-lock collaboration, Obsidian-style live-preview editor + file tree. See [`milestones/v0.9.9-ROADMAP.md`](milestones/v0.9.9-ROADMAP.md).
-- 🚧 **v1.0 Knowledge Graph & LLM Auto-Tagging** — Phases 8–12 (in progress) — derived link/tag store + backlinks, Obsidian-style global/local graph UI with edge-type toggles, and approval-gated per-page + bulk LLM tag suggestion.
+- ✅ **v1.0 Knowledge Graph & LLM Auto-Tagging** — Phases 8–12 (shipped 2026-06-24) — derived link/tag store + backlinks, Obsidian-style global/local graph UI with edge-type toggles, and approval-gated per-page + bulk LLM tag suggestion. See [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md).
 
 ## Phases
 
@@ -27,115 +27,18 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
 
 </details>
 
-### 🚧 v1.0 Knowledge Graph & LLM Auto-Tagging (In Progress)
+<details>
+<summary>✅ v1.0 Knowledge Graph & LLM Auto-Tagging (Phases 8–12, 14 plans) — SHIPPED 2026-06-24</summary>
 
-**Milestone Goal:** Add Obsidian-style graph visualization and LLM-assisted tagging so the team can *see* how knowledge connects and keep it organized with minimal effort — all over existing v0.9.9 seams, with zero new backend dependency and exactly one new frontend package (`react-force-graph-2d`), preserving the single CGO-free binary and files-as-truth constraints.
+- [x] **Phase 8: Derived Link/Tag Store & Maintenance** (3 plans) — rebuildable link/backlink/tag adjacency kept fresh on every page mutation, with an admin rebuild backstop (LINK-01, LINK-03)
+- [x] **Phase 9: Graph Endpoints & Backlinks Panel** (2 plans) — HTTP graph endpoints (typed edges incl. shared-tag) and a page-view "Referenced by" backlinks panel (LINK-02)
+- [x] **Phase 10: Graph UI** (3 plans) — Obsidian-style global graph view + per-page local panel with edge-type toggles, degree sizing, orphans, and hover-highlight (GRAPH-01..05)
+- [x] **Phase 11: Per-Page LLM Tag Suggestion** (3 plans) — byte-stable `okf.SetTags` primitive + on-demand suggest→approve tagging through the single-writer commit path (TAG-01..04)
+- [x] **Phase 12: Bulk Sweep & Batch Review Queue** (3 plans) — admin bulk untagged-pages sweep that enqueues suggestion jobs into a review queue, approved per page through the same byte-stable apply path (TAG-05, TAG-06)
 
-- [x] **Phase 8: Derived Link/Tag Store & Maintenance** - Rebuildable link/backlink/tag adjacency kept fresh on every page mutation, with an admin rebuild backstop (completed 2026-06-24)
-- [x] **Phase 9: Graph Endpoints & Backlinks Panel** - HTTP graph endpoints (typed edges incl. shared-tag) and a page-view "Referenced by" backlinks panel (completed 2026-06-24)
-- [x] **Phase 10: Graph UI** - Obsidian-style global graph view + per-page local panel with edge-type toggles, degree sizing, orphans, and hover-highlight (completed 2026-06-24)
-- [x] **Phase 11: Per-Page LLM Tag Suggestion** - Byte-stable `okf.SetTags` primitive + on-demand suggest→approve tagging through the single-writer commit path (completed 2026-06-24)
-- [x] **Phase 12: Bulk Sweep & Batch Review Queue** - Admin bulk untagged-pages sweep that enqueues suggestion jobs into a review queue, approved per page through the same byte-stable apply path (completed 2026-06-24)
+Full phase detail, success criteria, and plan breakdown archived in [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md). Close gates: audit passed (14/14 requirements), integration `integration_ok`, security review passed.
 
-## Phase Details
-
-### Phase 8: Derived Link/Tag Store & Maintenance
-
-**Goal**: A derived, rebuildable-from-files adjacency store (page links, backlinks, tag membership) exists and stays fresh on every page mutation — the foundation both the graph UI and tag-vocabulary prompting depend on.
-**Depends on**: Phase 1 (page mutation seams), Phase 3 (KindIndex/RebuildIndex pattern to mirror) — both shipped in v0.9.9
-**Requirements**: LINK-01, LINK-03
-**Success Criteria** (what must be TRUE):
-
-  1. After any page mutation (create / save / rename / move / delete-to-trash / restore), the stored link and backlink adjacency reflects the change without an app restart
-  2. The link/tag store is derived only — deleting it and rebuilding from the Markdown files on disk reproduces identical adjacency (SQLite is never the source of truth)
-  3. An admin can rebuild the link/graph index from files via an affordance consistent with the existing "Rebuild search index" button
-  4. Tag membership per page is queryable, giving the workspace's existing tag vocabulary for downstream prompting
-
-**Plans**: 3/3 plans complete
-
-- [x] 08-01-PLAN.md — `internal/graph` derived store (page_links/page_tags + migration 0009), KindGraph job + RebuildGraph data layer (LINK-01)
-- [x] 08-02-PLAN.md — startup handler registration + drift rebuild + per-mutation fire-and-forget graph enqueue across all mutation kinds (LINK-01)
-- [x] 08-03-PLAN.md — admin "Rebuild graph index" affordance: POST /admin/graph/reindex + ActionGraphReindex + Admin.tsx button (LINK-03)
-
-### Phase 9: Graph Endpoints & Backlinks Panel
-
-**Goal**: The stored adjacency is exposed over HTTP as typed-edge graph payloads, and the first user-visible output ships: a page-view backlinks panel listing every page that links to the current one.
-**Depends on**: Phase 8
-**Requirements**: LINK-02
-**Success Criteria** (what must be TRUE):
-
-  1. A user viewing a page sees a "Referenced by" panel listing every page that links to it, and clicking an entry navigates to that page
-  2. A global graph endpoint returns all pages as nodes and their links as typed edges (page-links / backlinks / shared-tags) in a lean payload
-  3. A local graph endpoint returns a given page's neighborhood (the page plus its direct neighbors)
-  4. Shared-tag edges are computed with a popular-tag cap / threshold so the payload never explodes into a hairball on common tags
-
-**Plans**: 2/2 plans complete
-
-- [x] 09-01-PLAN.md — read-only `internal/graph` query layer (GraphData/Neighborhood/Backlinks, popular-tag cap) + authed `/api/v1/graph`, `/graph/local`, `/graph/backlinks` endpoints (LINK-02)
-- [x] 09-02-PLAN.md — collapsible "Referenced by (N)" backlinks panel in PageView + getBacklinks api fn + useBacklinks hook (LINK-02)
-
-**UI hint**: yes
-
-### Phase 10: Graph UI
-
-**Goal**: The headline visual feature ships — an Obsidian-style global graph view and a docked per-page local graph panel, both interactive, with configurable edge types.
-**Depends on**: Phase 9
-**Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05
-**Success Criteria** (what must be TRUE):
-
-  1. A user can open a global graph view showing all pages as nodes and links as edges, pan and zoom it, and click a node to open that page
-  2. Node size visibly reflects connection count (degree), and orphan (unlinked) pages are visible and distinguishable from connected ones
-  3. A user can open a per-page local graph panel showing the current page plus its direct neighbors, which auto-updates when the active page changes and offers a depth control (default 1 hop)
-  4. A user can toggle edge types (page links / backlinks / shared tags) on and off in the graph UI, with shared-tag edges off by default
-  5. Hovering a node highlights that node and its immediate neighbors and edges
-
-**Plans**: 3/3 plans complete
-
-- [x] 10-01-PLAN.md — testable core: install `react-force-graph-2d` (Canvas-only, lockfile `three`-absence guard) + `getGraph`/`getLocalGraph` api fns & hooks + `graphEdges` zustand toggle slice + pure degree/orphan/filter/highlight helpers + thin `GraphCanvas` ref wrapper + `--graph-node-orphan` token (GRAPH-01..05)
-- [x] 10-02-PLAN.md — global graph: lazy `/app/graph` route + `Graph` nav entry + `GraphView` (degree sizing, orphan distinction, click-to-open, pan/zoom) + `EdgeToggles` (shared-tag OFF default) + hover-highlight (GRAPH-01, GRAPH-02, GRAPH-04, GRAPH-05)
-- [x] 10-03-PLAN.md — local panel: right-side collapsible `LocalGraphPanel` dock (AgentPanel mirror) + `DepthControl` (1 hop default, 1-3) + auto-update on active page + PageView mount, shared toggles + hover-highlight (GRAPH-03, GRAPH-04, GRAPH-05)
-
-**UI hint**: yes
-
-### Phase 11: Per-Page LLM Tag Suggestion
-
-**Goal**: A user can get LLM tag suggestions for the page they are on and approve them per tag, with approved tags merged byte-stably into the YAML frontmatter through the existing single-writer commit path — establishing trust before any bulk operation.
-**Depends on**: Phase 8 (tag vocabulary), Phase 4 (propose→apply→Save safety pattern to mirror — shipped in v0.9.9)
-**Requirements**: TAG-01, TAG-02, TAG-03, TAG-04
-**Success Criteria** (what must be TRUE):
-
-  1. A user can request LLM tag suggestions on demand for the page they are viewing or editing
-  2. Suggested tags are presented for per-tag approve/reject before anything is written, with new (invented) tags distinguished from existing ones and defaulting to unchecked
-  3. Approving tags changes only the `tags` lines of the page's YAML frontmatter (body and other frontmatter byte-unchanged), commits through the single-writer Git path, and a stale page revision 409s rather than clobbering
-  4. Suggestions are biased toward the existing workspace tag vocabulary, capped at max 5 per page, and normalized on write (lowercase, trimmed, deduped)
-
-**Plans**: 3/3 plans complete
-
-- [x] 11-01-PLAN.md — Byte-stable okf.SetTags (TAG-03) + Store.Vocabulary for vocab biasing (TAG-04) [wave 1]
-- [x] 11-02-PLAN.md — SuggestTags single-shot mode + suggest/apply endpoints (apply: editor+CSRF→okf.SetTags→pages.Save, 409 on stale) (TAG-01) [wave 2]
-- [x] 11-03-PLAN.md — Suggest-tags trigger + per-tag approval UI (new-default-unchecked, Apply-not-autofocused, 409 stale state) (TAG-01, TAG-02) [wave 3]
-
-**UI hint**: yes
-
-### Phase 12: Bulk Sweep & Batch Review Queue
-
-**Goal**: An admin can run a bulk tagging sweep over untagged (or all) pages that produces a review queue of pending suggestions — writing nothing automatically — which a user reviews and approves per page through the same byte-stable apply path.
-**Depends on**: Phase 11 (per-page suggest + apply primitives), Phase 8 (page_tags for untagged-page enumeration)
-**Requirements**: TAG-05, TAG-06
-**Success Criteria** (what must be TRUE):
-
-  1. An admin can start a bulk tagging sweep over untagged (or all) pages that enqueues per-page suggestion jobs on the existing async worker and produces a queue of pending suggestions, writing nothing automatically
-  2. A user can review the bulk-sweep suggestion queue and approve or reject suggestions per page
-  3. Approvals from the queue route through the same byte-stable frontmatter apply path as per-page tagging, committed in batches (not one commit per page)
-  4. The sweep is resumable and never bypasses human approval — killing and restarting the worker does not auto-write tags
-
-**Plans**: 3/3 plans complete
-
-- [x] 12-01-PLAN.md — KindTagSuggest job + tag_suggestions staging table (migration 0010) + admin sweep-start & review-queue read endpoints; writes nothing, go/no-go safety gate (TAG-05) [wave 1]
-- [x] 12-02-PLAN.md — batched single-writer tag apply (one commit, stale-page 409s individually) + admin batched approve endpoint, server re-validates per page (TAG-06) [wave 2]
-- [x] 12-03-PLAN.md — admin sweep-start control + lazy /app/tag-review route + nav entry + TagReviewView (backlog, reuse TagSuggestList, batched Apply approved, states) (TAG-05, TAG-06) [wave 3]
-
-**UI hint**: yes
+</details>
 
 ## Progress
 
@@ -159,4 +62,4 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 12. Bulk Sweep & Batch Review Queue | v1.0 | 3/3 | Complete   | 2026-06-24 |
 
 **v0.9.9 MVP: 8/8 phases, 36/36 plans complete — shipped 2026-06-23.** All phase verifications closed (live browser UAT 2026-06-24).
-**v1.0 Knowledge Graph & LLM Auto-Tagging: 0/5 phases — planning.**
+**v1.0 Knowledge Graph & LLM Auto-Tagging: 5/5 phases, 14/14 plans complete — shipped 2026-06-24.** Audit passed (14/14 requirements, 5/5 integration seams), security review passed.

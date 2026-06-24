@@ -2,24 +2,17 @@
 
 ## What This Is
 
-OKF Workspace is a lightweight, self-hosted, OKF-native internal wiki built for the agent era. Human-readable Markdown files (with YAML frontmatter) are the source of truth, Git provides hidden version history, uploaded attachments stay downloadable as their original files, and a CloudWeGo Eino agent can read, search, summarize, and propose edits that a human approves before they are applied. It targets a small internal team (~5 people) who want Notion-like simplicity without vendor lock-in, monthly cost, or a proprietary knowledge database.
+OKF Workspace is a lightweight, self-hosted, OKF-native internal wiki built for the agent era. Human-readable Markdown files (with YAML frontmatter) are the source of truth, Git provides hidden version history, uploaded attachments stay downloadable as their original files, and a CloudWeGo Eino agent can read, search, summarize, and propose edits that a human approves before they are applied. An Obsidian-style knowledge graph (global + per-page) with backlinks lets the team *see* how pages connect, and approval-gated LLM tagging (per-page and bulk) keeps the workspace organized — all from a derived store that is never the source of truth. It targets a small internal team (~5 people) who want Notion-like simplicity without vendor lock-in, monthly cost, or a proprietary knowledge database.
 
 ## Core Value
 
 A non-technical teammate can create, edit, and find knowledge — and get useful AI help on it — while every byte stays as plain Markdown + original files on disk, versioned in Git, with no proprietary store to escape. If everything else fails, *the data must remain open, portable, and the wiki usable without Git knowledge.*
 
-## Current Milestone: v1.0 Knowledge Graph & LLM Auto-Tagging
+## Current State
 
-**Goal:** Add Obsidian-style graph visualization and LLM-assisted tagging so the team can *see* how knowledge connects and keep it organized with minimal effort.
+**Shipped: v1.0 Knowledge Graph & LLM Auto-Tagging (2026-06-24).** All 5 phases (14 plans, 34 tasks) complete and verified — milestone audit passed (14/14 requirements, 5/5 integration seams), independent security review passed (zero HIGH/CRITICAL). Delivered: a derived link/tag adjacency store (rebuildable from files, never source of truth) with backlinks, an Obsidian-style global + per-page graph UI with edge-type toggles, and approval-gated LLM tagging (per-page on-demand + admin bulk sweep with a batch review queue) routed through the existing byte-stable single-writer commit path.
 
-**Target features:**
-- Global graph view — full-workspace graph (pages as nodes, links as edges), click-to-navigate, zoom/pan
-- Local graph panel — per-page neighborhood (current page + direct connections) in a side panel
-- Configurable edge types in the graph UI (Obsidian-style toggles): page links, backlinks, shared-tag edges
-- Backlinks — reverse-link tracking feeding both the graph and a page-view backlinks panel
-- LLM tag suggestion (per-page, on demand)
-- LLM bulk tagging sweep over untagged (or all) pages
-- Suggest→approve flow for tags (no silent frontmatter writes; consistent with the agent safety model)
+**Next milestone:** not yet defined — run `/gsd-new-milestone` to scope it. Candidate directions surfaced during v1.0: graph performance/clustering at larger page counts, tag-management UX (rename/merge across the workspace), and the deferred GraphCanvas bundle lazy-load. See STATE.md Deferred Items for the carried-forward backlog.
 
 ## Requirements
 
@@ -37,14 +30,15 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 - ✓ **Collaboration (MVP)** — v0.9.9 — soft locks + presence indicator; optimistic concurrency with document revision; 409 conflict shows a diff with overwrite / manual-merge / save-as-copy
 - ✓ **Security & audit** — v0.9.9 — fuzz-tested safe path resolver; upload size/MIME/extension limits; `Content-Disposition: attachment` for risky formats; Argon2id hashing; HttpOnly SameSite cookies; nosurf CSRF; SQLite+slog audit log
 - ✓ **Live-preview editor (Obsidian-style)** — v0.9.9 (Phase 6) — CM6 inline-rendering Markdown editor with source toggle, byte-stable round-trip preserved
+- ✓ **Knowledge graph** — v1.0 — derived link/tag store (rebuildable, never source of truth) + Obsidian-style global graph view & per-page local panel; configurable edge types (page links / backlinks / shared tags, shared-tag OFF by default); degree sizing, orphan distinction, hover-highlight, click-to-navigate
+- ✓ **Backlinks** — v1.0 — reverse-link tracking + page-view "Referenced by" panel + `/graph/backlinks` endpoint
+- ✓ **LLM auto-tagging** — v1.0 — per-page on-demand tag suggestion + admin bulk untagged sweep with a batch review queue; suggest→approve (no silent writes), byte-stable frontmatter apply, vocabulary-biased & capped, model output re-validated server-side
 
 ### Active
 
-<!-- v1.0 scope. Detailed REQ-IDs in REQUIREMENTS.md. -->
+<!-- Next milestone scope — TBD via /gsd-new-milestone. -->
 
-- **Knowledge graph** — global graph view + per-page local graph panel; configurable edge types (page links / backlinks / shared tags); click-to-navigate
-- **Backlinks** — reverse-link tracking + page-view backlinks panel
-- **LLM auto-tagging** — per-page on-demand tag suggestion + bulk untagged sweep; suggest→approve (no silent writes)
+(None — v1.0 shipped. Next milestone not yet scoped.)
 
 ### Out of Scope
 
@@ -61,7 +55,7 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 ## Context
 
 - **Domain:** internal knowledge base / wiki, "agent-era" — files-as-truth so both humans and agents read the same Markdown.
-- **Current state (post-v0.9.9, 2026-06-23):** MVP shipped — all 8 phases (36 plans, 82 tasks) complete and verified. A single CGO-free Go binary serves the embedded React SPA, backed by `internal/{config,server,auth,users,repo,okf,attachments,search,gitstore,agent,jobs,locks,audit,web}` + `cmd/okf-workspace`. All phase verifications closed via live browser UAT on 2026-06-24 (auth/RBAC/seed, attachments byte-exact + extraction, ⌘K search, agent summarize, two-session presence/lock/409 conflict floor). Tech stack as locked: chi, Goldmark, Bleve, Eino + DeepSeek (provider-agnostic), modernc SQLite, React 19 + Vite + CM6.
+- **Current state (post-v1.0, 2026-06-24):** v1.0 Knowledge Graph & LLM Auto-Tagging shipped — 5 phases (14 plans, 34 tasks) on top of the v0.9.9 MVP (8 phases, 36 plans). A single CGO-free Go binary serves the embedded React SPA, backed by `internal/{config,server,auth,users,repo,okf,attachments,search,gitstore,agent,jobs,locks,audit,graph,tagsweep,web}` + `cmd/okf-workspace`. v1.0 added the `internal/graph` derived link/tag store + query layer, `internal/tagsweep` async bulk-suggest jobs, `internal/agent` SuggestTags mode, and the React graph/backlinks/tag-review UI (one new frontend dep: `react-force-graph-2d`, Canvas-only, three.js absent). ~85 commits over 2026-06-23→24. Tech stack as locked: chi, Goldmark, Bleve, Eino + DeepSeek (provider-agnostic), modernc SQLite, React 19 + Vite + CM6. Known carry-forward: P10 canvas-pixel visual UAT and GraphCanvas bundle lazy-load (see STATE.md Deferred Items); `docs/` not yet authored (standing-team docs refresh deferred at v1.0 close).
 - **Repository origin:** began greenfield from `SPEC.md` (the product+technical spec, source of truth for the build).
 - **Storage model:** OKF-compatible Markdown + first-class attachments on the filesystem inside a Git repo; SQLite holds *operational data only* (users, sessions, jobs, indexing cache, attachment references, UI prefs, audit mirror) and must never become the source of truth for content.
 - **Repo layout (workspace data):** `index.md`, topic folders (`runbooks/`, `architecture/`, `decisions/`), `assets/{originals,extracted,metadata}/`, and app-private `.okf-workspace/{manifest.json,trash/,locks/}`.
@@ -86,15 +80,18 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Target = full MVP (SPEC Phases 0–5), SPEC.md is source of truth | User confirmed the whole MVP, not just the §24 first-prototype slice | — Pending |
-| Frontend framework: React | Largest ecosystem; Markdown renderer, editor (TipTap later), diff, and upload components target React first | — Pending |
-| Search engine: Bleve | Richer relevance/faceting than SQLite FTS5; pure-Go, no extra service | — Pending |
-| HTTP router: chi | Lightweight, idiomatic, composable middleware over net/http | — Pending |
-| Agent LLM: provider-agnostic via config | Keep deployment flexible (local Ollama or remote) for the "lightweight self-host" goal | — Pending |
-| Files-as-truth; SQLite = operational data only | Avoid proprietary lock-in; data stays portable/agent-readable | — Pending |
-| Git hidden behind backend; commits automatic | Non-technical users must not need Git knowledge | — Pending |
-| Agent writes require explicit user approval | Safety: agent proposes diffs, human approves before apply/commit | — Pending |
-| MVP editor = Markdown-with-preview; TipTap deferred to Phase 2 | Protect Markdown round-trip; avoid corruption risk of a rich editor in MVP | — Pending |
+| Target = full MVP (SPEC Phases 0–5), SPEC.md is source of truth | User confirmed the whole MVP, not just the §24 first-prototype slice | ✓ Good — MVP shipped v0.9.9 |
+| Frontend framework: React | Largest ecosystem; Markdown renderer, editor (TipTap later), diff, and upload components target React first | ✓ Good — React 19 + Vite + CM6 through v1.0 |
+| Search engine: Bleve | Richer relevance/faceting than SQLite FTS5; pure-Go, no extra service | ✓ Good — shipped v0.9.9 |
+| HTTP router: chi | Lightweight, idiomatic, composable middleware over net/http | ✓ Good — RBAC subgroups reused cleanly in v1.0 |
+| Agent LLM: provider-agnostic via config | Keep deployment flexible (local Ollama or remote) for the "lightweight self-host" goal | ✓ Good — DeepSeek used live; no code change for provider |
+| Files-as-truth; SQLite = operational data only | Avoid proprietary lock-in; data stays portable/agent-readable | ✓ Good — v1.0 graph/tag store is a derived cache, rebuildable from files |
+| Git hidden behind backend; commits automatic | Non-technical users must not need Git knowledge | ✓ Good — tag-apply rides the same single-writer commit path |
+| Agent writes require explicit user approval | Safety: agent proposes diffs, human approves before apply/commit | ✓ Good — extended to tagging: suggest→approve, no silent writes |
+| MVP editor = Markdown-with-preview; TipTap deferred to Phase 2 | Protect Markdown round-trip; avoid corruption risk of a rich editor in MVP | ✓ Good — CM6 live-preview shipped Phase 6; TipTap still deferred |
+| v1.0: derived graph/tag store is a SQLite cache, never source of truth | Preserve files-as-truth; deleting + rebuilding from `.md` reproduces byte-identical adjacency | ✓ Good — `-race`-clean rebuild parity proven; admin reindex backstop |
+| v1.0: byte-stable `okf.SetTags` via `yaml.Marshal`, model output re-validated server-side | Only the `tags` region changes; never trust LLM output or client tag list at the write | ✓ Good — security review confirmed no YAML/frontmatter injection vector |
+| v1.0: `react-force-graph-2d` (Canvas-only), lockfile guard that `three` is absent | One new frontend dep; keep the initial editor bundle lean (graph code-splits) | ✓ Good — three.js provably absent; graph in its own lazy chunk |
 
 ## Evolution
 
@@ -114,4 +111,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-24 — milestone v1.0 (Knowledge Graph & LLM Auto-Tagging) started*
+*Last updated: 2026-06-24 after v1.0 milestone (Knowledge Graph & LLM Auto-Tagging) shipped*
