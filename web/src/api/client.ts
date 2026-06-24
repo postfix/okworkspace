@@ -243,6 +243,66 @@ export async function getBacklinks(path: string): Promise<Backlink[]> {
   return (await res.json()) as Backlink[];
 }
 
+// --- Graph (GRAPH-01..05) ---
+//
+// The Phase-9 read endpoints return a LEAN bipartite typed-edge payload: page +
+// tag nodes (ids + labels + type only — never bodies), page->page link edges +
+// page->tag membership edges. Direction on link edges carries backlink
+// derivability (no separate backlink edge type). Tag node ids are namespaced
+// `tag:<name>` so they can never collide with a page path.
+
+// GraphNode is one node of the graph payload. type distinguishes a wiki page from
+// a tag node (the bipartite Phase-9 shape). label is the display text (a page's
+// resolved title, or the bare tag for a tag node) — rendered ONLY as canvas/React
+// text, never via dangerouslySetInnerHTML (stored-XSS guard, T-10-01).
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: "page" | "tag";
+}
+
+// GraphEdge is one typed edge: a page->page "link" or a page->tag "tag"
+// (shared-tag/membership) edge. source/target are node ids.
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: "link" | "tag";
+}
+
+// GraphData is the whole graph payload returned by /graph and /graph/local.
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+// getGraph fetches the whole-workspace graph (a GET — no CSRF needed). On failure
+// it throws generic, hidden-Git-safe copy (no git/sqlite/bleve/index vocabulary —
+// mirrors the BacklinksPanel contract, T-10-02).
+export async function getGraph(): Promise<GraphData> {
+  const res = await fetch("/api/v1/graph", { credentials: "same-origin" });
+  if (!res.ok) {
+    throw new Error("Couldn't load the graph.");
+  }
+  return (await res.json()) as GraphData;
+}
+
+// getLocalGraph fetches the neighborhood around `path` to `depth` hops (a GET —
+// no CSRF needed). depth is clamped server-side to [1,3]. The path is URL-encoded
+// into the query string. Throws the same generic copy on failure.
+export async function getLocalGraph(
+  path: string,
+  depth: number,
+): Promise<GraphData> {
+  const res = await fetch(
+    `/api/v1/graph/local?path=${encodeURIComponent(path)}&depth=${depth}`,
+    { credentials: "same-origin" },
+  );
+  if (!res.ok) {
+    throw new Error("Couldn't load the local graph.");
+  }
+  return (await res.json()) as GraphData;
+}
+
 // getPage fetches a single page by its repo-relative path (a GET).
 export async function getPage(path: string): Promise<Page> {
   const res = await fetch(`/api/v1/pages/${path}`, { credentials: "same-origin" });
