@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: Knowledge Graph & LLM Auto-Tagging
 current_phase: 10
 current_phase_name: Graph UI
-status: executing
+status: verifying
 stopped_at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
-last_updated: "2026-06-24T08:11:37.794Z"
+last_updated: "2026-06-24T08:19:37.223Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
-  percent: 40
+  completed_plans: 8
+  percent: 60
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 
 Phase: 10 (Graph UI) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-24 — Phase 10 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 09 P01 | 18min | 2 tasks | 7 files |
 | Phase 09 P02 | 9min | 2 tasks | 7 files |
 | Phase 10 P01 | 5min | 3 tasks | 15 files |
+| Phase 10 P03 | 4min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,8 @@ Recent decisions affecting v1.0 work:
 - [Phase ?]: react-force-graph-2d Canvas-only adopted; three.js asserted absent from lockfile
 - [Phase ?]: Graph filterEdges keeps link edges when EITHER Links OR Backlinks is on (both off hides links); tag edges gated by sharedTags (OFF default)
 - [Phase ?]: GraphCanvas closes stored-XSS sink at the wrapper: nodeLabel empty (no DOM tooltip), labels drawn only as canvas text
+- [Phase 10]: Local-graph dock collapsed by default; fetch gated to empty path while collapsed (no /graph/local cost until revealed)
+- [Phase 10]: EdgeToggles imported from 10-02 and bound to the shared graphEdges slice — global + local graph views stay in lock-step
 
 ### Pending Todos
 
@@ -117,7 +120,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-24T08:11:37.790Z
+Last session: 2026-06-24T08:19:07.230Z
 Stopped at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
 Resume file: None
 

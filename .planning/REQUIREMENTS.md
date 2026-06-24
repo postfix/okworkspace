@@ -21,7 +21,7 @@ Obsidian-style force-directed visualization. 2D Canvas renderer (`react-force-gr
 
 - [x] **GRAPH-01**: User can open a global graph view showing all pages as nodes and links as edges, with zoom/pan and click-a-node-to-open-its-page
 - [x] **GRAPH-02**: Node size reflects connection count (degree); orphan (unlinked) pages are visible and visually distinguishable
-- [ ] **GRAPH-03**: User can open a per-page local graph panel showing the current page plus its direct neighbors, auto-updating when the active page changes, with a depth control (default 1 hop)
+- [x] **GRAPH-03**: User can open a per-page local graph panel showing the current page plus its direct neighbors, auto-updating when the active page changes, with a depth control (default 1 hop)
 - [x] **GRAPH-04**: User can toggle edge types on/off in the graph UI (page links / backlinks / shared tags), Obsidian-style; shared-tag edges default OFF and are thresholded (≥2 shared tags, popular tags capped) to avoid a hairball
 - [x] **GRAPH-05**: Hovering a node highlights that node and its immediate neighbors/edges
 
@@ -79,7 +79,7 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | LINK-03 | Phase 8 | Complete |
 | GRAPH-01 | Phase 10 | Complete |
 | GRAPH-02 | Phase 10 | Complete |
-| GRAPH-03 | Phase 10 | Pending |
+| GRAPH-03 | Phase 10 | Complete |
 | GRAPH-04 | Phase 10 | Complete |
 | GRAPH-05 | Phase 10 | Complete |
 | TAG-01 | Phase 11 | Pending |
