@@ -375,6 +375,33 @@ func (s *Store) distinctPageCount(ctx context.Context) (int, error) {
 	return len(set), nil
 }
 
+// Vocabulary returns the workspace's existing tag vocabulary — the DISTINCT set
+// of tags currently present across all pages in the derived page_tags cache,
+// sorted ascending for a deterministic, stable order (stable prompts and tests).
+// It reads the DERIVED cache only (never the source-of-truth files) and exists
+// solely to bias the Phase-11 tag-suggestion prompt toward reusing existing tags
+// over inventing near-synonyms (TAG-04). It always returns a non-nil slice (an
+// empty, non-nil slice when no tags exist) so callers never special-case nil.
+func (s *Store) Vocabulary(ctx context.Context) ([]string, error) {
+	out := []string{}
+	if s.db == nil {
+		return out, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT tag FROM page_tags ORDER BY tag`)
+	if err != nil {
+		return out, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return out, err
+		}
+		out = append(out, tag)
+	}
+	return out, rows.Err()
+}
+
 // tagPageCounts returns, per tag, the number of distinct pages carrying it.
 func (s *Store) tagPageCounts(ctx context.Context) (map[string]int, error) {
 	rows, err := s.db.QueryContext(ctx,

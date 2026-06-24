@@ -297,6 +297,43 @@ func TestBacklinks_ReverseQuery(t *testing.T) {
 	}
 }
 
+// TestVocabulary_DistinctSortedDeduped: over pages with overlapping tags, the
+// vocabulary is the DISTINCT tag set, sorted ascending and deduped across pages.
+func TestVocabulary_DistinctSortedDeduped(t *testing.T) {
+	h := newHarness(t)
+	h.writePage(t, "a.md", "Alpha", []string{"design", "notes"}, "x")
+	h.writePage(t, "b.md", "Bravo", []string{"notes", "architecture"}, "x")
+	h.writePage(t, "c.md", "Charlie", []string{"design"}, "x")
+	h.rebuild(t)
+
+	vocab, err := h.st.Vocabulary(context.Background())
+	if err != nil {
+		t.Fatalf("Vocabulary: %v", err)
+	}
+	want := []string{"architecture", "design", "notes"}
+	if !equalSlices(vocab, want) {
+		t.Fatalf("vocabulary = %v, want %v (distinct, sorted, deduped)", vocab, want)
+	}
+}
+
+// TestVocabulary_EmptyStoreNonNil: an empty workspace returns a non-nil empty
+// slice (callers never special-case nil).
+func TestVocabulary_EmptyStoreNonNil(t *testing.T) {
+	h := newHarness(t)
+	h.rebuild(t)
+
+	vocab, err := h.st.Vocabulary(context.Background())
+	if err != nil {
+		t.Fatalf("Vocabulary: %v", err)
+	}
+	if vocab == nil {
+		t.Fatal("Vocabulary must return a non-nil slice for an empty store")
+	}
+	if len(vocab) != 0 {
+		t.Fatalf("empty store vocabulary = %v, want []", vocab)
+	}
+}
+
 func equalSlices(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
