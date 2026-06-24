@@ -19,11 +19,11 @@ Derived, rebuildable-from-files adjacency that powers both the graph and the bac
 
 Obsidian-style force-directed visualization. 2D Canvas renderer (`react-force-graph-2d`), lazy-loaded route; no WebGL/three.js.
 
-- [ ] **GRAPH-01**: User can open a global graph view showing all pages as nodes and links as edges, with zoom/pan and click-a-node-to-open-its-page
-- [ ] **GRAPH-02**: Node size reflects connection count (degree); orphan (unlinked) pages are visible and visually distinguishable
+- [x] **GRAPH-01**: User can open a global graph view showing all pages as nodes and links as edges, with zoom/pan and click-a-node-to-open-its-page
+- [x] **GRAPH-02**: Node size reflects connection count (degree); orphan (unlinked) pages are visible and visually distinguishable
 - [ ] **GRAPH-03**: User can open a per-page local graph panel showing the current page plus its direct neighbors, auto-updating when the active page changes, with a depth control (default 1 hop)
-- [ ] **GRAPH-04**: User can toggle edge types on/off in the graph UI (page links / backlinks / shared tags), Obsidian-style; shared-tag edges default OFF and are thresholded (≥2 shared tags, popular tags capped) to avoid a hairball
-- [ ] **GRAPH-05**: Hovering a node highlights that node and its immediate neighbors/edges
+- [x] **GRAPH-04**: User can toggle edge types on/off in the graph UI (page links / backlinks / shared tags), Obsidian-style; shared-tag edges default OFF and are thresholded (≥2 shared tags, popular tags capped) to avoid a hairball
+- [x] **GRAPH-05**: Hovering a node highlights that node and its immediate neighbors/edges
 
 ### LLM Auto-Tagging (TAG)
 
@@ -77,11 +77,11 @@ Which phases cover which requirements. Filled in during roadmap creation.
 | LINK-01 | Phase 8 | Complete |
 | LINK-02 | Phase 9 | Complete |
 | LINK-03 | Phase 8 | Complete |
-| GRAPH-01 | Phase 10 | Pending |
-| GRAPH-02 | Phase 10 | Pending |
+| GRAPH-01 | Phase 10 | Complete |
+| GRAPH-02 | Phase 10 | Complete |
 | GRAPH-03 | Phase 10 | Pending |
-| GRAPH-04 | Phase 10 | Pending |
-| GRAPH-05 | Phase 10 | Pending |
+| GRAPH-04 | Phase 10 | Complete |
+| GRAPH-05 | Phase 10 | Complete |
 | TAG-01 | Phase 11 | Pending |
 | TAG-02 | Phase 11 | Pending |
 | TAG-03 | Phase 11 | Pending |

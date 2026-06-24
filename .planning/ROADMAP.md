@@ -89,10 +89,10 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
   4. A user can toggle edge types (page links / backlinks / shared tags) on and off in the graph UI, with shared-tag edges off by default
   5. Hovering a node highlights that node and its immediate neighbors and edges
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 - [x] 10-01-PLAN.md — testable core: install `react-force-graph-2d` (Canvas-only, lockfile `three`-absence guard) + `getGraph`/`getLocalGraph` api fns & hooks + `graphEdges` zustand toggle slice + pure degree/orphan/filter/highlight helpers + thin `GraphCanvas` ref wrapper + `--graph-node-orphan` token (GRAPH-01..05)
-- [ ] 10-02-PLAN.md — global graph: lazy `/app/graph` route + `Graph` nav entry + `GraphView` (degree sizing, orphan distinction, click-to-open, pan/zoom) + `EdgeToggles` (shared-tag OFF default) + hover-highlight (GRAPH-01, GRAPH-02, GRAPH-04, GRAPH-05)
+- [x] 10-02-PLAN.md — global graph: lazy `/app/graph` route + `Graph` nav entry + `GraphView` (degree sizing, orphan distinction, click-to-open, pan/zoom) + `EdgeToggles` (shared-tag OFF default) + hover-highlight (GRAPH-01, GRAPH-02, GRAPH-04, GRAPH-05)
 - [ ] 10-03-PLAN.md — local panel: right-side collapsible `LocalGraphPanel` dock (AgentPanel mirror) + `DepthControl` (1 hop default, 1-3) + auto-update on active page + PageView mount, shared toggles + hover-highlight (GRAPH-03, GRAPH-04, GRAPH-05)
 
 **UI hint**: yes
@@ -144,7 +144,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 7. Obsidian-style File Tree | v0.9.9 | 4/4 | Complete | 2026-06-21 |
 | 8. Derived Link/Tag Store & Maintenance | v1.0 | 3/3 | Complete    | 2026-06-24 |
 | 9. Graph Endpoints & Backlinks Panel | v1.0 | 2/2 | Complete    | 2026-06-24 |
-| 10. Graph UI | v1.0 | 1/3 | In Progress|  |
+| 10. Graph UI | v1.0 | 2/3 | In Progress|  |
 | 11. Per-Page LLM Tag Suggestion | v1.0 | 0/TBD | Not started | - |
 | 12. Bulk Sweep & Batch Review Queue | v1.0 | 0/TBD | Not started | - |
 
