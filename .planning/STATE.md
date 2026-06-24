@@ -6,14 +6,14 @@ current_phase: 12
 current_phase_name: Bulk Sweep & Batch Review Queue
 status: executing
 stopped_at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
-last_updated: "2026-06-24T11:56:05.511Z"
+last_updated: "2026-06-24T12:08:12.792Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
   percent: 80
 ---
 
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 ## Current Position
 
 Phase: 12 (Bulk Sweep & Batch Review Queue) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 12
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-06-24 — Phase 12 execution started
 
 Progress: [█████████░] 91%
@@ -69,6 +69,7 @@ Progress: [█████████░] 91%
 | Phase 11 P02 | 25m | 2 tasks | 8 files |
 | Phase 11 P03 | ~20m | 2 tasks | 6 files |
 | Phase 12 P01 | 30m | 3 tasks | 11 files |
+| Phase 12 P02 | ~40m | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,8 @@ Recent decisions affecting v1.0 work:
 - [Phase ?]: 11-02: SuggestTags is a single-shot Generate MODE (validate-and-retry, JSON-array not response_format), never a 6th Eino tool; apply-tags is a non-tool editor+CSRF endpoint reusing pages.Save→single-writer + 409 floor
 - [Phase ?]: TagSuggest loading state lives on the trigger button (Suggesting tags…); the approval modal opens only after suggest succeeds, matching the UI-SPEC trigger loading label.
 - [Phase ?]: Editor gate reads the cached [me] react-query role (canEdit = editor/admin) for convenience; apply-tags is the real editor+CSRF boundary server-side.
+- [Phase ?]: 12-02: Reused existing commitPayload []fileWrite payload for ApplyTagsBatch (N pages -> ONE commit); no new batch commit primitive needed — Pitfall-6 batched-commit invariant falls out of the existing single-writer path.
+- [Phase ?]: 12-02: Moved setTagsFrontmatter into internal/pages as exported SetTagsFrontmatter so per-page + batch apply share ONE byte-stable tags-region builder and cannot drift.
 
 ### Pending Todos
 
@@ -129,7 +132,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-24T11:55:50.952Z
+Last session: 2026-06-24T12:07:55.211Z
 Stopped at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
 Resume file: None
 

@@ -129,10 +129,10 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
   3. Approvals from the queue route through the same byte-stable frontmatter apply path as per-page tagging, committed in batches (not one commit per page)
   4. The sweep is resumable and never bypasses human approval — killing and restarting the worker does not auto-write tags
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 - [x] 12-01-PLAN.md — KindTagSuggest job + tag_suggestions staging table (migration 0010) + admin sweep-start & review-queue read endpoints; writes nothing, go/no-go safety gate (TAG-05) [wave 1]
-- [ ] 12-02-PLAN.md — batched single-writer tag apply (one commit, stale-page 409s individually) + admin batched approve endpoint, server re-validates per page (TAG-06) [wave 2]
+- [x] 12-02-PLAN.md — batched single-writer tag apply (one commit, stale-page 409s individually) + admin batched approve endpoint, server re-validates per page (TAG-06) [wave 2]
 - [ ] 12-03-PLAN.md — admin sweep-start control + lazy /app/tag-review route + nav entry + TagReviewView (backlog, reuse TagSuggestList, batched Apply approved, states) (TAG-05, TAG-06) [wave 3]
 
 **UI hint**: yes
@@ -156,7 +156,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 9. Graph Endpoints & Backlinks Panel | v1.0 | 2/2 | Complete    | 2026-06-24 |
 | 10. Graph UI | v1.0 | 3/3 | Complete    | 2026-06-24 |
 | 11. Per-Page LLM Tag Suggestion | v1.0 | 3/3 | Complete    | 2026-06-24 |
-| 12. Bulk Sweep & Batch Review Queue | v1.0 | 1/3 | In Progress|  |
+| 12. Bulk Sweep & Batch Review Queue | v1.0 | 2/3 | In Progress|  |
 
 **v0.9.9 MVP: 8/8 phases, 36/36 plans complete — shipped 2026-06-23.** All phase verifications closed (live browser UAT 2026-06-24).
 **v1.0 Knowledge Graph & LLM Auto-Tagging: 0/5 phases — planning.**
