@@ -13,6 +13,7 @@ import {
   ChevronsUpDown,
   FilePlus,
   FolderPlus,
+  Network,
   PanelLeft,
   PanelLeftClose,
   PanelRightOpen,
@@ -692,6 +693,17 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           {/* Scrolling body — the file tree (with Trash at its bottom) + recent. */}
           <div className="navrail-body">
             <LeftTree ref={treeRef} />
+            <button
+              type="button"
+              className={`navrow navrail-trash-row${
+                location.pathname === "/app/graph" ? " navrail-row-active" : ""
+              }`}
+              onClick={() => navigate("/app/graph")}
+              aria-current={location.pathname === "/app/graph" ? "page" : undefined}
+            >
+              <Network size={16} aria-hidden="true" className="tree-icon" />
+              <span className="tree-label">Graph</span>
+            </button>
             <button
               type="button"
               className="navrow navrail-trash-row"

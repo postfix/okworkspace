@@ -263,6 +263,14 @@
   color: var(--color-text);
 }
 
+/* Active nav row (e.g. the Graph entry when on /app/graph) — reuses the existing
+   tree-active treatment so the selected destination reads with the reserved
+   accent, matching the rest of the nav. */
+.navrail-row-active {
+  background: var(--color-tree-active-bg);
+  color: var(--color-text);
+}
+
 .navtree {
   list-style: none;
   margin: 0;

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
@@ -11,6 +11,12 @@ import PageEditor from "./routes/PageEditor";
 import TrashView from "./components/TrashView";
 import ForcePasswordChange from "./routes/ForcePasswordChange";
 import { me, type Me } from "./api/client";
+
+// GraphView is lazy-loaded so react-force-graph-2d (the Canvas library) code-
+// splits OUT of the initial editor bundle — the bundle-discipline guard from
+// CONTEXT (research pitfall 6 / T-10-05). It is only fetched when /app/graph is
+// visited.
+const GraphView = lazy(() => import("./components/graph/GraphView"));
 
 // useSession loads the current user via /auth/me. A 401 means unauthenticated.
 function useSession() {
@@ -104,6 +110,29 @@ export default function App() {
           <RequireAuth>
             <AppShell>
               <Profile />
+            </AppShell>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/app/graph"
+        element={
+          <RequireAuth>
+            <AppShell>
+              <Suspense
+                fallback={
+                  <div
+                    style={{
+                      padding: "var(--space-2xl)",
+                      color: "var(--color-text-muted)",
+                    }}
+                  >
+                    Building the graph…
+                  </div>
+                }
+              >
+                <GraphView />
+              </Suspense>
             </AppShell>
           </RequireAuth>
         }
