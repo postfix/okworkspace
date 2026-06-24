@@ -31,7 +31,7 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
 
 **Milestone Goal:** Add Obsidian-style graph visualization and LLM-assisted tagging so the team can *see* how knowledge connects and keep it organized with minimal effort — all over existing v0.9.9 seams, with zero new backend dependency and exactly one new frontend package (`react-force-graph-2d`), preserving the single CGO-free binary and files-as-truth constraints.
 
-- [ ] **Phase 8: Derived Link/Tag Store & Maintenance** - Rebuildable link/backlink/tag adjacency kept fresh on every page mutation, with an admin rebuild backstop
+- [x] **Phase 8: Derived Link/Tag Store & Maintenance** - Rebuildable link/backlink/tag adjacency kept fresh on every page mutation, with an admin rebuild backstop (completed 2026-06-24)
 - [ ] **Phase 9: Graph Endpoints & Backlinks Panel** - HTTP graph endpoints (typed edges incl. shared-tag) and a page-view "Referenced by" backlinks panel
 - [ ] **Phase 10: Graph UI** - Obsidian-style global graph view + per-page local panel with edge-type toggles, degree sizing, orphans, and hover-highlight
 - [ ] **Phase 11: Per-Page LLM Tag Suggestion** - Byte-stable `okf.SetTags` primitive + on-demand suggest→approve tagging through the single-writer commit path
@@ -51,11 +51,11 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
   3. An admin can rebuild the link/graph index from files via an affordance consistent with the existing "Rebuild search index" button
   4. Tag membership per page is queryable, giving the workspace's existing tag vocabulary for downstream prompting
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans complete
 
 - [x] 08-01-PLAN.md — `internal/graph` derived store (page_links/page_tags + migration 0009), KindGraph job + RebuildGraph data layer (LINK-01)
 - [x] 08-02-PLAN.md — startup handler registration + drift rebuild + per-mutation fire-and-forget graph enqueue across all mutation kinds (LINK-01)
-- [ ] 08-03-PLAN.md — admin "Rebuild graph index" affordance: POST /admin/graph/reindex + ActionGraphReindex + Admin.tsx button (LINK-03)
+- [x] 08-03-PLAN.md — admin "Rebuild graph index" affordance: POST /admin/graph/reindex + ActionGraphReindex + Admin.tsx button (LINK-03)
 
 ### Phase 9: Graph Endpoints & Backlinks Panel
 
@@ -133,7 +133,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 5. Collaboration | v0.9.9 | 4/4 | Complete | 2026-06-22 |
 | 6. Live-Preview Editor (Obsidian-style) | v0.9.9 | 4/4 | Complete | 2026-06-21 |
 | 7. Obsidian-style File Tree | v0.9.9 | 4/4 | Complete | 2026-06-21 |
-| 8. Derived Link/Tag Store & Maintenance | v1.0 | 2/3 | In Progress|  |
+| 8. Derived Link/Tag Store & Maintenance | v1.0 | 3/3 | Complete   | 2026-06-24 |
 | 9. Graph Endpoints & Backlinks Panel | v1.0 | 0/TBD | Not started | - |
 | 10. Graph UI | v1.0 | 0/TBD | Not started | - |
 | 11. Per-Page LLM Tag Suggestion | v1.0 | 0/TBD | Not started | - |

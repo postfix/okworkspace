@@ -13,7 +13,7 @@ Derived, rebuildable-from-files adjacency that powers both the graph and the bac
 
 - [x] **LINK-01**: System maintains a derived page-link / backlink index, built from existing Markdown link parsing, kept fresh on every page mutation (create / save / rename / move / delete-to-trash / restore)
 - [ ] **LINK-02**: User can see a "Referenced by" (backlinks) panel on a page that lists every page linking to it, each entry click-to-navigate
-- [ ] **LINK-03**: Admin can rebuild the link/graph index from files (recovery backstop), consistent with the existing "rebuild search index" affordance
+- [x] **LINK-03**: Admin can rebuild the link/graph index from files (recovery backstop), consistent with the existing "rebuild search index" affordance
 
 ### Knowledge Graph (GRAPH)
 
@@ -76,7 +76,7 @@ Which phases cover which requirements. Filled in during roadmap creation.
 |-------------|-------|--------|
 | LINK-01 | Phase 8 | Complete |
 | LINK-02 | Phase 9 | Pending |
-| LINK-03 | Phase 8 | Pending |
+| LINK-03 | Phase 8 | Complete |
 | GRAPH-01 | Phase 10 | Pending |
 | GRAPH-02 | Phase 10 | Pending |
 | GRAPH-03 | Phase 10 | Pending |
