@@ -95,6 +95,24 @@
   gap: var(--space-sm);
 }
 
+/* The tag-sweep scope toggle (TAG-05). A single checkbox + label; the full row
+   meets the interactive hit target. The checkbox uses the accent color for its
+   checked state (the one accent use on this operational control). Token-only. */
+.admin-sweep-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--hit-min-height);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.admin-sweep-toggle input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
 .status-active {
   color: var(--color-text);
 }

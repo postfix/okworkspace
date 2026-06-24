@@ -12,6 +12,7 @@ import {
   reindexSearch,
   resetUserPassword,
   setUserRole,
+  startTagSweep,
   type AdminUser,
   type Me,
   type UserRole,
@@ -168,6 +169,41 @@ export default function Admin() {
     },
   });
 
+  // Tag-suggestion sweep (TAG-05). Clones the reindexGraphMut pattern: an async
+  // 202 mutation, a muted role="status" confirmation, a generic field-error. The
+  // scope toggle (sweepAll) defaults UNCHECKED = only untagged pages (the locked
+  // default — the cheap backfill case); checking it sweeps every page. The
+  // confirmation copy is scope-appropriate and surfaces the queued count; queued===0
+  // shows the "every page already has tags" line. Hidden-infra rule: no job/queue/
+  // worker/LLM vocabulary anywhere — the user sees "suggesting tags" and a count.
+  const [sweepAll, setSweepAll] = useState(false);
+  const [sweepNotice, setSweepNotice] = useState<string | null>(null);
+  const [sweepError, setSweepError] = useState<string | null>(null);
+  const startSweepMut = useMutation({
+    mutationFn: () => startTagSweep({ all: sweepAll }),
+    onSuccess: (res) => {
+      setSweepError(null);
+      if (res.queued === 0) {
+        // The untagged scope found no targets (every page already has tags).
+        setSweepNotice("Every page already has tags — nothing to suggest.");
+      } else if (sweepAll) {
+        setSweepNotice(
+          `Started suggesting tags — ${res.queued} pages queued for review.`,
+        );
+      } else {
+        setSweepNotice(
+          `Started suggesting tags for untagged pages — ${res.queued} pages queued for review.`,
+        );
+      }
+    },
+    onError: () => {
+      setSweepNotice(null);
+      // Generic, hidden-infra-safe error (mirrors reindexError; never the raw
+      // server message, which could leak internals on an unexpected failure).
+      setSweepError("Couldn’t start the sweep. Try again.");
+    },
+  });
+
   function openRoleDialog(u: AdminUser) {
     setRoleTarget(u);
     setRoleValue(u.role as UserRole);
@@ -288,6 +324,42 @@ export default function Admin() {
         {graphReindexError && (
           <div className="field-error" role="alert">
             {graphReindexError}
+          </div>
+        )}
+      </section>
+
+      <section className="admin-section">
+        <h2 className="admin-section-heading">Tag suggestions</h2>
+        <p className="admin-muted">
+          Suggest tags across your pages. Suggestions wait for your review —
+          nothing is tagged automatically.
+        </p>
+        <label className="admin-sweep-toggle">
+          <input
+            type="checkbox"
+            checked={sweepAll}
+            onChange={(e) => setSweepAll(e.target.checked)}
+          />
+          <span>Include pages that already have tags</span>
+        </label>
+        <div className="admin-section-row">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => startSweepMut.mutate()}
+            disabled={startSweepMut.isPending}
+          >
+            {startSweepMut.isPending ? "Starting…" : "Suggest tags for pages"}
+          </button>
+          {sweepNotice && (
+            <span className="admin-muted" role="status">
+              {sweepNotice}
+            </span>
+          )}
+        </div>
+        {sweepError && (
+          <div className="field-error" role="alert">
+            {sweepError}
           </div>
         )}
       </section>

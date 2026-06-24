@@ -226,3 +226,126 @@ describe("tag suggestion api fns (TAG-01/TAG-02)", () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 });
+
+describe("bulk tag sweep + review-queue api fns (TAG-05/TAG-06)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("startTagSweep POSTs /admin/tags/sweep with {all} and returns {queued}", async () => {
+    let hit: string | null = null;
+    let sentBody: unknown = null;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/v1/csrf") {
+        return makeRes({ status: 200, body: JSON.stringify({ csrf_token: "t0ken" }) });
+      }
+      hit = url;
+      sentBody = init?.body ? JSON.parse(init.body as string) : null;
+      return makeRes({ status: 202, body: JSON.stringify({ ok: true, queued: 7 }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = await freshClient();
+    const res = await client.startTagSweep({ all: false });
+    expect(hit).toBe("/api/v1/admin/tags/sweep");
+    expect(sentBody).toEqual({ all: false });
+    expect(res.queued).toBe(7);
+  });
+
+  it("startTagSweep passes all:true through for the whole-workspace scope", async () => {
+    let sentBody: unknown = null;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/v1/csrf") {
+        return makeRes({ status: 200, body: JSON.stringify({ csrf_token: "t0ken" }) });
+      }
+      sentBody = init?.body ? JSON.parse(init.body as string) : null;
+      return makeRes({ status: 202, body: JSON.stringify({ ok: true, queued: 0 }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = await freshClient();
+    const res = await client.startTagSweep({ all: true });
+    expect(sentBody).toEqual({ all: true });
+    expect(res.queued).toBe(0);
+  });
+
+  it("listTagSuggestions GETs /admin/tags/suggestions and returns the typed queue", async () => {
+    let hit: string | null = null;
+    installFetch((url) => {
+      hit = url;
+      return makeRes({
+        status: 200,
+        body: JSON.stringify([
+          {
+            page_path: "notes/a.md",
+            suggestions: [
+              { tag: "release", existing: true },
+              { tag: "q3-launch", existing: false },
+            ],
+            base_revision: "rev-1",
+          },
+          { page_path: "notes/b.md", suggestions: [], base_revision: "rev-2" },
+        ]),
+      });
+    });
+    const client = await freshClient();
+    const queue = await client.listTagSuggestions();
+    expect(hit).toBe("/api/v1/admin/tags/suggestions");
+    expect(queue).toHaveLength(2);
+    expect(queue[0].page_path).toBe("notes/a.md");
+    expect(queue[0].base_revision).toBe("rev-1");
+    expect(queue[0].suggestions).toEqual([
+      { tag: "release", existing: true },
+      { tag: "q3-launch", existing: false },
+    ]);
+  });
+
+  it("listTagSuggestions throws hidden-infra-safe copy on a non-ok status", async () => {
+    installFetch(() => makeRes({ status: 500, body: "" }));
+    const client = await freshClient();
+    await expect(client.listTagSuggestions()).rejects.toThrow(
+      "Couldn't load the review queue.",
+    );
+  });
+
+  it("approveTagSuggestions POSTs /admin/tags/approve with {approvals} and returns the per-page status array", async () => {
+    let hit: string | null = null;
+    let sentBody: unknown = null;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/v1/csrf") {
+        return makeRes({ status: 200, body: JSON.stringify({ csrf_token: "t0ken" }) });
+      }
+      hit = url;
+      sentBody = init?.body ? JSON.parse(init.body as string) : null;
+      return makeRes({
+        status: 200,
+        body: JSON.stringify([
+          { page_path: "notes/a.md", status: "applied" },
+          { page_path: "notes/b.md", status: "stale" },
+        ]),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = await freshClient();
+    const res = await client.approveTagSuggestions([
+      { page_path: "notes/a.md", tags: ["release"] },
+      { page_path: "notes/b.md", tags: ["draft"] },
+    ]);
+    expect(hit).toBe("/api/v1/admin/tags/approve");
+    expect(sentBody).toEqual({
+      approvals: [
+        { page_path: "notes/a.md", tags: ["release"] },
+        { page_path: "notes/b.md", tags: ["draft"] },
+      ],
+    });
+    expect(res).toEqual([
+      { page_path: "notes/a.md", status: "applied" },
+      { page_path: "notes/b.md", status: "stale" },
+    ]);
+  });
+});

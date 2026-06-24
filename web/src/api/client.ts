@@ -1171,6 +1171,77 @@ export async function reindexGraph(): Promise<void> {
   await mutate<void>("/api/v1/admin/graph/reindex", undefined);
 }
 
+// --- Bulk tag sweep + batch review queue (TAG-05/TAG-06, admin-only) ---
+//
+// The sweep STAGES per-page suggestions (it writes nothing automatically); the
+// review queue lists those pending pages; approve routes the user-approved tags
+// through the SAME byte-stable apply path the per-page TagSuggest uses, committed
+// in batches. All three endpoints are admin-only + CSRF-gated server-side; the
+// client UI gate (Admin route / RequireAdmin) is convenience, never the boundary.
+
+// startTagSweep starts an admin tag-suggestion sweep (POST, CSRF, admin-only).
+// `all` drives the server-side target scope: false (default) = only untagged
+// pages, true = every page. The endpoint returns 202 immediately with the number
+// of pages queued for review (queued=0 when the scope found no targets). It uses
+// no job/queue/worker/index/LLM vocabulary in the thrown error (hidden-infra rule).
+export async function startTagSweep(opts: {
+  all: boolean;
+}): Promise<{ queued: number }> {
+  return mutate<{ queued: number }>("/api/v1/admin/tags/sweep", {
+    all: opts.all,
+  });
+}
+
+// TagSuggestionEntry is one pending page in the review queue: the staged
+// suggestions (reusing the per-page TagSuggestion {tag, existing} shape from
+// Phase 11) plus the base_revision captured when the suggestion was staged. The
+// review UI echoes base_revision back on approve so a moved page 409s per-page
+// instead of clobbering a concurrent edit (mirrors the applyTags contract).
+export interface TagSuggestionEntry {
+  page_path: string;
+  suggestions: TagSuggestion[];
+  base_revision: string;
+}
+
+// listTagSuggestions reads the admin review queue (a GET — no CSRF). It returns
+// every page that currently has pending tag suggestions, deterministically
+// ordered. On failure it throws generic, hidden-infra-safe copy (no job/queue/
+// git/index/model vocabulary — mirrors the BacklinksPanel / graph contract).
+export async function listTagSuggestions(): Promise<TagSuggestionEntry[]> {
+  const res = await fetch("/api/v1/admin/tags/suggestions", {
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    throw new Error("Couldn't load the review queue.");
+  }
+  return (await res.json()) as TagSuggestionEntry[];
+}
+
+// TagApproveResult is the per-page outcome of a batched approve: "applied" (the
+// tags were written + the row resolved), "stale" (the page moved since the
+// suggestion was staged — handled individually, no clobber), or "notfound" (the
+// page no longer exists). A per-page stale/notfound never sinks the rest of the
+// batch — the server returns one result row per requested page.
+export interface TagApproveResult {
+  page_path: string;
+  status: "applied" | "stale" | "notfound";
+}
+
+// approveTagSuggestions approves one OR many pages' checked tags (POST, CSRF,
+// admin-only). `approvals` carries ONLY the checked tags per page (never an
+// unchecked tag, never the full suggestion list); the server re-validates +
+// normalizes per page, reads the STAGED base_revision (the client value is never
+// trusted), and commits in batches. The whole call only rejects if the request
+// itself fails — per-page staleness comes back as status="stale" in the result
+// array (never a whole-batch 409).
+export async function approveTagSuggestions(
+  approvals: { page_path: string; tags: string[] }[],
+): Promise<TagApproveResult[]> {
+  return mutate<TagApproveResult[]>("/api/v1/admin/tags/approve", {
+    approvals,
+  });
+}
+
 // relativeMdLink computes a relative `.md` link destination from the page at
 // fromPath to the page at toPath (both repo-relative slash paths), matching the
 // canonical on-disk link format (D-05). Used by the LinkPicker so an inserted
