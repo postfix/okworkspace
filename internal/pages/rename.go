@@ -309,12 +309,21 @@ func (s *Service) relocateFolder(ctx context.Context, oldDir, newDir, action, us
 	for oldPath, newPath := range moves {
 		s.enqueueIndexDelete(ctx, oldPath)
 		s.enqueueIndexUpsert(ctx, newPath)
+		// Graph mirror of the per-move index delete+upsert: the graph delete drops the
+		// moved page's old edges (outbound AND inbound), the upsert re-scans it at its
+		// new path; rewritten linkers below re-add their inbound edges at the new path.
+		s.enqueueGraphDelete(ctx, oldPath)
+		s.enqueueGraphUpsert(ctx, newPath)
 	}
 	for p := range byPath {
 		if _, moved := movedDestinations(moves)[p]; moved {
 			continue // already upserted above
 		}
 		s.enqueueIndexUpsert(ctx, p)
+		// Re-graph every rewritten stationary linker over the SAME byPath set the index
+		// upsert covers, so inbound edges to the moved descendants are rewritten and no
+		// stale row survives (closes pitfall 2 for folder relocations too).
+		s.enqueueGraphUpsert(ctx, p)
 	}
 	return nil
 }
@@ -475,13 +484,23 @@ func (s *Service) relocate(ctx context.Context, oldPath, newPath, action, user s
 	// rebuild backstop reconciles a dropped enqueue (T-03-20).
 	s.enqueueIndexDelete(ctx, oldPath)
 	s.enqueueIndexUpsert(ctx, newPath)
-	// Inbound-link rewrites edited OTHER pages in the same commit; re-index each so
-	// their (changed) body bytes stay searchable without a restart.
+	// Graph MOVE (mirrors the index move): delete the OLD path's edges/tags, upsert
+	// the NEW path. The graph delete also drops inbound edges that pointed at the old
+	// path; re-scanning every rewritten linker below re-adds them at the new path, so
+	// no stale src/dst row survives (closes pitfall 2).
+	s.enqueueGraphDelete(ctx, oldPath)
+	s.enqueueGraphUpsert(ctx, newPath)
+	// Inbound-link rewrites edited OTHER pages in the same commit; re-index AND
+	// re-graph each so their (changed) body bytes stay searchable and their rewritten
+	// inbound edges point at the new path without a restart. Re-scanning every
+	// rewritten linker is what rewrites inbound edges and closes the stale-edge
+	// pitfall — the graph upsert covers the SAME writes set as the index upsert.
 	for _, w := range writes {
 		if w.Path == newPath {
 			continue
 		}
 		s.enqueueIndexUpsert(ctx, w.Path)
+		s.enqueueGraphUpsert(ctx, w.Path)
 	}
 	return newPath, nil
 }

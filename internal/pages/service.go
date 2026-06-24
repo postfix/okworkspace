@@ -12,6 +12,7 @@ import (
 	"log/slog"
 
 	"github.com/postfix/okworkspace/internal/gitstore"
+	"github.com/postfix/okworkspace/internal/graph"
 	"github.com/postfix/okworkspace/internal/jobs"
 	"github.com/postfix/okworkspace/internal/okf"
 	"github.com/postfix/okworkspace/internal/repo"
@@ -164,6 +165,7 @@ func (s *Service) Create(ctx context.Context, folder, title, user string) (strin
 		return "", err
 	}
 	s.enqueueIndexUpsert(ctx, path)
+	s.enqueueGraphUpsert(ctx, path)
 	return path, nil
 }
 
@@ -249,6 +251,7 @@ func (s *Service) Save(ctx context.Context, path, body, frontmatter, baseRevisio
 		return err
 	}
 	s.enqueueIndexUpsert(ctx, path)
+	s.enqueueGraphUpsert(ctx, path)
 	return nil
 }
 
@@ -288,6 +291,7 @@ func (s *Service) CreateFolder(ctx context.Context, parent, name string, user st
 		return err
 	}
 	s.enqueueIndexUpsert(ctx, indexPath)
+	s.enqueueGraphUpsert(ctx, indexPath)
 	return nil
 }
 
@@ -334,6 +338,32 @@ func (s *Service) enqueueIndexUpsert(ctx context.Context, pagePath string) {
 func (s *Service) enqueueIndexDelete(ctx context.Context, pagePath string) {
 	if err := s.worker.Enqueue(ctx, search.KindIndex, search.DeletePagePayload(pagePath)); err != nil {
 		slog.WarnContext(ctx, "pages: failed to enqueue search index delete (rebuild backstop reconciles)",
+			slog.String("path", pagePath), slog.String("error", err.Error()))
+	}
+}
+
+// enqueueGraphUpsert fires a FIRE-AND-FORGET graph.KindGraph upsert for a page
+// path so the derived link/tag adjacency (page_links/page_tags) tracks the change
+// without a restart (LINK-01). It is the exact sibling of enqueueIndexUpsert: called
+// from the HTTP-handler goroutine AFTER the commit has been enqueued/landed, using
+// worker.Enqueue (never EnqueueAndWait — CR-01) so a graph-freshness job never adds
+// latency to a save; correctness is guaranteed by the idempotent RebuildGraph +
+// startup drift check, so a dropped enqueue is logged at Warn and swallowed (the
+// rebuild backstop reconciles). A save is NEVER blocked or failed by graph
+// maintenance.
+func (s *Service) enqueueGraphUpsert(ctx context.Context, pagePath string) {
+	if err := s.worker.Enqueue(ctx, graph.KindGraph, graph.UpsertPagePayload(pagePath)); err != nil {
+		slog.WarnContext(ctx, "pages: failed to enqueue graph upsert (rebuild backstop reconciles)",
+			slog.String("path", pagePath), slog.String("error", err.Error()))
+	}
+}
+
+// enqueueGraphDelete fires a FIRE-AND-FORGET graph.KindGraph delete for a page
+// path (removing the page's outbound edges, its inbound edges, and its tag rows via
+// the handler's delete branch). Same context/contract as enqueueGraphUpsert.
+func (s *Service) enqueueGraphDelete(ctx context.Context, pagePath string) {
+	if err := s.worker.Enqueue(ctx, graph.KindGraph, graph.DeletePagePayload(pagePath)); err != nil {
+		slog.WarnContext(ctx, "pages: failed to enqueue graph delete (rebuild backstop reconciles)",
 			slog.String("path", pagePath), slog.String("error", err.Error()))
 	}
 }

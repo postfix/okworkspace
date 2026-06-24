@@ -123,6 +123,12 @@ func (s *Service) deleteWithGroup(ctx context.Context, pagePath, user, groupID s
 	// is the ORIGINAL page path; the page now lives under trashDir, which the index
 	// excludes, so only the delete is enqueued. Fire-and-forget.
 	s.enqueueIndexDelete(ctx, pagePath)
+	// Drop the trashed page from the derived link/tag graph too: its outbound edges,
+	// its inbound edges (so no backlink dangles at a trashed page), and its tag rows.
+	// Fire-and-forget beside the index delete; the rebuild backstop reconciles a
+	// dropped enqueue. DeleteFolder loops deleteWithGroup per descendant, so folder
+	// delete is covered here automatically (no second enqueue in the folder caller).
+	s.enqueueGraphDelete(ctx, pagePath)
 	// Also drop the trashed page's attachment docs (WR-04): an attachment's indexed
 	// page_path stays the original LIVE path (not the trash path), so the query-time
 	// trash filter never matches it and the attachment would remain searchable,
@@ -398,6 +404,11 @@ func (s *Service) restoreInner(ctx context.Context, id int64, user string) (stri
 	// The page is back out of trash at target — re-index it so it reappears in
 	// search without a restart. Fire-and-forget; rebuild backstop reconciles.
 	s.enqueueIndexUpsert(ctx, target)
+	// Re-graph the restored page at its (possibly suffixed) target so its outbound
+	// edges + tags reappear in the adjacency without a restart. RestoreGroup loops
+	// restoreInner per member, so group restore is covered here automatically (no
+	// second enqueue in the group caller). Fire-and-forget; rebuild backstop reconciles.
+	s.enqueueGraphUpsert(ctx, target)
 
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM trash WHERE id = ?`, id); err != nil {
 		return "", fmt.Errorf("pages: delete trash row %d: %w", id, err)
