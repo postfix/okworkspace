@@ -101,3 +101,15 @@ Verification output (real, pasted):
 - key-free (no DEEPSEEK_API_KEY / OKF_LLM_API_KEY) `go test ./internal/agent/ ./internal/server/` → ok
 - `go test ./internal/agent/ -run TestToolSetIsExactlyReadOnlyAllowList` → PASS (the unchanged 5-tool set-equality gate)
 - `TestSuggestTags` / `TestValidateTags` → PASS key-free; `TestApplyTagsStaleRevision` (409) → PASS
+
+## Gap closure (2026-06-24): robust real-model tag parsing
+
+LIVE validation against the configured real model (deepseek-v4-flash) revealed `POST /agent/suggest-tags` returned HTTP 422 for EVERY real request: the agent reached the LLM and retried 3× but each reply "was not a JSON array of strings". The original `parseTagArray` only accepted a clean array or a WHOLE-reply ```fence``` (`stripCodeFence` required `HasPrefix("```")`). Real chat models wrap the array in prose ("Here are the tags:\n[...]"), a fence with leading prose, or a JSON object `{"tags":[...]}` — all rejected. The key-free fake-model tests passed because the fake returns a clean array, so the wrapping was never exercised. TAG-01 did not work end-to-end with the configured model.
+
+Fix (`internal/agent/suggesttags.go`, parser only — `validateTags` UNCHANGED and still gates contents):
+- `stripCodeFence` now finds a ```...``` block ANYWHERE (tolerates leading/trailing prose) and returns its inner content.
+- `parseTagArray` extraction order: (1) de-fence → (2) parse as JSON string array → (3) parse as JSON object and accept a string array under `tags`/`suggestions`/`labels` → (4) extract the first balanced `[`..`]` substring (string-literal-aware) and parse that → (5) else `ErrTagsInvalid` (so genuinely-garbage replies still retry). The parser only EXTRACTS the candidate array; `validateTags` (lowercase/trim/dedupe/cap MAX 5/reject garbage) is unchanged and still applied. Endpoint, 5-tool boundary, and `okf.SetTags` untouched.
+
+Tests added (`internal/agent/suggesttags_test.go`, key-free): new `TestParseTagArray` table (bare array, json fence, plain fence, fence-with-leading-prose, prose-then-array, `{"tags":[...]}`, `{"suggestions":[...]}`, object-in-fence, prose-wrapped-array) + genuinely-garbage still → `ErrTagsInvalid`; plus `TestSuggestTags/real-model wrapped replies parse end-to-end` driving fence-with-prose, prose-then-array, and tags-object through the full `SuggestTags` flow on one model call.
+
+Verification (real, pasted): `CGO_ENABLED=0 go build ./...` → exit 0; `env -u DEEPSEEK_API_KEY -u OKF_LLM_API_KEY go test ./internal/agent/ -run 'TestParseTagArray|TestSuggestTags|TestValidateTags|TestToolSet' -v` → all PASS (incl. new prose/object cases AND the unchanged `TestToolSetIsExactlyReadOnlyAllowList` 5-tool gate).

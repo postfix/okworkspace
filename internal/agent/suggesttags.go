@@ -116,37 +116,135 @@ func isValidTagToken(tag string) bool {
 	return true
 }
 
-// parseTagArray leniently extracts a JSON array of strings from the model's raw
-// reply. It is lenient on the WRAPPER (tolerates leading/trailing whitespace and a
-// single surrounding ``` code fence the model may add despite the contract) but the
-// contents are validated downstream by validateTags. A reply that is not a JSON
-// array of strings returns an error so the attempt is retried.
+// parseTagArray leniently EXTRACTS a candidate JSON array of strings from the
+// model's raw reply, tolerant of the wrapping real chat models (DeepSeek etc.)
+// commonly add despite the bare-array contract: leading/trailing prose, a code
+// fence with or without surrounding prose, a JSON object like {"tags":[...]}, or a
+// prose-wrapped array. It only EXTRACTS the candidate array — the contents are
+// still gated downstream by validateTags (which is NOT relaxed). The extraction
+// order is:
+//  1. trim + strip a ```...``` fence found ANYWHERE (use its inner content),
+//  2. parse the (de-fenced) text as a JSON array of strings,
+//  3. else parse as a JSON object and accept a string-array under "tags" /
+//     "suggestions" / "labels",
+//  4. else extract the first '[' .. matching ']' substring and parse that,
+//  5. else return ErrTagsInvalid (so genuinely garbage replies still retry).
 func parseTagArray(reply string) ([]string, error) {
 	s := strings.TrimSpace(reply)
 	s = stripCodeFence(s)
-	var tags []string
-	if err := json.Unmarshal([]byte(s), &tags); err != nil {
-		return nil, fmt.Errorf("%w: reply was not a JSON array of strings", ErrTagsInvalid)
+
+	// 2. Direct JSON array of strings (the contract / regression path).
+	if tags, ok := tryUnmarshalStringArray(s); ok {
+		return tags, nil
 	}
-	return tags, nil
+
+	// 3. JSON object carrying the array under a known key.
+	if tags, ok := tryUnmarshalTagObject(s); ok {
+		return tags, nil
+	}
+
+	// 4. Prose-wrapped array: extract the first bracketed JSON array substring.
+	if sub, ok := firstJSONArray(s); ok {
+		if tags, ok := tryUnmarshalStringArray(sub); ok {
+			return tags, nil
+		}
+	}
+
+	return nil, fmt.Errorf("%w: reply was not a JSON array of strings", ErrTagsInvalid)
 }
 
-// stripCodeFence removes a single surrounding ```...``` (optionally ```json) code
-// fence the model may wrap its JSON in, returning the inner content. A reply with
-// no wrapping fence is returned unchanged. Only a WHOLE-reply wrapping fence is
-// stripped (mirrors isWholeBodyFenced's intent for the tags path).
+// tryUnmarshalStringArray attempts to parse s as a JSON array of strings. It
+// returns (tags, true) only when s is a valid JSON string array; otherwise
+// (nil, false). Contents are validated later by validateTags.
+func tryUnmarshalStringArray(s string) ([]string, bool) {
+	var tags []string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(s)), &tags); err != nil {
+		return nil, false
+	}
+	return tags, true
+}
+
+// tryUnmarshalTagObject attempts to parse s as a JSON object and pull a string
+// array out from under a recognized key ("tags", "suggestions", "labels").
+// Returns (tags, true) on the first key that holds a string array.
+func tryUnmarshalTagObject(s string) ([]string, bool) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(strings.TrimSpace(s)), &obj); err != nil {
+		return nil, false
+	}
+	for _, key := range []string{"tags", "suggestions", "labels"} {
+		raw, present := obj[key]
+		if !present {
+			continue
+		}
+		if tags, ok := tryUnmarshalStringArray(string(raw)); ok {
+			return tags, true
+		}
+	}
+	return nil, false
+}
+
+// firstJSONArray returns the substring from the first '[' to its matching ']'
+// (bracket-balanced, skipping brackets inside JSON string literals), so a
+// prose-wrapped array like `Here are the tags:\n["a","b"]` yields `["a","b"]`.
+// Returns (sub, true) when a balanced array is found.
+func firstJSONArray(s string) (string, bool) {
+	start := strings.IndexByte(s, '[')
+	if start < 0 {
+		return "", false
+	}
+	depth := 0
+	inString := false
+	escaped := false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if inString {
+			switch {
+			case escaped:
+				escaped = false
+			case c == '\\':
+				escaped = true
+			case c == '"':
+				inString = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inString = true
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				return s[start : i+1], true
+			}
+		}
+	}
+	return "", false
+}
+
+// stripCodeFence removes a ```...``` (optionally ```json) code fence the model may
+// wrap its JSON in, returning the inner content. It tolerates LEADING/TRAILING
+// prose around the fence: it finds the first opening ``` anywhere, then the next
+// closing ```, and returns what is between them. A reply with no fence is returned
+// unchanged (after trimming).
 func stripCodeFence(s string) string {
-	if !strings.HasPrefix(s, "```") {
+	s = strings.TrimSpace(s)
+	open := strings.Index(s, "```")
+	if open < 0 {
 		return s
 	}
-	nl := strings.IndexByte(s, '\n')
+	// Skip past the opening fence line (which may carry a language tag like ```json).
+	rest := s[open+3:]
+	nl := strings.IndexByte(rest, '\n')
 	if nl < 0 {
-		return s
+		return s // a lone "```" with no newline — not a real fence; leave as-is.
 	}
-	inner := s[nl+1:]
-	inner = strings.TrimRight(inner, "\n")
-	if strings.HasSuffix(inner, "```") {
-		inner = strings.TrimSuffix(inner, "```")
+	inner := rest[nl+1:]
+	// The closing fence is the next ``` in the remaining content.
+	if close := strings.Index(inner, "```"); close >= 0 {
+		inner = inner[:close]
 	}
 	return strings.TrimSpace(inner)
 }

@@ -130,6 +130,57 @@ func TestValidateTags(t *testing.T) {
 	})
 }
 
+// TestParseTagArray proves parseTagArray EXTRACTS the candidate array from the
+// real-model wrappers DeepSeek-class models add (prose, fences-with-prose, JSON
+// objects, prose-wrapped arrays) — and still rejects genuinely garbage replies so
+// the retry loop fires. Extraction only; validateTags still gates contents.
+func TestParseTagArray(t *testing.T) {
+	cases := []struct {
+		name  string
+		reply string
+		want  []string
+	}{
+		{"bare array (regression)", `["release","notes","draft"]`, []string{"release", "notes", "draft"}},
+		{"whole-reply json fence (regression)", "```json\n[\"release\",\"notes\"]\n```", []string{"release", "notes"}},
+		{"plain fence no lang (regression)", "```\n[\"release\"]\n```", []string{"release"}},
+		{"fence WITH leading prose", "Here are the tags:\n```json\n[\"release\",\"notes\"]\n```\nHope that helps!", []string{"release", "notes"}},
+		{"prose-then-array no fence", "Sure! Here are some good tags: [\"release\", \"notes\", \"editor\"] — let me know.", []string{"release", "notes", "editor"}},
+		{"tags object form", `{"tags":["release","notes"]}`, []string{"release", "notes"}},
+		{"suggestions object form", `{"suggestions":["release"]}`, []string{"release"}},
+		{"object with prose and fence", "Here you go:\n```json\n{\"tags\": [\"alpha\", \"beta\"]}\n```", []string{"alpha", "beta"}},
+		{"prose-wrapped object via array extraction", "The tags are: [\"x\",\"y\"]. Object was {\"other\":1}.", []string{"x", "y"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseTagArray(tc.reply)
+			if err != nil {
+				t.Fatalf("parseTagArray(%q): unexpected err %v", tc.reply, err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Fatalf("got %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+
+	t.Run("genuinely garbage reply returns ErrTagsInvalid", func(t *testing.T) {
+		for _, reply := range []string{
+			"Here are some great tags for your page!",
+			"I'm sorry, I cannot do that.",
+			"",
+			"{not even json",
+		} {
+			if _, err := parseTagArray(reply); !errors.Is(err, ErrTagsInvalid) {
+				t.Fatalf("parseTagArray(%q) err = %v, want ErrTagsInvalid", reply, err)
+			}
+		}
+	})
+}
+
 func TestSuggestTags(t *testing.T) {
 	ctx := context.Background()
 
@@ -160,6 +211,36 @@ func TestSuggestTags(t *testing.T) {
 			t.Fatalf("wrong system prompt; got:\n%s", cm.gotMsgs[0].Content)
 		}
 		assertDeadlineAbout60s(t, cm.gotCtx)
+	})
+
+	t.Run("real-model wrapped replies parse end-to-end through SuggestTags", func(t *testing.T) {
+		wrapped := []struct {
+			name  string
+			reply string
+		}{
+			{"fence with leading prose", "Here are the tags:\n```json\n[\"release\",\"notes\"]\n```"},
+			{"prose then bare array", "Sure! Good tags: [\"release\", \"notes\"]."},
+			{"tags object", `{"tags":["release","notes"]}`},
+		}
+		for _, w := range wrapped {
+			t.Run(w.name, func(t *testing.T) {
+				cm := &fakeChatModel{reply: w.reply}
+				svc := newFakeTagService(cm, fakeVocabReader{vocab: []string{"release"}})
+				tags, existing, _, err := svc.SuggestTags(ctx, "notes/x.md")
+				if err != nil {
+					t.Fatalf("SuggestTags(%q): %v", w.reply, err)
+				}
+				if len(tags) != 2 || tags[0] != "release" || tags[1] != "notes" {
+					t.Fatalf("got %v, want [release notes]", tags)
+				}
+				if !existing[0] || existing[1] {
+					t.Fatalf("existing=%v, want [true false]", existing)
+				}
+				if cm.calls != 1 {
+					t.Fatalf("model called %d times; want 1 (parsed on first attempt)", cm.calls)
+				}
+			})
+		}
 	})
 
 	t.Run("page body is delimited as untrusted DATA and vocab appears as a bias hint", func(t *testing.T) {
