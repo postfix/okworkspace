@@ -1,0 +1,37 @@
+/* BacklinksPanel — the collapsible "Referenced by (N)" section at the bottom of the
+   page read view. Token-only (no hard-coded hex/px). Entry rows reuse the existing
+   .navtree/.navrow/.navrow-page/.tree-icon/.tree-label classes (defined in
+   LeftTree.css) — only the container/header/status styles are new here. */
+
+.backlinks-panel {
+  max-width: var(--prose-max-width);
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.backlinks-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: var(--hit-min-height);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-sm);
+}
+
+.backlinks-toggle:hover {
+  background: var(--color-hover);
+}
+
+.backlinks-status {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+  padding: var(--space-sm);
+  margin: 0;
+}

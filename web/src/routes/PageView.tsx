@@ -9,6 +9,7 @@ import { getPage, me, type Me, type Page } from "../api/client";
 import { okfTitle } from "../lib/frontmatter";
 import { useRecent } from "../stores/recent";
 import LivePreviewEditor from "../components/LivePreviewEditor";
+import BacklinksPanel from "../components/BacklinksPanel";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PageActionMenu from "../components/PageActionMenu";
 import RenameModal from "../components/RenameModal";
@@ -126,6 +127,7 @@ export default function PageView() {
           readOnly
         />
       )}
+      <BacklinksPanel path={path} />
       <Dialog
         open={attachmentsOpen}
         title="Attachments"

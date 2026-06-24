@@ -20,6 +20,7 @@ vi.mock("../api/client", async (importOriginal) => {
     getPage: vi.fn(),
     me: vi.fn(),
     getTree: vi.fn().mockResolvedValue([]),
+    getBacklinks: vi.fn().mockResolvedValue([]),
     renamePage: vi.fn(),
     movePage: vi.fn(),
   };
