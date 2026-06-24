@@ -2,14 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Knowledge Graph & LLM Auto-Tagging
-status: planning
-last_updated: "2026-06-24T00:00:00.000Z"
+current_phase: 08
+current_phase_name: Derived Link/Tag Store & Maintenance
+status: executing
+stopped_at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
+last_updated: "2026-06-24T05:36:41.512Z"
 last_activity: 2026-06-24
+last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -20,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-24)
 
 **Core value:** A non-technical teammate can create, edit, and find knowledge — and get useful AI help on it — while every byte stays as plain Markdown + original files on disk, versioned in Git, with no proprietary store to escape.
-**Current focus:** Phase 8 — Derived Link/Tag Store & Maintenance (v1.0 foundation)
+**Current focus:** Phase 08 — Derived Link/Tag Store & Maintenance
 
 ## Current Position
 
-Phase: 8 of 12 (Derived Link/Tag Store & Maintenance) — first v1.0 phase
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-06-24 — v1.0 roadmap created (Phases 8–12); all 14 requirements mapped
+Phase: 08 (Derived Link/Tag Store & Maintenance) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-06-24 — Phase 08 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -51,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 08 P01 | 22min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -74,6 +79,8 @@ Recent decisions affecting v1.0 work:
 - Byte-stable Markdown round-trip — `okf.SetTags` must use the surgical `yaml.Node` editor (only `tags` lines change), gated by a golden-file test (TAG-03)
 - 2D Canvas graph only (`react-force-graph-2d`); umbrella `react-force-graph`/three.js explicitly avoided to keep the embedded binary small
 - Shared-tag edges off by default, thresholded/capped to avoid a K² hairball (GRAPH-04)
+- [Phase ?]: graph page_tags rows match search.readTags output exactly
+- [Phase ?]: graph RebuildGraph resolves dangling links against the live-page set so rebuild==incremental
 
 ### Pending Todos
 
@@ -100,7 +107,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-24
+Last session: 2026-06-24T05:36:28.765Z
 Stopped at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
 Resume file: None
 

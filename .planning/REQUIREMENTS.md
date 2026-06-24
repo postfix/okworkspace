@@ -11,7 +11,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase (see Tra
 
 Derived, rebuildable-from-files adjacency that powers both the graph and the backlinks panel. SQLite cache, never source of truth.
 
-- [ ] **LINK-01**: System maintains a derived page-link / backlink index, built from existing Markdown link parsing, kept fresh on every page mutation (create / save / rename / move / delete-to-trash / restore)
+- [x] **LINK-01**: System maintains a derived page-link / backlink index, built from existing Markdown link parsing, kept fresh on every page mutation (create / save / rename / move / delete-to-trash / restore)
 - [ ] **LINK-02**: User can see a "Referenced by" (backlinks) panel on a page that lists every page linking to it, each entry click-to-navigate
 - [ ] **LINK-03**: Admin can rebuild the link/graph index from files (recovery backstop), consistent with the existing "rebuild search index" affordance
 
@@ -74,7 +74,7 @@ Which phases cover which requirements. Filled in during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LINK-01 | Phase 8 | Pending |
+| LINK-01 | Phase 8 | Complete |
 | LINK-02 | Phase 9 | Pending |
 | LINK-03 | Phase 8 | Pending |
 | GRAPH-01 | Phase 10 | Pending |

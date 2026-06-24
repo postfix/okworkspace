@@ -40,65 +40,81 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
 ## Phase Details
 
 ### Phase 8: Derived Link/Tag Store & Maintenance
+
 **Goal**: A derived, rebuildable-from-files adjacency store (page links, backlinks, tag membership) exists and stays fresh on every page mutation — the foundation both the graph UI and tag-vocabulary prompting depend on.
 **Depends on**: Phase 1 (page mutation seams), Phase 3 (KindIndex/RebuildIndex pattern to mirror) — both shipped in v0.9.9
 **Requirements**: LINK-01, LINK-03
 **Success Criteria** (what must be TRUE):
+
   1. After any page mutation (create / save / rename / move / delete-to-trash / restore), the stored link and backlink adjacency reflects the change without an app restart
   2. The link/tag store is derived only — deleting it and rebuilding from the Markdown files on disk reproduces identical adjacency (SQLite is never the source of truth)
   3. An admin can rebuild the link/graph index from files via an affordance consistent with the existing "Rebuild search index" button
   4. Tag membership per page is queryable, giving the workspace's existing tag vocabulary for downstream prompting
-**Plans**: 3 plans
-- [ ] 08-01-PLAN.md — `internal/graph` derived store (page_links/page_tags + migration 0009), KindGraph job + RebuildGraph data layer (LINK-01)
+
+**Plans**: 1/3 plans executed
+
+- [x] 08-01-PLAN.md — `internal/graph` derived store (page_links/page_tags + migration 0009), KindGraph job + RebuildGraph data layer (LINK-01)
 - [ ] 08-02-PLAN.md — startup handler registration + drift rebuild + per-mutation fire-and-forget graph enqueue across all mutation kinds (LINK-01)
 - [ ] 08-03-PLAN.md — admin "Rebuild graph index" affordance: POST /admin/graph/reindex + ActionGraphReindex + Admin.tsx button (LINK-03)
 
 ### Phase 9: Graph Endpoints & Backlinks Panel
+
 **Goal**: The stored adjacency is exposed over HTTP as typed-edge graph payloads, and the first user-visible output ships: a page-view backlinks panel listing every page that links to the current one.
 **Depends on**: Phase 8
 **Requirements**: LINK-02
 **Success Criteria** (what must be TRUE):
+
   1. A user viewing a page sees a "Referenced by" panel listing every page that links to it, and clicking an entry navigates to that page
   2. A global graph endpoint returns all pages as nodes and their links as typed edges (page-links / backlinks / shared-tags) in a lean payload
   3. A local graph endpoint returns a given page's neighborhood (the page plus its direct neighbors)
   4. Shared-tag edges are computed with a popular-tag cap / threshold so the payload never explodes into a hairball on common tags
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 10: Graph UI
+
 **Goal**: The headline visual feature ships — an Obsidian-style global graph view and a docked per-page local graph panel, both interactive, with configurable edge types.
 **Depends on**: Phase 9
 **Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05
 **Success Criteria** (what must be TRUE):
+
   1. A user can open a global graph view showing all pages as nodes and links as edges, pan and zoom it, and click a node to open that page
   2. Node size visibly reflects connection count (degree), and orphan (unlinked) pages are visible and distinguishable from connected ones
   3. A user can open a per-page local graph panel showing the current page plus its direct neighbors, which auto-updates when the active page changes and offers a depth control (default 1 hop)
   4. A user can toggle edge types (page links / backlinks / shared tags) on and off in the graph UI, with shared-tag edges off by default
   5. Hovering a node highlights that node and its immediate neighbors and edges
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 11: Per-Page LLM Tag Suggestion
+
 **Goal**: A user can get LLM tag suggestions for the page they are on and approve them per tag, with approved tags merged byte-stably into the YAML frontmatter through the existing single-writer commit path — establishing trust before any bulk operation.
 **Depends on**: Phase 8 (tag vocabulary), Phase 4 (propose→apply→Save safety pattern to mirror — shipped in v0.9.9)
 **Requirements**: TAG-01, TAG-02, TAG-03, TAG-04
 **Success Criteria** (what must be TRUE):
+
   1. A user can request LLM tag suggestions on demand for the page they are viewing or editing
   2. Suggested tags are presented for per-tag approve/reject before anything is written, with new (invented) tags distinguished from existing ones and defaulting to unchecked
   3. Approving tags changes only the `tags` lines of the page's YAML frontmatter (body and other frontmatter byte-unchanged), commits through the single-writer Git path, and a stale page revision 409s rather than clobbering
   4. Suggestions are biased toward the existing workspace tag vocabulary, capped at max 5 per page, and normalized on write (lowercase, trimmed, deduped)
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 12: Bulk Sweep & Batch Review Queue
+
 **Goal**: An admin can run a bulk tagging sweep over untagged (or all) pages that produces a review queue of pending suggestions — writing nothing automatically — which a user reviews and approves per page through the same byte-stable apply path.
 **Depends on**: Phase 11 (per-page suggest + apply primitives), Phase 8 (page_tags for untagged-page enumeration)
 **Requirements**: TAG-05, TAG-06
 **Success Criteria** (what must be TRUE):
+
   1. An admin can start a bulk tagging sweep over untagged (or all) pages that enqueues per-page suggestion jobs on the existing async worker and produces a queue of pending suggestions, writing nothing automatically
   2. A user can review the bulk-sweep suggestion queue and approve or reject suggestions per page
   3. Approvals from the queue route through the same byte-stable frontmatter apply path as per-page tagging, committed in batches (not one commit per page)
   4. The sweep is resumable and never bypasses human approval — killing and restarting the worker does not auto-write tags
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -117,7 +133,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 5. Collaboration | v0.9.9 | 4/4 | Complete | 2026-06-22 |
 | 6. Live-Preview Editor (Obsidian-style) | v0.9.9 | 4/4 | Complete | 2026-06-21 |
 | 7. Obsidian-style File Tree | v0.9.9 | 4/4 | Complete | 2026-06-21 |
-| 8. Derived Link/Tag Store & Maintenance | v1.0 | 0/TBD | Not started | - |
+| 8. Derived Link/Tag Store & Maintenance | v1.0 | 1/3 | In Progress|  |
 | 9. Graph Endpoints & Backlinks Panel | v1.0 | 0/TBD | Not started | - |
 | 10. Graph UI | v1.0 | 0/TBD | Not started | - |
 | 11. Per-Page LLM Tag Suggestion | v1.0 | 0/TBD | Not started | - |
