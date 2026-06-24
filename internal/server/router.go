@@ -12,6 +12,7 @@ import (
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
+	"github.com/postfix/okworkspace/internal/graph"
 	"github.com/postfix/okworkspace/internal/locks"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
@@ -54,6 +55,12 @@ type Deps struct {
 	// main.go this is the SAME single worker passed as SearchJobs (the KindGraph
 	// handler is registered on it), not a second store/worker.
 	GraphJobs graphEnqueuer
+	// Graph is the derived link/tag adjacency store backing the authed graph READ
+	// endpoints (GET /graph, /graph/local, /graph/backlinks). Optional; when nil
+	// those reads return a 500 with the generic copy. In main.go this is the SAME
+	// graphStore already constructed for the KindGraph maintenance handler — it is
+	// reused for the reads, not a second store.
+	Graph *graph.Store
 	// Agent is the Eino agent service backing POST /agent/chat (Ask). Optional;
 	// when nil the route returns a 500. When constructed-but-disabled (cfg.Agent.
 	// Enabled false) the handler returns a structured "agent off" error.
@@ -87,6 +94,7 @@ func New(deps Deps) (http.Handler, error) {
 		search:      deps.Search,
 		searchJobs:  deps.SearchJobs,
 		graphJobs:   deps.GraphJobs,
+		graph:       deps.Graph,
 		agent:       deps.Agent,
 		locks:       deps.Locks,
 	}
@@ -148,6 +156,18 @@ func New(deps Deps) (http.Handler, error) {
 			// page-read authorization model, Area 4). q is a query param (not a
 			// path), so no cleanPathParam is needed.
 			authed.Get("/search", h.handleSearch)
+
+			// Derived link/tag graph reads — available to ANY authenticated user
+			// (the same any-authed read model as /tree + /search, NOT editor/admin
+			// gated). All three are mounted here in the authed read group. path and
+			// depth are QUERY params (not path segments); backlinks is a query-param
+			// read (NOT a /pages/{path}/backlinks route) precisely to avoid the
+			// /pages/* sibling-wildcard conflict (chi cannot host a sibling wildcard
+			// next to the /pages/* catch-all). The payload is lean (ids+labels+typed
+			// edges, no page bodies) and built only from the cache tables.
+			authed.Get("/graph", h.handleGraph)
+			authed.Get("/graph/local", h.handleGraphLocal)
+			authed.Get("/graph/backlinks", h.handleGraphBacklinks)
 
 			// Agent Ask (AGNT-01) — any authenticated user may ask a question
 			// about the current page; the answer streams back as SSE. POST (it

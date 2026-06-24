@@ -14,6 +14,7 @@ import (
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/config"
+	"github.com/postfix/okworkspace/internal/graph"
 	"github.com/postfix/okworkspace/internal/locks"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
@@ -61,6 +62,11 @@ type authHandlers struct {
 	// graphJobs enqueues the from-files rebuild job for the admin graph reindex
 	// (fire-and-forget). Optional: when nil the graph reindex returns a 500.
 	graphJobs graphEnqueuer
+	// graph is the derived link/tag adjacency store backing the authed graph READ
+	// endpoints (/graph, /graph/local, /graph/backlinks). Optional: when nil those
+	// reads return a 500 with the generic copy, following the same
+	// optional-dependency pattern as search.
+	graph *graph.Store
 	// agent is the Eino agent service backing POST /agent/chat (Ask). Optional:
 	// when nil the handler returns a 500; when constructed-but-disabled the
 	// handler returns a structured "agent off" error rather than hanging.
