@@ -25,6 +25,7 @@ import LivePreviewEditor from "../components/LivePreviewEditor";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
+import TagSuggest from "../components/TagSuggest";
 import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
 
@@ -637,6 +638,12 @@ export default function PageEditor() {
             onChange={(e) => onFieldChange("description", e.target.value)}
           />
         </div>
+        {/* TAG-01/TAG-02: the on-demand "Suggest tags" trust surface. It is
+            editor-gated (renders only for editor/admin) and writes through its own
+            apply-tags mutation — the server owns the byte-stable okf.SetTags write
+            and 409 floor; on a successful apply it invalidates the page query so
+            the editor reloads the updated frontmatter rather than racing autosave. */}
+        <TagSuggest pagePath={path} />
       </div>
 
       <div className="pageeditor-toolbar">
