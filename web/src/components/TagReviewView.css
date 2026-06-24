@@ -1,0 +1,165 @@
+/* TagReviewView — the admin batch review queue route (TAG-06). Token-only (no
+   hard-coded hex/px, no new token). The per-page review surface is the REUSED
+   Phase-11 TagSuggestList (its own TagSuggest.css/Dialog.css shell is imported by
+   that component) — only the route chrome (header, backlog list, progress line,
+   empty/loading/error states) is styled here. The backlog rows clone the
+   .navrow/BacklinksPanel-row recipe; the pending chip clones .role-badge. */
+
+.tagreview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Header bar — --color-surface band, mirrors the graph route header. */
+.tagreview-header {
+  flex: 0 0 auto;
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.tagreview-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text);
+}
+
+.tagreview-title-icon {
+  color: var(--color-text-muted);
+}
+
+.tagreview-subtitle {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* Scrolling body — the backlog list / states. */
+.tagreview-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+/* Quiet muted single-line states (mirror .backlinks-status / .admin-muted). */
+.tagreview-loading,
+.tagreview-status {
+  margin: 0;
+  padding: var(--space-sm);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+.tagreview-progress {
+  margin: 0 0 var(--space-sm);
+  padding: 0 var(--space-sm);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* Empty state — centered, muted, clones .admin-empty. */
+.tagreview-empty {
+  text-align: center;
+  margin-top: var(--space-2xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tagreview-empty-heading {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text);
+}
+
+.tagreview-empty-body {
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* Backlog list — selectable rows cloning the .navrow recipe. */
+.tagreview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.tagreview-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: var(--hit-min-height);
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.tagreview-row:hover {
+  background: var(--color-hover);
+}
+
+.tagreview-row-active {
+  background: var(--color-tree-active-bg);
+}
+
+.tagreview-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.tagreview-row-title {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tagreview-row-path {
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Pending-count chip — neutral, word + number (never color-only). The base
+   .role-badge supplies fill/outline/radius; this only prevents wrapping. */
+.tagreview-pending-badge {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.tagreview-row-chevron {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+}

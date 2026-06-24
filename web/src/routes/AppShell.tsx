@@ -13,6 +13,7 @@ import {
   ChevronsUpDown,
   FilePlus,
   FolderPlus,
+  ListChecks,
   Network,
   PanelLeft,
   PanelLeftClose,
@@ -704,6 +705,24 @@ export default function AppShell({ children }: { children?: ReactNode }) {
               <Network size={16} aria-hidden="true" className="tree-icon" />
               <span className="tree-label">Graph</span>
             </button>
+            {/* Tag review — admin-only (TAG-06). The nav row, the route, and the
+                admin sweep section all render only for an admin (client
+                convenience); the server RequireRole(admin) is the real gate. */}
+            {isAdmin && (
+              <button
+                type="button"
+                className={`navrow navrail-trash-row${
+                  location.pathname === "/app/tag-review" ? " navrail-row-active" : ""
+                }`}
+                onClick={() => navigate("/app/tag-review")}
+                aria-current={
+                  location.pathname === "/app/tag-review" ? "page" : undefined
+                }
+              >
+                <ListChecks size={16} aria-hidden="true" className="tree-icon" />
+                <span className="tree-label">Tag review</span>
+              </button>
+            )}
             <button
               type="button"
               className="navrow navrail-trash-row"

@@ -18,6 +18,12 @@ import { me, type Me } from "./api/client";
 // visited.
 const GraphView = lazy(() => import("./components/graph/GraphView"));
 
+// TagReviewView is lazy-loaded (the Phase-10 lazy-route pattern) so the admin
+// batch review queue code-splits OUT of the initial bundle — only fetched when
+// the admin visits /app/tag-review. The route is admin-gated by RequireAdmin
+// (the server RequireRole(admin) on every endpoint is the real boundary).
+const TagReviewView = lazy(() => import("./components/TagReviewView"));
+
 // useSession loads the current user via /auth/me. A 401 means unauthenticated.
 function useSession() {
   return useQuery<Me>({
@@ -135,6 +141,29 @@ export default function App() {
               </Suspense>
             </AppShell>
           </RequireAuth>
+        }
+      />
+      <Route
+        path="/app/tag-review"
+        element={
+          <RequireAdmin>
+            <AppShell>
+              <Suspense
+                fallback={
+                  <div
+                    style={{
+                      padding: "var(--space-2xl)",
+                      color: "var(--color-text-muted)",
+                    }}
+                  >
+                    Loading pages to review…
+                  </div>
+                }
+              >
+                <TagReviewView />
+              </Suspense>
+            </AppShell>
+          </RequireAdmin>
         }
       />
       <Route

@@ -90,6 +90,32 @@ describe("AppShell — AUTH-06", () => {
 
 });
 
+describe("AppShell — Tag review nav entry (TAG-06)", () => {
+  it("renders the admin-only 'Tag review' nav row for an admin and routes to /app/tag-review", async () => {
+    const user = userEvent.setup();
+    seedMe("admin");
+    renderAppShell();
+
+    const navRow = await screen.findByRole("button", { name: /tag review/i });
+    expect(navRow).toBeInTheDocument();
+    await user.click(navRow);
+    // After navigating, the row reflects the active route via aria-current.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /tag review/i }),
+      ).toHaveAttribute("aria-current", "page"),
+    );
+  });
+
+  it("hides the 'Tag review' nav row for a non-admin (editor)", async () => {
+    seedMe("editor");
+    renderAppShell();
+    // The shell mounts (Graph row is present for everyone); the admin row is not.
+    await screen.findByRole("button", { name: /graph/i });
+    expect(screen.queryByRole("button", { name: /tag review/i })).toBeNull();
+  });
+});
+
 describe("AppShell — agent dispatch (04-07)", () => {
   it("AGNT-07: rewrite mode with a selection calls rewrite() and opens DiffReviewDialog (never auto-applies)", async () => {
     const user = userEvent.setup();

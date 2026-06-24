@@ -156,7 +156,7 @@ export default function TagSuggest({ pagePath }: { pagePath: string }) {
   );
 }
 
-interface TagSuggestListProps {
+export interface TagSuggestListProps {
   suggestions: TagSuggestion[];
   checked: Record<string, boolean>;
   onToggle: (tag: string) => void;
@@ -170,13 +170,25 @@ interface TagSuggestListProps {
   onApply: () => void;
   onCancel: () => void;
   onRerun: () => void;
+  // The cancel/apply labels are overridable so the batch review route (Phase 12)
+  // can read "Skip for now" / "Apply approved" while the per-page PageEditor
+  // surface keeps "Cancel" / "Apply tags". The INTERACTION contract is unchanged
+  // by a label — cancel stays the DOM-first focused safe default; apply stays
+  // accent + never auto-focused. Defaults preserve the Phase-11 copy verbatim.
+  cancelLabel?: string;
+  applyLabel?: string;
 }
 
 // TagSuggestList is the modal approval surface. It clones the Dialog/DiffReviewDialog
 // modal shell and REPRODUCES the trust-gate focus inversion verbatim: Cancel is the
 // DOM-first deliberate initial-focus target; Apply is accent + NEVER auto-focused;
 // Esc + backdrop = Cancel (never Apply); full focus trap + restore-focus-on-close.
-function TagSuggestList({
+//
+// Exported so BOTH the per-page TagSuggest (above) and the batch review route
+// (TagReviewView, Phase 12) consume the SAME approval surface — the row internals,
+// new-default-unchecked, select-all/clear, count line, trust-gate focus inversion,
+// and stale state are inherited verbatim, never re-implemented.
+export function TagSuggestList({
   suggestions,
   checked,
   onToggle,
@@ -190,6 +202,8 @@ function TagSuggestList({
   onApply,
   onCancel,
   onRerun,
+  cancelLabel = "Cancel",
+  applyLabel = "Apply tags",
 }: TagSuggestListProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   // Cancel is the deliberate initial-focus target (NEVER Apply) — a reflexive
@@ -285,7 +299,7 @@ function TagSuggestList({
                 onClick={onCancel}
                 disabled={rerunning}
               >
-                Close
+                {cancelLabel === "Cancel" ? "Close" : cancelLabel}
               </button>
               <button
                 type="button"
@@ -309,7 +323,7 @@ function TagSuggestList({
                 className="btn btn-secondary"
                 onClick={onCancel}
               >
-                Cancel
+                {cancelLabel}
               </button>
             </div>
           </>
@@ -374,7 +388,7 @@ function TagSuggestList({
                 onClick={onCancel}
                 disabled={applying}
               >
-                Cancel
+                {cancelLabel}
               </button>
               <button
                 type="button"
@@ -387,7 +401,7 @@ function TagSuggestList({
                 ) : (
                   <>
                     <Check size={16} aria-hidden="true" />
-                    Apply tags
+                    {applyLabel}
                   </>
                 )}
               </button>
