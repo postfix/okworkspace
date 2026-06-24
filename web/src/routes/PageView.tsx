@@ -10,6 +10,7 @@ import { okfTitle } from "../lib/frontmatter";
 import { useRecent } from "../stores/recent";
 import LivePreviewEditor from "../components/LivePreviewEditor";
 import BacklinksPanel from "../components/BacklinksPanel";
+import LocalGraphPanel from "../components/graph/LocalGraphPanel";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PageActionMenu from "../components/PageActionMenu";
 import RenameModal from "../components/RenameModal";
@@ -128,6 +129,12 @@ export default function PageView() {
         />
       )}
       <BacklinksPanel path={path} />
+      {/* The right-side per-page local graph dock (GRAPH-03). Additive: it honors
+          its own persisted collapse state (collapsed by default) so the CM6 read
+          surface above is untouched and a reader who never opens it pays no canvas
+          cost. Only mounts on the success branch (the 404/error early-returns
+          above never reach here). */}
+      <LocalGraphPanel path={path} />
       <Dialog
         open={attachmentsOpen}
         title="Attachments"

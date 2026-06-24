@@ -1,0 +1,119 @@
+/* LocalGraphPanel (GRAPH-03..05) — the right-side collapsible per-page 'Local
+   graph' dock. A token-for-token mirror of .agentpanel: a fixed-width column with
+   a left border, a surface header, a controls row, and a flexing body that hosts
+   the canvas. Token-only styling; the width reuses --agentpanel-width (the dock
+   sits in the same right-edge slot, never two docks at once in PageView). */
+.localgraph {
+  width: var(--agentpanel-width);
+  flex: 0 0 var(--agentpanel-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-bg);
+  border-left: 1px solid var(--color-border);
+}
+
+.localgraph-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.localgraph-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.localgraph-title {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+}
+
+.localgraph-collapse {
+  flex: 0 0 auto;
+  min-width: var(--hit-min-icon);
+  min-height: var(--hit-min-icon);
+  padding: var(--space-sm);
+}
+
+/* The toggle cluster + depth selector row, just under the header. */
+.localgraph-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.localgraph-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The canvas host fills the remaining body height so ForceGraph2D can measure a
+   real box (it does not flex on its own). */
+.localgraph-canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+/* Quiet muted single-line states (loading / error / empty), matching the
+   BacklinksPanel + AgentPanel status copy treatment. */
+.localgraph-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: var(--space-md);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* The slim reopen affordance shown when the dock is collapsed: a vertical tab
+   pinned to the right edge so the reader can bring the panel back. */
+.localgraph-reopen {
+  position: fixed;
+  top: calc(var(--topbar-height) + var(--space-md));
+  right: 0;
+  z-index: 40;
+  min-width: var(--hit-min-icon);
+  min-height: var(--hit-min-icon);
+  padding: var(--space-sm);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-right: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .localgraph-status .spinner {
+    animation: none;
+  }
+}
+
+/* Narrow widths: float the dock over the right edge rather than squeezing the
+   editor below its readable prose width (mirrors .agentpanel). */
+@media (max-width: 1280px) {
+  .localgraph {
+    position: fixed;
+    top: var(--topbar-height);
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    box-shadow: var(--shadow-popover);
+  }
+}
