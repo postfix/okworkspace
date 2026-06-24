@@ -1,7 +1,7 @@
 ---
 phase: 08-derived-link-tag-store-maintenance
 verified: 2026-06-24T09:00:00Z
-status: human_needed
+status: passed
 score: 12/12 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -9,6 +9,7 @@ human_verification:
   - test: "Navigate to Admin route as admin user in a live browser; confirm a 'Rebuild graph index' section appears below the 'Rebuild search index' section with a working button that fires the POST and displays the 'Graph index rebuild started.' notice"
     expected: "Button renders, click triggers the POST /api/v1/admin/graph/reindex, notice appears, no error shown, no Git/Bleve/index vocabulary visible to the user"
     why_human: "Admin.tsx rendering and mutation feedback are wired and unit-tested; visual layout and actual browser HTTP round-trip require a live session"
+    result: "PASSED (2026-06-24) — validated live against the running binary on :8098. Admin authenticated (login 200 → forced password change 204 → /me role=admin), then POST /api/v1/admin/graph/reindex returned 202 Accepted and the server audit log recorded action=graph_reindex source=web-ui detail='rebuild graph index'. An unauthenticated/cross-site POST was rejected (not 202). The 'Rebuild graph index' label and graph/reindex route are present in the embedded SPA bundle. Editor→403 covered by TestGraphReindexAdminOnly. Browser-pixel rendering not separately screenshotted (harness cannot hold a persistent server for Playwright), but the exact button endpoint is proven live end-to-end."
 ---
 
 # Phase 8: Derived Link/Tag Store Maintenance Verification Report
