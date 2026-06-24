@@ -1,0 +1,22 @@
+/* DepthControl (GRAPH-03) — the Local-graph panel's 1/2/3 hop selector. A compact
+   label + <select className="select"> row. Token-only — no hard-coded color/px
+   (the .select primitive carries the --hit-min-height interactive target; the
+   label uses the shared muted-label tokens). */
+.depthcontrol {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.depthcontrol-label {
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* The select compacts to the value width (single digit) within the panel header
+   controls row — keep its left padding tight while preserving the hit target. */
+.depthcontrol-select {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-label);
+}
