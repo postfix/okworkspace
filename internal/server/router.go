@@ -296,6 +296,14 @@ func New(deps Deps) (http.Handler, error) {
 				// the review-queue read lists pages with pending staged suggestions.
 				admin.Post("/admin/tags/sweep", h.handleStartTagSweep)
 				admin.Get("/admin/tags/suggestions", h.handleListTagSuggestions)
+				// Batched approve (TAG-06) — admin-only, inheriting the SAME
+				// RequireRole(admin) gate + nosurf CSRF. It approves one OR many pages'
+				// staged suggestions through the byte-stable apply, committed in a BATCH
+				// (one commit, not one-per-page — Pitfall 6). The server RE-VALIDATES
+				// each page's tags and uses the STAGED base_revision from the queue — the
+				// client tag list and any claimed revision are NEVER trusted, mirroring
+				// handleApplyTags. A stale page 409s individually without sinking the batch.
+				admin.Post("/admin/tags/approve", h.handleApproveTagSuggestions)
 			})
 		})
 	})
