@@ -109,10 +109,12 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
   3. Approving tags changes only the `tags` lines of the page's YAML frontmatter (body and other frontmatter byte-unchanged), commits through the single-writer Git path, and a stale page revision 409s rather than clobbering
   4. Suggestions are biased toward the existing workspace tag vocabulary, capped at max 5 per page, and normalized on write (lowercase, trimmed, deduped)
 
-**Plans**: 3 plans
-- [ ] 11-01-PLAN.md — Byte-stable okf.SetTags (TAG-03) + Store.Vocabulary for vocab biasing (TAG-04) [wave 1]
+**Plans**: 1/3 plans executed
+
+- [x] 11-01-PLAN.md — Byte-stable okf.SetTags (TAG-03) + Store.Vocabulary for vocab biasing (TAG-04) [wave 1]
 - [ ] 11-02-PLAN.md — SuggestTags single-shot mode + suggest/apply endpoints (apply: editor+CSRF→okf.SetTags→pages.Save, 409 on stale) (TAG-01) [wave 2]
 - [ ] 11-03-PLAN.md — Suggest-tags trigger + per-tag approval UI (new-default-unchecked, Apply-not-autofocused, 409 stale state) (TAG-01, TAG-02) [wave 3]
+
 **UI hint**: yes
 
 ### Phase 12: Bulk Sweep & Batch Review Queue
@@ -148,7 +150,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11 → 12. Phase 8 is the sh
 | 8. Derived Link/Tag Store & Maintenance | v1.0 | 3/3 | Complete    | 2026-06-24 |
 | 9. Graph Endpoints & Backlinks Panel | v1.0 | 2/2 | Complete    | 2026-06-24 |
 | 10. Graph UI | v1.0 | 3/3 | Complete    | 2026-06-24 |
-| 11. Per-Page LLM Tag Suggestion | v1.0 | 0/TBD | Not started | - |
+| 11. Per-Page LLM Tag Suggestion | v1.0 | 1/3 | In Progress|  |
 | 12. Bulk Sweep & Batch Review Queue | v1.0 | 0/TBD | Not started | - |
 
 **v0.9.9 MVP: 8/8 phases, 36/36 plans complete — shipped 2026-06-23.** All phase verifications closed (live browser UAT 2026-06-24).
