@@ -48,7 +48,10 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
   2. The link/tag store is derived only — deleting it and rebuilding from the Markdown files on disk reproduces identical adjacency (SQLite is never the source of truth)
   3. An admin can rebuild the link/graph index from files via an affordance consistent with the existing "Rebuild search index" button
   4. Tag membership per page is queryable, giving the workspace's existing tag vocabulary for downstream prompting
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 08-01-PLAN.md — `internal/graph` derived store (page_links/page_tags + migration 0009), KindGraph job + RebuildGraph data layer (LINK-01)
+- [ ] 08-02-PLAN.md — startup handler registration + drift rebuild + per-mutation fire-and-forget graph enqueue across all mutation kinds (LINK-01)
+- [ ] 08-03-PLAN.md — admin "Rebuild graph index" affordance: POST /admin/graph/reindex + ActionGraphReindex + Admin.tsx button (LINK-03)
 
 ### Phase 9: Graph Endpoints & Backlinks Panel
 **Goal**: The stored adjacency is exposed over HTTP as typed-edge graph payloads, and the first user-visible output ships: a page-view backlinks panel listing every page that links to the current one.
