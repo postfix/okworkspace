@@ -146,12 +146,10 @@ The following were considered and explicitly deferred:
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| UAT-01 | — | Not started |
-| UX-01 | — | Not started |
-| DOC-01 | — | Not started |
-| DOC-02 | — | Not started |
-| SEC-01 | — | Not started |
-| SEC-02 | — | Not started |
-| SEC-03 | — | Not started |
-
-*Traceability will be filled by the roadmap.*
+| UAT-01 | Phase 13 | Not started |
+| UX-01 | Phase 15 | Not started |
+| DOC-01 | Phase 14 | Not started |
+| DOC-02 | Phase 14 | Not started |
+| SEC-01 | Phase 16 | Not started |
+| SEC-02 | Phase 16 | Not started |
+| SEC-03 | Phase 16 | Not started |
