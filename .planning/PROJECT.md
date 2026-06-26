@@ -12,7 +12,7 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 **Shipped: v1.0 Knowledge Graph & LLM Auto-Tagging (2026-06-24).** All 5 phases (14 plans, 34 tasks) complete and verified — milestone audit passed (14/14 requirements, 5/5 integration seams), independent security review passed (zero HIGH/CRITICAL). Delivered: a derived link/tag adjacency store (rebuildable from files, never source of truth) with backlinks, an Obsidian-style global + per-page graph UI with edge-type toggles, and approval-gated LLM tagging (per-page on-demand + admin bulk sweep with a batch review queue) routed through the existing byte-stable single-writer commit path.
 
-**Next milestone:** not yet defined — run `/gsd-new-milestone` to scope it. Candidate directions surfaced during v1.0: graph performance/clustering at larger page counts, tag-management UX (rename/merge across the workspace), and the deferred GraphCanvas bundle lazy-load. See STATE.md Deferred Items for the carried-forward backlog.
+**Next milestone: v1.1 Hardening & Polish** — Close v1.0's deferred items: Phase 10 visual UAT, bulk-approve UX improvement, `docs/` authoring, and security hardening (sweep fan-out cap, tag charset validation, `govulncheck` resolution). GraphCanvas bundle lazy-load deferred to backlog.
 
 ## Requirements
 
@@ -36,9 +36,15 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 ### Active
 
-<!-- Next milestone scope — TBD via /gsd-new-milestone. -->
+<!-- v1.1 Hardening & Polish -->
 
-(None — v1.0 shipped. Next milestone not yet scoped.)
+- **UAT-01:** Manual browser testing of Phase 10 graph UI (zoom, pan, hover-highlight, edge toggles, global + local views) — visual verification after wiring confirmed
+- **UX-01:** Improve bulk-approve UX when commit hasn't physically landed (poll until complete or progress indicator) — eventual-consistency latency fix
+- **DOC-01:** Contributor architecture docs for v1.0 graph/tag subsystems (`docs/` creation + public API surfaces)
+- **DOC-02:** User-facing README update reflecting v1.0 features and current capabilities
+- **SEC-01:** Configurable cap on admin tag-sweep concurrent jobs (prevent resource exhaustion)
+- **SEC-02:** Server-side tag charset input validation (defense-in-depth alongside existing sink encoding)
+- **SEC-03:** Resolve `govulncheck` inconclusive state (Go 1.26/x-tools toolchain panic investigation)
 
 ### Out of Scope
 

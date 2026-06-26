@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: Knowledge Graph & LLM Auto-Tagging
+milestone: v1.1
+milestone_name: Hardening & Polish
 current_phase: 0
-status: Awaiting next milestone
-stopped_at: v1.0 roadmap created (ROADMAP.md Phases 8–12, REQUIREMENTS.md traceability filled, STATE.md updated)
-last_updated: "2026-06-24T14:42:03.703Z"
-last_activity: 2026-06-24
-last_activity_desc: Milestone v1.0 completed and archived
+status: Defining requirements
+stopped_at: Milestone v1.1 initialized from v1.0 deferred items
+last_updated: "2026-06-26T13:05:00.000Z"
+last_activity: 2026-06-26
+last_activity_desc: Milestone v1.1 started — hardening & polish scope
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
-current_phase_name: Bulk Sweep & Batch Review Queue
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+current_phase_name: Not started
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-24 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-26 — Milestone v1.1 started from v1.0 deferred items
 
 ## Deferred Items
 
