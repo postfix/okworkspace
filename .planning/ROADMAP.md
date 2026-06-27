@@ -215,14 +215,14 @@ Phase 13 (UAT) catches visual issues early. Phase 14 (docs) can run in parallel.
 
 ## Phase 17: Graph Filter Sidebar
 
-**Goal:** Implement a dark-themed, collapsible Graph Filter Sidebar on the global graph view that gives users live control over node/edge visibility, graph groups, and display settings.
+**Goal:** Add filtering and display controls inline on the graph page — integrated into the same panel as the existing Links/Backlinks/Shared Tags edge-type toggles — giving users live control over node/edge visibility, graph groups, and display settings without a separate sidebar.
 
 **Requirements:** GF-01
 
-**Context:** Discovered during Phase 13 UAT — the graph renders correctly but lacks filtering. As the page count grows, the global graph becomes a hairball. Users need search, visibility toggles, and display controls to make the graph useful at scale.
+**Context:** Discovered during Phase 13 UAT — the graph renders correctly but lacks filtering. As the page count grows, the global graph becomes a hairball. Users need search, visibility toggles, and display controls integrated into the existing graph panel alongside the current edge-type chips (Links/Backlinks/Shared Tags) — not a separate sidebar.
 
 **Success Criteria:**
-1. Collapsible sidebar panel (~313px, dark theme #262626) with "Filters" header, collapse chevron, reset button, and close button
+1. Inline filter section on the graph page — lives in the same panel as the existing Links/Backlinks/Shared Tags edge-type chips, with collapsible "Filters" header, collapse chevron, and reset button
 2. Search input filters graph nodes live by name, path, aliases, and tags
 3. Four visibility toggles with correct defaults:
    - Tags: ON (show tag nodes)
@@ -236,7 +236,7 @@ Phase 13 (UAT) catches visual issues early. Phase 14 (docs) can run in parallel.
    - Node size slider (0–1, default 0.2) — node radius 2px–12px
    - Link thickness slider (0–1, default 0.2) — edge stroke 0.5px–5px
 6. Live updates: every control change immediately updates the graph (no Apply button)
-7. Reset restores all defaults; close hides the sidebar
+7. Reset restores all defaults; "Filters" section is collapsible inline (no separate close needed)
 8. Settings persisted per workspace (localStorage)
 9. Filtering pipeline is deterministic: node filter → edge filter → orphan filter → display settings
 10. Accessible controls: real `<button>`, `<input type="search">`, `<input type="range">` with aria-labels
