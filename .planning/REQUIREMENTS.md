@@ -131,6 +131,40 @@ This milestone closes v1.0's deferred items: visual UAT, eventual-consistency UX
 
 ---
 
+## Graph Filter Sidebar
+
+### GF-01: Graph Filter Sidebar
+
+**Requirement:** Implement a dark-themed, collapsible Graph Filter Sidebar panel (~313px wide) on the global and local graph views that controls node/edge visibility and display settings with live updates.
+
+**Acceptance criteria:**
+- [ ] Sidebar panel with "Filters" header, collapse chevron, reset button, and close button
+- [ ] Search input ("Search files...") filters graph nodes live by name, path, aliases, and tags
+- [ ] Toggle: Tags (default ON) — show/hide tag nodes and tag-only edges
+- [ ] Toggle: Attachments (default OFF) — show/hide attachment nodes (image, pdf, audio, video, archive, binary)
+- [ ] Toggle: Existing files only (default OFF) — hide nodes for missing/nonexistent files
+- [ ] Toggle: Orphans (default ON) — show/hide nodes with zero visible edges after all other filters
+- [ ] Groups section (collapsible) with "New group" button for creating named, colored graph groups with query matching
+- [ ] Display section (collapsible) with:
+  - Arrows toggle (default OFF) — show/hide link direction arrowheads
+  - Text fade threshold slider (0–1, default 0.5) — control label fade based on zoom level
+  - Node size slider (0–1, default 0.2) — control node radius (2px–12px range)
+  - Link thickness slider (0–1, default 0.2) — control edge stroke width (0.5px–5px range)
+- [ ] All controls update the graph immediately (no Apply button)
+- [ ] Reset button restores all settings to defaults
+- [ ] Settings persisted per workspace (localStorage or backend workspace_settings)
+- [ ] Filtering pipeline is deterministic and ordered: node filter → edge filter → orphan filter → display settings
+- [ ] Accessible: real `<button>`, `<input type="search">`, `<input type="range">` with aria-labels; keyboard navigable
+- [ ] Dark theme: bg #262626, text #d4d4d4, accent purple #8b5cf6
+
+**Notes:**
+- Discovered during Phase 13 UAT — the graph needs filtering to be usable at scale
+- Builds on Phase 10 (GraphCanvas, useGraph, graphEdges store)
+- CSS variables should use existing project token patterns where possible
+- Graph groups can be deferred to a follow-up if scope is too large
+
+---
+
 ## Out of Scope
 
 The following were considered and explicitly deferred:
@@ -146,10 +180,11 @@ The following were considered and explicitly deferred:
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| UAT-01 | Phase 13 | Not started |
+| UAT-01 | Phase 13 | In progress |
 | UX-01 | Phase 15 | Not started |
 | DOC-01 | Phase 14 | Not started |
 | DOC-02 | Phase 14 | Not started |
 | SEC-01 | Phase 16 | Not started |
 | SEC-02 | Phase 16 | Not started |
 | SEC-03 | Phase 16 | Not started |
+| GF-01 | Phase 17 | Not started |

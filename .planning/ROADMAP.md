@@ -48,8 +48,9 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
 - [ ] **Phase 14: Documentation** (2 plans) — contributor architecture docs for graph/tag subsystems, user-facing README update (DOC-01, DOC-02)
 - [ ] **Phase 15: UX Improvement** (1 plan) — bulk-approve eventual-consistency UX improvement with progress indication (UX-01)
 - [ ] **Phase 16: Security Hardening** (3 plans) — admin sweep fan-out cap, tag charset input validation, govulncheck resolution (SEC-01, SEC-02, SEC-03)
+- [ ] **Phase 17: Graph Filter Sidebar** (2 plans) — dark-themed collapsible sidebar panel with node search, visibility toggles (Tags, Attachments, Existing, Orphans), graph groups, and display controls (arrows, text fade, node size, link thickness) (GF-01)
 
-Phase 13 (UAT) catches visual issues early. Phase 14 (docs) can run in parallel. Phases 15–16 follow.
+Phase 13 (UAT) catches visual issues early. Phase 14 (docs) can run in parallel. Phase 17 discovered during UAT — builds on Phase 10 graph UI with live filtering. Phases 15–16 follow.
 
 </details>
 
@@ -75,10 +76,11 @@ Phase 13 (UAT) catches visual issues early. Phase 14 (docs) can run in parallel.
 | 10. Graph UI | v1.0 | 3/3 | Complete | 2026-06-24 |
 | 11. Per-Page LLM Tag Suggestion | v1.0 | 3/3 | Complete | 2026-06-24 |
 | 12. Bulk Sweep & Batch Review | v1.0 | 3/3 | Complete | 2026-06-24 |
-| **13. Visual UAT** | **v1.1** | **0/1** | **Not started** | — |
+| **13. Visual UAT** | **v1.1** | **0/1** | **In progress** | — |
 | **14. Documentation** | **v1.1** | **0/2** | **Not started** | — |
 | **15. UX Improvement** | **v1.1** | **0/1** | **Not started** | — |
 | **16. Security Hardening** | **v1.1** | **0/3** | **Not started** | — |
+| **17. Graph Filter Sidebar** | **v1.1** | **0/2** | **Not started** | — |
 
 ---
 
@@ -208,6 +210,45 @@ Phase 13 (UAT) catches visual issues early. Phase 14 (docs) can run in parallel.
 - `go.mod`, CI workflow (SEC-03)
 
 **Dependencies:** Phase 13 (visual issues caught early)
+
+---
+
+## Phase 17: Graph Filter Sidebar
+
+**Goal:** Implement a dark-themed, collapsible Graph Filter Sidebar on the global graph view that gives users live control over node/edge visibility, graph groups, and display settings.
+
+**Requirements:** GF-01
+
+**Context:** Discovered during Phase 13 UAT — the graph renders correctly but lacks filtering. As the page count grows, the global graph becomes a hairball. Users need search, visibility toggles, and display controls to make the graph useful at scale.
+
+**Success Criteria:**
+1. Collapsible sidebar panel (~313px, dark theme #262626) with "Filters" header, collapse chevron, reset button, and close button
+2. Search input filters graph nodes live by name, path, aliases, and tags
+3. Four visibility toggles with correct defaults:
+   - Tags: ON (show tag nodes)
+   - Attachments: OFF (hide attachment nodes)
+   - Existing files only: OFF (show all)
+   - Orphans: ON (show orphan nodes)
+4. Groups section (collapsible) with "New group" button for creating named, colored graph groups with query matching
+5. Display section (collapsible) with:
+   - Arrows toggle (OFF default) — show/hide link direction arrowheads
+   - Text fade threshold slider (0–1, default 0.5) — label fade at zoom
+   - Node size slider (0–1, default 0.2) — node radius 2px–12px
+   - Link thickness slider (0–1, default 0.2) — edge stroke 0.5px–5px
+6. Live updates: every control change immediately updates the graph (no Apply button)
+7. Reset restores all defaults; close hides the sidebar
+8. Settings persisted per workspace (localStorage)
+9. Filtering pipeline is deterministic: node filter → edge filter → orphan filter → display settings
+10. Accessible controls: real `<button>`, `<input type="search">`, `<input type="range">` with aria-labels
+
+**Key Files:**
+- `web/src/components/graph/GraphCanvas.tsx` — Canvas wrapper (display settings apply here)
+- `web/src/components/graph/GraphView.tsx` — Global graph route (sidebar mounts here)
+- `web/src/stores/graphEdges.ts` — Edge toggle state (extend or add filter store)
+- `web/src/hooks/useGraph.ts` — Graph data fetching (filtering pipeline)
+- `internal/graph/query.go` — Graph query layer (may need search/filter params)
+
+**Dependencies:** Phase 10 (Graph UI) — builds on existing GraphCanvas, useGraph, and graphEdges store. Phase 13 (UAT) — baseline verified working before adding features.
 
 ---
 
