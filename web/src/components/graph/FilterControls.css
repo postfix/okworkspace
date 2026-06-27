@@ -1,0 +1,125 @@
+/* FilterControls (GF-01) — search input, visibility toggles, display sliders,
+   groups button, and reset button. Lives flat alongside EdgeToggles in the
+   graphview-header. Token-only — uses the project's CSS variable system with
+   sensible dark-theme fallbacks. */
+
+.filtercontrols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm, 8px);
+  align-items: center;
+  width: 100%;
+}
+
+/* --- Search input --- */
+
+.filtercontrols-search {
+  position: relative;
+  width: 100%;
+}
+
+.filtercontrols-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-faint, #9a9a9a);
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.filtercontrols-search-input {
+  width: 100%;
+  height: 36px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-bg-elevated, #202020);
+  border: 1px solid var(--color-border, #3a3a3a);
+  color: var(--color-text, #d4d4d4);
+  padding: 0 12px 0 34px;
+  font-size: var(--font-size-body, 14px);
+  font-family: var(--font-family-ui, system-ui, sans-serif);
+  box-sizing: border-box;
+}
+
+.filtercontrols-search-input::placeholder {
+  color: var(--color-text-muted, #626b7d);
+}
+
+.filtercontrols-search-input:focus {
+  outline: none;
+  border-color: var(--color-accent-border, #8b5cf6);
+}
+
+/* --- Visibility / toggle chip group --- */
+
+.filtercontrols-toggles {
+  display: flex;
+  gap: var(--space-xs, 6px);
+  flex-wrap: wrap;
+}
+
+/* --- Display controls section --- */
+
+.filtercontrols-display {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 10px);
+  width: 100%;
+  margin-top: var(--space-xs, 4px);
+}
+
+.filtercontrols-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.filtercontrols-slider-label {
+  font-size: var(--font-size-label, 13px);
+  color: var(--color-text-muted, #9a9a9a);
+}
+
+.filtercontrols-slider-input {
+  width: 100%;
+  accent-color: var(--color-accent, #8b5cf6);
+  cursor: pointer;
+}
+
+/* --- Group button (full-width purple) --- */
+
+.filtercontrols-group-btn {
+  width: 100%;
+  height: 40px;
+  border-radius: var(--radius-sm, 6px);
+  border: none;
+  background: var(--color-accent, #8b5cf6);
+  color: white;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: var(--font-family-ui, system-ui, sans-serif);
+  cursor: pointer;
+  margin-top: var(--space-xs, 4px);
+}
+
+.filtercontrols-group-btn:hover {
+  opacity: 0.9;
+}
+
+/* --- Reset button --- */
+
+.filtercontrols-reset {
+  background: none;
+  border: 1px solid var(--color-border, #3a3a3a);
+  color: var(--color-text-muted, #9a9a9a);
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 10px;
+  font-size: var(--font-size-label, 13px);
+  font-family: var(--font-family-ui, system-ui, sans-serif);
+  cursor: pointer;
+  margin-top: var(--space-xs, 4px);
+}
+
+.filtercontrols-reset:hover {
+  border-color: var(--color-accent-border, #8b5cf6);
+  color: var(--color-text, #d4d4d4);
+}
