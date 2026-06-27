@@ -10,9 +10,9 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 ## Current State
 
-**Shipped: v1.0 Knowledge Graph & LLM Auto-Tagging (2026-06-24).** All 5 phases (14 plans, 34 tasks) complete and verified — milestone audit passed (14/14 requirements, 5/5 integration seams), independent security review passed (zero HIGH/CRITICAL). Delivered: a derived link/tag adjacency store (rebuildable from files, never source of truth) with backlinks, an Obsidian-style global + per-page graph UI with edge-type toggles, and approval-gated LLM tagging (per-page on-demand + admin bulk sweep with a batch review queue) routed through the existing byte-stable single-writer commit path.
+**Shipped: v1.1 Hardening & Polish (2026-06-27).** All 5 phases (9 plans) complete and verified — security review passed (zero blockers). Delivered: visual UAT confirming graph UI, `docs/` contributor architecture documentation, non-blocking bulk-approve progress UX, defense-in-depth security hardening (sweep fan-out cap, tag charset validation, govulncheck clean), and the graph filter sidebar (search, visibility toggles, display sliders, groups, reset).
 
-**Next milestone: v1.1 Hardening & Polish** — Close v1.0's deferred items: Phase 10 visual UAT, bulk-approve UX improvement, `docs/` authoring, and security hardening (sweep fan-out cap, tag charset validation, `govulncheck` resolution). GraphCanvas bundle lazy-load deferred to backlog.
+**Current milestone: v1.2 Graph Schema Extension** — Close the Phase 17 gap: extend the backend graph data model so the 3 inert filter toggles (Attachments, Existing files only, search by aliases/tags) become functional. Pure backend data plumbing — no new UI.
 
 ## Requirements
 
@@ -34,17 +34,16 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 - ✓ **Backlinks** — v1.0 — reverse-link tracking + page-view "Referenced by" panel + `/graph/backlinks` endpoint
 - ✓ **LLM auto-tagging** — v1.0 — per-page on-demand tag suggestion + admin bulk untagged sweep with a batch review queue; suggest→approve (no silent writes), byte-stable frontmatter apply, vocabulary-biased & capped, model output re-validated server-side
 
+- ✓ **Graph filter sidebar** — v1.1 — live node search, visibility toggles (Tags/Attachments/Existing/Orphans), display sliders (text fade/node size/link thickness), arrows toggle, graph groups, reset, localStorage persistence
+- ✓ **Documentation** — v1.1 — `docs/` contributor architecture docs (overview, graph subsystem, tag subsystem, API contracts) + root README update
+- ✓ **UX improvement** — v1.1 — non-blocking bulk-approve progress indicator with polling status endpoint
+- ✓ **Security hardening** — v1.1 — admin sweep fan-out cap, tag charset server-side validation, govulncheck triaged (0 reachable vulns)
+
 ### Active
 
-<!-- v1.1 Hardening & Polish -->
+<!-- v1.2 Graph Schema Extension -->
 
-- **UAT-01:** Manual browser testing of Phase 10 graph UI (zoom, pan, hover-highlight, edge toggles, global + local views) — visual verification after wiring confirmed
-- **UX-01:** Improve bulk-approve UX when commit hasn't physically landed (poll until complete or progress indicator) — eventual-consistency latency fix
-- **DOC-01:** Contributor architecture docs for v1.0 graph/tag subsystems (`docs/` creation + public API surfaces)
-- **DOC-02:** User-facing README update reflecting v1.0 features and current capabilities
-- **SEC-01:** Configurable cap on admin tag-sweep concurrent jobs (prevent resource exhaustion)
-- **SEC-02:** Server-side tag charset input validation (defense-in-depth alongside existing sink encoding)
-- **SEC-03:** Resolve `govulncheck` inconclusive state (Go 1.26/x-tools toolchain panic investigation)
+- **GF-02:** Extend backend GraphNode to include `aliases`, `tags`, `exists` fields, and `type: "attachment"` for attachment nodes — activates the 3 inert Phase 17 filter toggles
 
 ### Out of Scope
 

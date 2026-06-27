@@ -9,6 +9,7 @@ OKF Workspace is built dependency-first: a safe foundation (single binary, auth,
 - ✅ **v0.9.9 MVP** — Phases 0–7 (shipped 2026-06-23) — full self-hosted OKF wiki: auth/RBAC, pages+hidden Git, attachments+extraction, search, approval-gated Eino agent, soft-lock collaboration, Obsidian-style live-preview editor + file tree. See [`milestones/v0.9.9-ROADMAP.md`](milestones/v0.9.9-ROADMAP.md).
 - ✅ **v1.0 Knowledge Graph & LLM Auto-Tagging** — Phases 8–12 (shipped 2026-06-24) — derived link/tag store + backlinks, Obsidian-style global/local graph UI with edge-type toggles, and approval-gated per-page + bulk LLM tag suggestion. See [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md).
 - ✅ **v1.1 Hardening & Polish** — Phases 13–17 (shipped 2026-06-27) — visual UAT, documentation, UX improvement, security hardening, and graph filter sidebar.
+- 🔵 **v1.2 Graph Schema Extension** — Phase 18 (in progress) — extend backend GraphNode with aliases, tags, exists, and attachment types to activate the 3 inert Phase 17 filter toggles.
 
 ## Phases
 
@@ -247,6 +248,74 @@ Phase 13 (UAT) caught visual issues early. Phase 14 (docs) ran in parallel. Phas
 - `internal/graph/query.go` — Graph query layer (may need search/filter params)
 
 **Dependencies:** Phase 10 (Graph UI) — builds on existing GraphCanvas, useGraph, and graphEdges store. Phase 13 (UAT) — baseline verified working before adding features.
+
+---
+
+<details>
+<summary>🔵 v1.2 Graph Schema Extension (Phase 18) — IN PROGRESS</summary>
+
+- [ ] **Phase 18: Graph Schema Extension** (1 plan) — extend backend GraphNode struct with aliases, tags, exists, and attachment types to activate the 3 inert Phase 17 filter toggles (GF-02)
+
+Phase 18 closes the accepted tech debt from Phase 17. Pure backend data plumbing — no new UI.
+
+</details>
+
+## Progress
+
+**Execution Order:**
+- Phase 18 is standalone — no dependencies on other phases
+
+| Phase | Milestone | Plans | Status | Completed |
+| ----- | --------- | ----- | ------ | --------- |
+| 0. Skeleton, Auth & Foundations | v0.9.9 | 4/4 | Complete | 2026-06-18 |
+| 1. OKF Pages, Navigation & Hidden Git | v0.9.9 | 5/5 | Complete | 2026-06-19 |
+| 2. Attachments & Text Extraction | v0.9.9 | 4/4 | Complete | 2026-06-20 |
+| 3. Search | v0.9.9 | 4/4 | Complete | 2026-06-20 |
+| 4. Eino Agent | v0.9.9 | 7/7 | Complete | 2026-06-21 |
+| 5. Collaboration | v0.9.9 | 4/4 | Complete | 2026-06-21 |
+| 6. Live-Preview Editor | v0.9.9 | 4/4 | Complete | 2026-06-22 |
+| 7. Obsidian-style File Tree | v0.9.9 | 4/4 | Complete | 2026-06-22 |
+| 8. Derived Link/Tag Store | v1.0 | 3/3 | Complete | 2026-06-23 |
+| 9. Graph Endpoints & Backlinks | v1.0 | 2/2 | Complete | 2026-06-24 |
+| 10. Graph UI | v1.0 | 3/3 | Complete | 2026-06-24 |
+| 11. Per-Page LLM Tag Suggestion | v1.0 | 3/3 | Complete | 2026-06-24 |
+| 12. Bulk Sweep & Batch Review | v1.0 | 3/3 | Complete | 2026-06-24 |
+| 13. Visual UAT | v1.1 | 1/1 | Complete | 2026-06-27 |
+| 14. Documentation | v1.1 | 2/2 | Complete | 2026-06-27 |
+| 15. UX Improvement | v1.1 | 1/1 | Complete | 2026-06-27 |
+| 16. Security Hardening | v1.1 | 3/3 | Complete | 2026-06-27 |
+| 17. Graph Filter Sidebar | v1.1 | 2/2 | Complete | 2026-06-27 |
+| **18. Graph Schema Extension** | **v1.2** | **0/1** | **Not started** | — |
+
+---
+
+## Phase 18: Graph Schema Extension
+
+**Goal:** Extend the backend `GraphNode` struct and graph store to populate `aliases`, `tags`, `exists`, and `type: "attachment"` fields — activating the 3 inert Phase 17 filter toggles (Attachments, Existing files only, search by aliases/tags).
+
+**Requirements:** GF-02
+
+**Context:** Phase 17 built the full filtering pipeline, but 3 toggles are dead code because the backend `GraphNode` only carries `id`, `label`, and `type: "page" | "tag"`. The TypeScript code uses type assertions to access `aliases`, `tags`, `exists`, and `type: "attachment"` — none of which exist at runtime. This phase makes them real.
+
+**Success Criteria:**
+1. `GraphNode` struct extended with `Aliases []string`, `Tags []string`, `Exists bool`
+2. `GraphNode.Type` extended to `"page" | "tag" | "attachment"`
+3. Graph store populates `Aliases` and `Tags` from page YAML frontmatter
+4. Graph store populates `Exists: true` for existing pages, `false` for unresolved links
+5. Graph store creates attachment nodes for uploaded files with `type: "attachment"`
+6. TypeScript `GraphNode` type updated in `client.ts` (no more type assertions)
+7. `matchesSearch` matches against real `aliases` and `tags` arrays
+8. `filterNodes` checks real `type` and `exists` values
+9. All 3 previously-inert toggles become functional
+10. `go test ./internal/graph/...` and `npx tsc --noEmit` clean
+
+**Key Files:**
+- `internal/graph/model.go` — GraphNode struct definition
+- `internal/graph/store.go` — graph store (rebuild, incremental upsert/delete)
+- `web/src/api/client.ts` — TypeScript GraphNode type
+- `web/src/lib/graph/filter.ts` — matchesSearch, filterNodes (remove type assertions)
+
+**Dependencies:** Phase 17 (Graph Filter Sidebar) — activates the already-built UI.
 
 ---
 
