@@ -38,7 +38,7 @@ Close the Phase 17 gap: extend the backend graph data model so the 3 inert filte
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| GF-02 | Phase 18 | Not started |
+| GF-02 | Phase 18 | Complete |
 
 ---
 

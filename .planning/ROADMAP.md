@@ -9,7 +9,7 @@ OKF Workspace is built dependency-first: a safe foundation (single binary, auth,
 - ✅ **v0.9.9 MVP** — Phases 0–7 (shipped 2026-06-23) — full self-hosted OKF wiki: auth/RBAC, pages+hidden Git, attachments+extraction, search, approval-gated Eino agent, soft-lock collaboration, Obsidian-style live-preview editor + file tree. See [`milestones/v0.9.9-ROADMAP.md`](milestones/v0.9.9-ROADMAP.md).
 - ✅ **v1.0 Knowledge Graph & LLM Auto-Tagging** — Phases 8–12 (shipped 2026-06-24) — derived link/tag store + backlinks, Obsidian-style global/local graph UI with edge-type toggles, and approval-gated per-page + bulk LLM tag suggestion. See [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md).
 - ✅ **v1.1 Hardening & Polish** — Phases 13–17 (shipped 2026-06-27) — visual UAT, documentation, UX improvement, security hardening, and graph filter sidebar.
-- 🔵 **v1.2 Graph Schema Extension** — Phase 18 (in progress) — extend backend GraphNode with aliases, tags, exists, and attachment types to activate the 3 inert Phase 17 filter toggles.
+- ✅ **v1.2 Graph Schema Extension** — Phase 18 (shipped 2026-06-28) — extended backend GraphNode with aliases, tags, exists, and attachment types; all 3 inert Phase 17 filter toggles now functional.
 
 ## Phases
 
@@ -252,18 +252,15 @@ Phase 13 (UAT) caught visual issues early. Phase 14 (docs) ran in parallel. Phas
 ---
 
 <details>
-<summary>🔵 v1.2 Graph Schema Extension (Phase 18) — IN PROGRESS</summary>
+<summary>✅ v1.2 Graph Schema Extension (Phase 18) — SHIPPED 2026-06-28</summary>
 
-- [ ] **Phase 18: Graph Schema Extension** (1 plan) — extend backend GraphNode struct with aliases, tags, exists, and attachment types to activate the 3 inert Phase 17 filter toggles (GF-02)
+- [x] **Phase 18: Graph Schema Extension** (1 plan) — extended backend GraphNode struct with aliases, tags, exists, and attachment types to activate the 3 inert Phase 17 filter toggles (GF-02)
 
-Phase 18 closes the accepted tech debt from Phase 17. Pure backend data plumbing — no new UI.
+Phase 18 closed the accepted tech debt from Phase 17. Pure backend data plumbing — no new UI.
 
 </details>
 
 ## Progress
-
-**Execution Order:**
-- Phase 18 is standalone — no dependencies on other phases
 
 | Phase | Milestone | Plans | Status | Completed |
 | ----- | --------- | ----- | ------ | --------- |
@@ -285,7 +282,7 @@ Phase 18 closes the accepted tech debt from Phase 17. Pure backend data plumbing
 | 15. UX Improvement | v1.1 | 1/1 | Complete | 2026-06-27 |
 | 16. Security Hardening | v1.1 | 3/3 | Complete | 2026-06-27 |
 | 17. Graph Filter Sidebar | v1.1 | 2/2 | Complete | 2026-06-27 |
-| **18. Graph Schema Extension** | **v1.2** | **0/1** | **Not started** | — |
+| 18. Graph Schema Extension | v1.2 | 1/1 | Complete | 2026-06-28 |
 
 ---
 
