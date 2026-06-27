@@ -4,8 +4,10 @@ import { Loader2 } from "lucide-react";
 
 import { useGraph } from "../../hooks/useGraph";
 import { useGraphEdges } from "../../stores/graphEdges";
+import { useGraphFilters } from "../../stores/graphFilters";
 import { computeDegrees, isOrphan } from "../../lib/graph/model";
-import { filterEdges } from "../../lib/graph/filter";
+import { filterEdges, filterNodes, applyOrphanFilter } from "../../lib/graph/filter";
+import type { NodeFilters } from "../../lib/graph/filter";
 import { edgeKey, neighborHighlight } from "../../lib/graph/highlight";
 import type { GraphEdge, GraphNode } from "../../api/client";
 import GraphCanvas, {
@@ -13,6 +15,7 @@ import GraphCanvas, {
   type GraphCanvasNode,
 } from "./GraphCanvas";
 import EdgeToggles from "./EdgeToggles";
+import FilterControls from "./FilterControls";
 import "./GraphView.css";
 
 // GraphView is the full-pane /app/graph component (GRAPH-01/02/04/05): a header
@@ -72,10 +75,19 @@ function endId(end: unknown): string {
 }
 
 // DIM_ALPHA is the low alpha applied to non-highlighted elements on hover
-// ("dim the rest" — GRAPH-05). MIN_R/MAX_R bound the degree→radius scale.
-const DIM_ALPHA = 0.18;
-const MIN_R = 3;
-const MAX_R = 12;
+// ("dim the rest" — GRAPH-05). MIN_R/MAX_R bound the degree→radius scale,
+// kept small for an Obsidian-style dot-graph look. GLOW_SPREAD is the number
+// of extra pixels the outer bloom ring extends beyond the filled node.
+const DIM_ALPHA = 0.12;
+const MIN_R = 2.5;
+const MAX_R = 8;
+const GLOW_SPREAD = 4;
+// labelZoomThreshold computes a zoom cutoff for label visibility from the
+// textFadeThreshold slider (0–1). At 0 labels always appear, at 0.5 they
+// appear at ~2.5x zoom, at 1 they only appear at ~4.5x zoom.
+function labelZoomThreshold(v: number): number {
+  return 0.5 + v * 4;
+}
 
 interface GraphViewProps {
   // activePath, when supplied (the local-graph use later), accents that one page
@@ -91,24 +103,63 @@ export default function GraphView({ activePath }: GraphViewProps) {
   const backlinks = useGraphEdges((s) => s.backlinks);
   const sharedTags = useGraphEdges((s) => s.sharedTags);
 
+  // Filter state (GF-01).
+  const searchQuery = useGraphFilters((s) => s.searchQuery);
+  const showTags = useGraphFilters((s) => s.showTags);
+  const showAttachments = useGraphFilters((s) => s.showAttachments);
+  const existingFilesOnly = useGraphFilters((s) => s.existingFilesOnly);
+  const showOrphans = useGraphFilters((s) => s.showOrphans);
+  const showArrows = useGraphFilters((s) => s.showArrows);
+  const textFadeThreshold = useGraphFilters((s) => s.textFadeThreshold);
+  const filterNodeSize = useGraphFilters((s) => s.nodeSize);
+  const filterLinkThickness = useGraphFilters((s) => s.linkThickness);
+
   const [hoverId, setHoverId] = useState<string | null>(null);
   // Keep the latest hover in a ref so the draw callbacks (stable identities) read
   // the current value without being re-created each hover (avoids canvas churn).
   const hoverRef = useRef<string | null>(null);
   hoverRef.current = hoverId;
 
-  // Filter the payload edges client-side over the toggle slice (GRAPH-04). This
-  // useMemo is the ONLY edge transform — toggling never refetches.
+  // --- GF-01 filtering pipeline: node filter → edge filter → orphan filter ---
+
+  // 1. Node visibility filter (search + toggles).
+  const nodeFilters: NodeFilters = useMemo(
+    () => ({ searchQuery, showTags, showAttachments, existingFilesOnly }),
+    [searchQuery, showTags, showAttachments, existingFilesOnly],
+  );
+
+  const visibleNodes = useMemo(() => {
+    if (!data) return [];
+    return filterNodes(data.nodes, nodeFilters);
+  }, [data, nodeFilters]);
+
+  // 2. Edge filter over the toggle slice, keeping only edges whose both
+  // endpoints survived the node filter.
+  const visibleNodeIds = useMemo(
+    () => new Set(visibleNodes.map((n) => n.id)),
+    [visibleNodes],
+  );
+
   const visibleEdges: GraphEdge[] = useMemo(() => {
     if (!data) return [];
-    return filterEdges(data.edges, { links, backlinks, sharedTags });
-  }, [data, links, backlinks, sharedTags]);
+    const edges = filterEdges(data.edges, { links, backlinks, sharedTags });
+    return edges.filter(
+      (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target),
+    );
+  }, [data, links, backlinks, sharedTags, visibleNodeIds]);
 
-  // Degree map over the VISIBLE edges so node sizing reflects what is shown.
+  // 3. Orphan filter — when orphans hidden, drop nodes with 0 visible edges.
+  const orphanFiltered = useMemo(
+    () => applyOrphanFilter(visibleNodes, visibleEdges, showOrphans),
+    [visibleNodes, visibleEdges, showOrphans],
+  );
+
+  // Degree map over the ORPHAN-FILTERED edges so node sizing reflects what is
+  // shown (an always-hidden orphan has degree 0 no matter what the payload says).
   const degrees = useMemo(() => {
     if (!data) return new Map<string, number>();
-    return computeDegrees(data.nodes, visibleEdges);
-  }, [data, visibleEdges]);
+    return computeDegrees(orphanFiltered.nodes, orphanFiltered.edges);
+  }, [data, orphanFiltered]);
 
   // The maximum degree drives the radius scale denominator.
   const maxDegree = useMemo(() => {
@@ -124,18 +175,22 @@ export default function GraphView({ activePath }: GraphViewProps) {
     return map;
   }, [data]);
 
-  // The lib-shaped data: it wants `links` (not `edges`) with source/target ids.
+  // The lib-shaped data: uses orphan-filtered nodes/edges.
   const canvasData = useMemo(() => {
     if (!data) return { nodes: [], links: [] };
     return {
-      nodes: data.nodes.map((n) => ({ id: n.id, label: n.label, type: n.type })),
-      links: visibleEdges.map((e) => ({
+      nodes: orphanFiltered.nodes.map((n) => ({
+        id: n.id,
+        label: n.label,
+        type: n.type,
+      })),
+      links: orphanFiltered.edges.map((e) => ({
         source: e.source,
         target: e.target,
         type: e.type,
       })),
     };
-  }, [data, visibleEdges]);
+  }, [data, orphanFiltered]);
 
   const radiusFor = useCallback(
     (id: string): number => {
@@ -153,8 +208,10 @@ export default function GraphView({ activePath }: GraphViewProps) {
     [hoverId, visibleEdges],
   );
 
-  // Draw a single node: degree-sized; orphan = dimmer fill + outline; active page
-  // = accent; tag = faint diamond. Dim everything outside the hover set.
+  // Draw a single node Obsidian-style: small colored dot with an outer glow ring
+  // (the bloom signature of the dark-theme graph). Orphans use the same hue at low
+  // alpha + a subtle outline so they read as distinct. Tags stay faint diamonds.
+  // Dim everything outside the hover set on pointer-in.
   const nodeCanvasObject = useCallback(
     (
       node: GraphCanvasNode,
@@ -166,78 +223,96 @@ export default function GraphView({ activePath }: GraphViewProps) {
       const type = meta?.type ?? "page";
       const r = radiusFor(id);
 
-      const accent = readVar("--color-accent", "#8b5cf6");
-      const muted = readVar("--color-text-muted", "#8d96a8");
-      const orphanColor = readVar("--graph-node-orphan", "rgba(141,150,168,0.45)");
+      const nodeColor = readVar("--graph-node-color", "#4cc9a0");
+      const glowColor = readVar("--graph-node-glow", "rgba(76,201,160,0.18)");
       const faint = readVar("--color-faint", "#626b7d");
-      const borderStrong = readVar("--color-border-strong", "rgba(255,255,255,0.13)");
+      const borderSubtle = readVar("--color-border", "rgba(255,255,255,0.06)");
       const text = readVar("--color-text", "#eef1f7");
 
       const isActive = activePath != null && id === activePath;
       const orphan = isOrphan(id, degrees, type);
-
-      let fill = muted;
-      if (type === "tag") fill = faint;
-      else if (isActive) fill = accent;
-      else if (orphan) fill = orphanColor;
-
-      // Dim non-highlighted elements when hovering (GRAPH-05).
       const hovered = hoverRef.current;
       const dim = hovered != null && !highlight.nodes.has(id);
+
+      // Step 1: outer glow ring (the Obsidian bloom). Only for page nodes at
+      // sufficient size; skips tags and min-radius orphans so the glow doesn't
+      // overwhelm the canvas.
+      if (type !== "tag" && r > MIN_R + 0.5) {
+        ctx.beginPath();
+        ctx.arc(node.x ?? 0, node.y ?? 0, r + GLOW_SPREAD / globalScale, 0, 2 * Math.PI);
+        ctx.fillStyle = dim ? withAlpha(glowColor, DIM_ALPHA * 2) : glowColor;
+        ctx.fill();
+      }
+
+      // Step 2: solid node dot. Page nodes use the teal --graph-node-color; active
+      // pages get a slight radius boost; orphans are the same hue at ~30% alpha;
+      // tags stay faint diamonds.
+      const activeR = isActive ? r * 1.18 : r;
+      let fill: string;
+      if (type === "tag") {
+        fill = faint;
+      } else if (orphan) {
+        fill = withAlpha(nodeColor, 0.3);
+      } else {
+        fill = nodeColor;
+      }
       if (dim) fill = withAlpha(fill, DIM_ALPHA);
 
       ctx.beginPath();
       if (type === "tag") {
-        // Diamond for tag nodes (distinct shape, NOT a rainbow color).
         ctx.moveTo(node.x ?? 0, (node.y ?? 0) - r);
         ctx.lineTo((node.x ?? 0) + r, node.y ?? 0);
         ctx.lineTo(node.x ?? 0, (node.y ?? 0) + r);
         ctx.lineTo((node.x ?? 0) - r, node.y ?? 0);
         ctx.closePath();
       } else {
-        ctx.arc(node.x ?? 0, node.y ?? 0, r, 0, 2 * Math.PI);
+        ctx.arc(node.x ?? 0, node.y ?? 0, activeR, 0, 2 * Math.PI);
       }
       ctx.fillStyle = fill;
       ctx.fill();
 
-      // Orphan outline so an unlinked page reads as distinct even at min radius.
+      // Step 3: orphan outline so a lone page reads at min radius.
       if (orphan && !dim) {
-        ctx.lineWidth = 1 / globalScale;
-        ctx.strokeStyle = borderStrong;
+        ctx.lineWidth = 0.8 / globalScale;
+        ctx.strokeStyle = borderSubtle;
         ctx.stroke();
       }
 
-      // Labels: above a zoom threshold, or whenever this node is in the hover
-      // highlight set (so a hovered node + neighbors always read).
+      // Step 4: labels above the zoom threshold (driven by textFadeThreshold),
+      // or always on hovered+neighbors.
       const inHover = hovered != null && highlight.nodes.has(id);
-      const showLabel = globalScale > 1.6 || inHover;
+      const showLabel = globalScale > labelZoomThreshold(textFadeThreshold) || inHover;
       if (showLabel && meta) {
-        const fontPx = 12 / globalScale;
+        const fontPx = 11 / globalScale;
         ctx.font = `${fontPx}px var(--font-family-ui), system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillStyle = dim ? withAlpha(text, DIM_ALPHA) : text;
-        // Label is canvas text only (stored-XSS guard) — never an HTML sink.
-        ctx.fillText(meta.label, node.x ?? 0, (node.y ?? 0) + r + 1 / globalScale);
+        ctx.fillStyle = dim ? withAlpha(text, DIM_ALPHA * 2) : text;
+        ctx.fillText(meta.label, node.x ?? 0, (node.y ?? 0) + activeR + 1.5 / globalScale);
       }
     },
-    [nodeMeta, radiusFor, degrees, activePath, highlight],
+    [nodeMeta, radiusFor, degrees, activePath, highlight, textFadeThreshold],
   );
 
-  // Edge color: connecting edges of the hovered node stay bright (accent-2),
-  // everything else dims when hovering, else the default border stroke.
+  // Edge color by type: link edges are blue (references), tag edges are green,
+  // both subtle at rest and brightening on hover.
   const linkColor = useCallback(
     (link: GraphCanvasLink): string => {
-      const base = readVar("--color-border-strong", "rgba(255,255,255,0.13)");
-      const accent2 = readVar("--color-accent-2", "#a78bfa");
+      const edgeType = (link as { type?: "link" | "tag" }).type ?? "link";
+      const isTag = edgeType === "tag";
+      const base = isTag
+        ? readVar("--graph-edge-tag", "#22c55e")
+        : readVar("--graph-edge-backlink", "#60a5fa");
       const hovered = hoverRef.current;
       if (hovered == null) return base;
       const key = edgeKey({
         source: endId((link as { source?: unknown }).source),
         target: endId((link as { target?: unknown }).target),
-        type: (link as { type?: "link" | "tag" }).type ?? "link",
+        type: edgeType,
       });
-      if (highlight.edges.has(key)) return accent2;
+      if (highlight.edges.has(key)) return isTag
+        ? readVar("--graph-edge-tag", "#22c55e")
+        : readVar("--graph-edge-backlink", "#60a5fa");
       return withAlpha(base, DIM_ALPHA);
     },
     [highlight],
@@ -245,16 +320,19 @@ export default function GraphView({ activePath }: GraphViewProps) {
 
   const linkWidth = useCallback(
     (link: GraphCanvasLink): number => {
+      // Base width from the thickness slider: maps 0→0.5, 0.2→1.4 (default),
+      // 1→5.0. Multiplied by highlight state.
+      const base = 0.5 + filterLinkThickness * 4.5;
       const hovered = hoverRef.current;
-      if (hovered == null) return 1;
+      if (hovered == null) return base;
       const key = edgeKey({
         source: endId((link as { source?: unknown }).source),
         target: endId((link as { target?: unknown }).target),
         type: (link as { type?: "link" | "tag" }).type ?? "link",
       });
-      return highlight.edges.has(key) ? 2 : 1;
+      return highlight.edges.has(key) ? base * 3 : base;
     },
-    [highlight],
+    [highlight, filterLinkThickness],
   );
 
   // Click a PAGE node → open its page (reuse the BacklinksPanel navigate seam).
@@ -278,6 +356,7 @@ export default function GraphView({ activePath }: GraphViewProps) {
       <header className="graphview-header">
         <h1 className="graphview-title">Graph</h1>
         <EdgeToggles />
+        <FilterControls />
       </header>
 
       <div className="graphview-canvas">
@@ -309,6 +388,8 @@ export default function GraphView({ activePath }: GraphViewProps) {
             nodeCanvasObject={nodeCanvasObject}
             linkColor={linkColor}
             linkWidth={linkWidth}
+            nodeRelSize={2 + filterNodeSize * 8}
+            linkDirectionalArrowLength={showArrows ? 4 : 0}
           />
         )}
       </div>

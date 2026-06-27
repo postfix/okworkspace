@@ -52,6 +52,9 @@ interface GraphCanvasProps {
   // animation, GRAPH-01). Parents may override after a tuning pass.
   cooldownTicks?: number;
   nodeRelSize?: number;
+  // linkDirectionalArrowLength controls arrowhead size; 0 = no arrows.
+  // Driven by the Arrows toggle in FilterControls (GF-01).
+  linkDirectionalArrowLength?: number;
   // backgroundCssVar names the CSS custom property to read for the canvas
   // backdrop (default --color-bg). Read via getComputedStyle so tokens drive it.
   backgroundCssVar?: string;
@@ -76,6 +79,7 @@ export default function GraphCanvas({
   linkWidth,
   cooldownTicks = 120,
   nodeRelSize = 4,
+  linkDirectionalArrowLength,
   backgroundCssVar = "--color-bg",
 }: GraphCanvasProps) {
   // Own the imperative ForceGraph2D handle (LivePreviewEditor precedent): the lib
@@ -133,6 +137,7 @@ export default function GraphCanvas({
         nodeCanvasObject={nodeCanvasObject}
         linkColor={linkColor}
         linkWidth={linkWidth}
+        linkDirectionalArrowLength={linkDirectionalArrowLength}
         onNodeClick={(n) => onNodeClick?.(n as GraphCanvasNode)}
         onNodeHover={(n) => onNodeHover?.((n as GraphCanvasNode) ?? null)}
       />
