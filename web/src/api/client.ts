@@ -258,7 +258,10 @@ export async function getBacklinks(path: string): Promise<Backlink[]> {
 export interface GraphNode {
   id: string;
   label: string;
-  type: "page" | "tag";
+  type: "page" | "tag" | "attachment";
+  aliases?: string[];
+  tags?: string[];
+  exists?: boolean;
 }
 
 // GraphEdge is one typed edge: a page->page "link" or a page->tag "tag"

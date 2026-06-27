@@ -31,13 +31,17 @@ const (
 	depthMax = 3
 )
 
-// GraphNode is one node in a lean graph payload: a page or a tag. It carries an
-// id, a human label, and a type ONLY — never a body, frontmatter, or excerpt
-// (the lean-payload invariant; T-09-01).
+// GraphNode is one node in a lean graph payload: a page, a tag, or an attachment.
+// It carries an id, a human label, and a type, along with optional aliases+tags
+// (from frontmatter) and an exists flag. Never includes a body, frontmatter, or
+// excerpt (the lean-payload invariant; T-09-01).
 type GraphNode struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	Type  string `json:"type"` // "page" | "tag"
+	ID      string   `json:"id"`
+	Label   string   `json:"label"`
+	Type    string   `json:"type"`             // "page" | "tag" | "attachment"
+	Aliases []string `json:"aliases,omitempty"`
+	Tags    []string `json:"tags,omitempty"`
+	Exists  bool     `json:"exists"`
 }
 
 // GraphEdge is a directed typed edge. A "link" edge is page(source)->page(target)
@@ -66,6 +70,68 @@ type BacklinkEntry struct {
 // tagNodeID namespaces a tag id so it can never collide with a page path.
 func tagNodeID(tag string) string { return "tag:" + tag }
 
+// readPageMeta reads a page file and returns its frontmatter title, aliases, and
+// tags in ONE read+parse pass (avoids double I/O when titleFor + pageMeta were
+// called separately). Follows the SAME resilient pattern as titleFor: a nil repo,
+// read error, or parse error falls back to the basename title and nil slices.
+func (s *Store) readPageMeta(pagePath string) (title string, aliases, tags []string) {
+	fallback := strings.TrimSuffix(path.Base(pagePath), ".md")
+	if s.repo == nil {
+		return fallback, nil, nil
+	}
+	raw, err := s.repo.Read(pagePath)
+	if err != nil {
+		return fallback, nil, nil
+	}
+	doc, perr := okf.Parse(raw)
+	if perr != nil || !doc.HasFrontmatter {
+		return fallback, nil, nil
+	}
+	title = okf.Field(doc, okf.FieldTitle)
+	if strings.TrimSpace(title) == "" {
+		title = fallback
+	}
+	return title, pageAliases(doc), pageTags(doc)
+}
+
+// inLiveSet reports whether a page file exists on disk (the SEC-01 resolver
+// route). A nil repo or any error returns false — the safe default that means a
+// cache-referenced page with no backing file gets Exists: false.
+func (s *Store) inLiveSet(path string) bool {
+	if s.repo == nil {
+		return false
+	}
+	ok, err := s.repo.Exists(path)
+	return ok && err == nil
+}
+
+// attachmentFiles returns the set of attachment binary files on disk by
+// enumerating the repo Tree. It includes every non-.md, non-(.json|.txt sidecar),
+// non-directory, non-trashed file. A nil repo or Tree() error returns an empty set
+// so GraphData degrades gracefully (the attachments toggle simply has no nodes).
+func (s *Store) attachmentFiles() map[string]struct{} {
+	out := map[string]struct{}{}
+	if s.repo == nil {
+		return out
+	}
+	items, err := s.repo.Tree()
+	if err != nil {
+		return out
+	}
+	for _, it := range items {
+		if it.IsDir || isTrashed(it.Path) || strings.HasSuffix(it.Path, ".md") {
+			continue
+		}
+		// Skip attachment sidecar files (metadata and extracted text) so every
+		// attachment produces exactly ONE graph node (the binary file).
+		if strings.HasSuffix(it.Path, ".json") || strings.HasSuffix(it.Path, ".txt") {
+			continue
+		}
+		out[it.Path] = struct{}{}
+	}
+	return out
+}
+
 // GraphData returns the whole derived graph: every live page node (label = its
 // title) plus every surviving tag node, the page->page link edges, and the
 // page->tag membership edges. The page-node set is the UNION of every live page
@@ -93,12 +159,20 @@ func (s *Store) GraphData(ctx context.Context) (GraphData, error) {
 	// Union in every live page on disk so orphans (no links, no tags) are nodes.
 	// If the repo is not wired (nil) we fall back to the cache-derived set rather
 	// than erroring — the server path wires the repo (main.go SetRepo), so
-	// production always returns all live pages.
-	for p := range s.livePages() {
+	// production always returns all live pages. Build the live set once for the
+	// Exists check so we don't enumerate the tree per page.
+	liveSet := s.livePages()
+	for p := range liveSet {
 		pageSet[p] = struct{}{}
 	}
 	for _, p := range sortedKeys(pageSet) {
-		g.Nodes = append(g.Nodes, GraphNode{ID: p, Label: s.titleFor(p), Type: "page"})
+		_, onDisk := liveSet[p]
+		title, aliases, tags := s.readPageMeta(p)
+		g.Nodes = append(g.Nodes, GraphNode{
+			ID: p, Label: title, Type: "page",
+			Aliases: aliases, Tags: tags,
+			Exists: onDisk,
+		})
 	}
 
 	linkEdges, err := s.linkEdges(ctx, nil)
@@ -113,6 +187,15 @@ func (s *Store) GraphData(ctx context.Context) (GraphData, error) {
 	}
 	g.Nodes = append(g.Nodes, tagNodes...)
 	g.Edges = append(g.Edges, tagEdges...)
+
+	// Attachment nodes: every non-.md binary file on disk. These are nodes with no
+	// edges — the Attachments toggle filters them in/out. Enumerated from the repo
+	// Tree (same walk as livePages but with opposite filter on .md).
+	for _, p := range sortedKeys(s.attachmentFiles()) {
+		g.Nodes = append(g.Nodes, GraphNode{
+			ID: p, Label: path.Base(p), Type: "attachment", Exists: true,
+		})
+	}
 
 	return g, nil
 }
@@ -155,7 +238,12 @@ func (s *Store) Neighborhood(ctx context.Context, pagePath string, depth int) (G
 	}
 
 	for _, p := range sortedKeys(visited) {
-		g.Nodes = append(g.Nodes, GraphNode{ID: p, Label: s.titleFor(p), Type: "page"})
+		title, aliases, tags := s.readPageMeta(p)
+		g.Nodes = append(g.Nodes, GraphNode{
+			ID: p, Label: title, Type: "page",
+			Aliases: aliases, Tags: tags,
+			Exists: s.inLiveSet(p),
+		})
 	}
 
 	linkEdges, err := s.linkEdges(ctx, visited)
@@ -360,7 +448,7 @@ func (s *Store) tagNodesAndEdges(ctx context.Context, restrict map[string]struct
 
 	var nodes []GraphNode
 	for _, tag := range sortedKeys(emittedTags) {
-		nodes = append(nodes, GraphNode{ID: tagNodeID(tag), Label: tag, Type: "tag"})
+		nodes = append(nodes, GraphNode{ID: tagNodeID(tag), Label: tag, Type: "tag", Exists: true})
 	}
 	return nodes, edges, nil
 }

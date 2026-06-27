@@ -96,6 +96,41 @@ func isAbsoluteOrExternal(dest string) bool {
 	return false
 }
 
+// pageAliases returns the page's frontmatter aliases read sequence-aware from the
+// yaml.Node, mirroring pageTags exactly. The `aliases` key may be a SequenceNode
+// (each scalar item collected) or a ScalarNode (single alias wrapped in a slice).
+// Returns nil when there are no aliases.
+func pageAliases(doc *okf.Doc) []string {
+	mapping := topMapping(&doc.Front)
+	if mapping == nil {
+		return nil
+	}
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value != "aliases" {
+			continue
+		}
+		val := mapping.Content[i+1]
+		switch val.Kind {
+		case yaml.SequenceNode:
+			out := make([]string, 0, len(val.Content))
+			for _, item := range val.Content {
+				if item.Kind == yaml.ScalarNode {
+					if t := strings.TrimSpace(item.Value); t != "" {
+						out = append(out, t)
+					}
+				}
+			}
+			return out
+		case yaml.ScalarNode:
+			if t := strings.TrimSpace(val.Value); t != "" {
+				return []string{t}
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
 // pageTags returns the page's frontmatter tags read sequence-aware from the
 // yaml.Node. This re-implements search.readTags's walk EXACTLY (find the
 // top-level `tags` key, collect SequenceNode scalar items trimmed/non-empty, or a

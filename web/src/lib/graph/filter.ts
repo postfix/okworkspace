@@ -52,12 +52,8 @@ export function matchesSearch(node: GraphNode, query: string): boolean {
   return (
     node.label?.toLowerCase().includes(q) ||
     node.id?.toLowerCase().includes(q) ||
-    (node as { aliases?: string[] }).aliases?.some((a) =>
-      a.toLowerCase().includes(q),
-    ) ||
-    (node as { tags?: string[] }).tags?.some((t) =>
-      t.toLowerCase().includes(q),
-    )
+    node.aliases?.some((a) => a.toLowerCase().includes(q)) ||
+    node.tags?.some((t) => t.toLowerCase().includes(q))
   );
 }
 
@@ -70,7 +66,7 @@ export function filterNodes(
   return nodes.filter((n) => {
     if (!filters.showTags && n.type === "tag") return false;
     if (!filters.showAttachments && n.type === "attachment") return false;
-    if (filters.existingFilesOnly && (n as { exists?: boolean }).exists === false)
+    if (filters.existingFilesOnly && n.type === "page" && !n.exists)
       return false;
     if (!matchesSearch(n, filters.searchQuery)) return false;
     return true;

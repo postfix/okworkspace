@@ -74,6 +74,57 @@ func TestExtract_OutboundLinks_RelativeResolution(t *testing.T) {
 	}
 }
 
+func TestExtract_PageAliases(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want []string
+	}{
+		{
+			name: "flow sequence",
+			src:  "---\ntitle: A\naliases: [old-name, alt-name]\n---\nbody\n",
+			want: []string{"old-name", "alt-name"},
+		},
+		{
+			name: "block list",
+			src:  "---\ntitle: A\naliases:\n  - old-name\n  - alt-name\n---\nbody\n",
+			want: []string{"old-name", "alt-name"},
+		},
+		{
+			name: "single scalar",
+			src:  "---\ntitle: A\naliases: old-name\n---\nbody\n",
+			want: []string{"old-name"},
+		},
+		{
+			name: "no aliases key",
+			src:  "---\ntitle: A\n---\nbody\n",
+			want: nil,
+		},
+		{
+			name: "empty flow sequence",
+			src:  "---\ntitle: A\naliases: []\n---\nbody\n",
+			want: []string{},
+		},
+		{
+			name: "blank items skipped",
+			src:  "---\ntitle: A\naliases:\n  - old-name\n  - \"\"\n---\nbody\n",
+			want: []string{"old-name"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc, err := okf.Parse([]byte(tc.src))
+			if err != nil {
+				t.Fatalf("okf.Parse: %v", err)
+			}
+			got := pageAliases(doc)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("pageAliases = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestExtract_PageTags(t *testing.T) {
 	cases := []struct {
 		name string
