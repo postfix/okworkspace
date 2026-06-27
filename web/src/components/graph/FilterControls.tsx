@@ -4,6 +4,7 @@
 //
 // Every control reads/writes through useGraphFilters; changes propagate live
 // through the client-side filtering pipeline in GraphView.
+import { Search } from "lucide-react";
 import { useGraphFilters } from "../../stores/graphFilters";
 import "./FilterControls.css";
 
@@ -34,7 +35,7 @@ export default function FilterControls() {
       {/* Search input */}
       <div className="filtercontrols-search">
         <span className="filtercontrols-search-icon" aria-hidden="true">
-          &#x2315;
+          <Search size={15} />
         </span>
         <input
           type="search"
@@ -153,18 +154,21 @@ function SliderRow({
   step: number;
   onChange: (v: number) => void;
 }) {
+  const id = `filter-slider-${label.toLowerCase().replace(/\s+/g, "-")}`;
   return (
     <div className="filtercontrols-slider">
-      <label className="filtercontrols-slider-label">{label}</label>
+      <label className="filtercontrols-slider-label" htmlFor={id}>
+        {label}
+      </label>
       <input
         type="range"
+        id={id}
         className="filtercontrols-slider-input"
         value={value}
         min={min}
         max={max}
         step={step}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        aria-label={label}
       />
     </div>
   );

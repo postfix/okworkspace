@@ -201,11 +201,12 @@ export default function GraphView({ activePath }: GraphViewProps) {
     [degrees, maxDegree],
   );
 
-  // The hover highlight set, recomputed only when hover or the visible edges
-  // change (neighborHighlight is pure — GRAPH-05).
+  // The hover highlight set, recomputed only when hover or the RENDERED edges
+  // change (neighborHighlight is pure — GRAPH-05). Uses orphanFiltered.edges
+  // so the highlight set keys always match what the canvas draws.
   const highlight = useMemo(
-    () => neighborHighlight(hoverId, visibleEdges),
-    [hoverId, visibleEdges],
+    () => neighborHighlight(hoverId, orphanFiltered.edges),
+    [hoverId, orphanFiltered.edges],
   );
 
   // Draw a single node Obsidian-style: small colored dot with an outer glow ring
