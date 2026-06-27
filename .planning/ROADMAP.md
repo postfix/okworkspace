@@ -8,7 +8,7 @@ OKF Workspace is built dependency-first: a safe foundation (single binary, auth,
 
 - ✅ **v0.9.9 MVP** — Phases 0–7 (shipped 2026-06-23) — full self-hosted OKF wiki: auth/RBAC, pages+hidden Git, attachments+extraction, search, approval-gated Eino agent, soft-lock collaboration, Obsidian-style live-preview editor + file tree. See [`milestones/v0.9.9-ROADMAP.md`](milestones/v0.9.9-ROADMAP.md).
 - ✅ **v1.0 Knowledge Graph & LLM Auto-Tagging** — Phases 8–12 (shipped 2026-06-24) — derived link/tag store + backlinks, Obsidian-style global/local graph UI with edge-type toggles, and approval-gated per-page + bulk LLM tag suggestion. See [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md).
-- 🔵 **v1.1 Hardening & Polish** — Phases 13–16 (in progress) — visual UAT, UX improvement, documentation, and security hardening.
+- ✅ **v1.1 Hardening & Polish** — Phases 13–17 (shipped 2026-06-27) — visual UAT, documentation, UX improvement, security hardening, and graph filter sidebar.
 
 ## Phases
 
@@ -42,15 +42,15 @@ Full phase detail, success criteria, and plan breakdown archived in [`milestones
 </details>
 
 <details>
-<summary>🔵 v1.1 Hardening & Polish (Phases 13–16) — IN PROGRESS</summary>
+<summary>✅ v1.1 Hardening & Polish (Phases 13–17) — SHIPPED 2026-06-27</summary>
 
-- [ ] **Phase 13: Visual UAT** (1 plan) — manual browser testing of Phase 10 graph UI (zoom, pan, hover-highlight, edge toggles, global + local views) (UAT-01)
-- [ ] **Phase 14: Documentation** (2 plans) — contributor architecture docs for graph/tag subsystems, user-facing README update (DOC-01, DOC-02)
-- [ ] **Phase 15: UX Improvement** (1 plan) — bulk-approve eventual-consistency UX improvement with progress indication (UX-01)
-- [ ] **Phase 16: Security Hardening** (3 plans) — admin sweep fan-out cap, tag charset input validation, govulncheck resolution (SEC-01, SEC-02, SEC-03)
-- [ ] **Phase 17: Graph Filter Sidebar** (2 plans) — dark-themed collapsible sidebar panel with node search, visibility toggles (Tags, Attachments, Existing, Orphans), graph groups, and display controls (arrows, text fade, node size, link thickness) (GF-01)
+- [x] **Phase 13: Visual UAT** (1 plan) — manual browser testing of Phase 10 graph UI (zoom, pan, hover-highlight, edge toggles, global + local views) (UAT-01)
+- [x] **Phase 14: Documentation** (2 plans) — contributor architecture docs for graph/tag subsystems, user-facing README update (DOC-01, DOC-02)
+- [x] **Phase 15: UX Improvement** (1 plan) — bulk-approve eventual-consistency UX improvement with progress indication, non-blocking polling (UX-01)
+- [x] **Phase 16: Security Hardening** (3 plans) — admin sweep fan-out cap, tag charset input validation, govulncheck resolution (SEC-01, SEC-02, SEC-03)
+- [x] **Phase 17: Graph Filter Sidebar** (2 plans) — live graph filtering with node search, visibility toggles, groups, display sliders, and reset (GF-01)
 
-Phase 13 (UAT) catches visual issues early. Phase 14 (docs) can run in parallel. Phase 17 discovered during UAT — builds on Phase 10 graph UI with live filtering. Phases 15–16 follow.
+Phase 13 (UAT) caught visual issues early. Phase 14 (docs) ran in parallel. Phase 17 was discovered during UAT — built on Phase 10 graph UI with live filtering. Phases 15–16 followed.
 
 </details>
 
@@ -76,11 +76,11 @@ Phase 13 (UAT) catches visual issues early. Phase 14 (docs) can run in parallel.
 | 10. Graph UI | v1.0 | 3/3 | Complete | 2026-06-24 |
 | 11. Per-Page LLM Tag Suggestion | v1.0 | 3/3 | Complete | 2026-06-24 |
 | 12. Bulk Sweep & Batch Review | v1.0 | 3/3 | Complete | 2026-06-24 |
-| **13. Visual UAT** | **v1.1** | **0/1** | **In progress** | — |
-| **14. Documentation** | **v1.1** | **0/2** | **Not started** | — |
-| **15. UX Improvement** | **v1.1** | **0/1** | **Not started** | — |
-| **16. Security Hardening** | **v1.1** | **0/3** | **Not started** | — |
-| **17. Graph Filter Sidebar** | **v1.1** | **0/2** | **Not started** | — |
+| **13. Visual UAT** | **v1.1** | **1/1** | **Complete** | 2026-06-27 |
+| **14. Documentation** | **v1.1** | **2/2** | **Complete** | 2026-06-27 |
+| **15. UX Improvement** | **v1.1** | **1/1** | **Complete** | 2026-06-27 |
+| **16. Security Hardening** | **v1.1** | **3/3** | **Complete** | 2026-06-27 |
+| **17. Graph Filter Sidebar** | **v1.1** | **2/2** | **Complete** | 2026-06-27 |
 
 ---
 

@@ -31,6 +31,12 @@ auth:
 admin:
   username: "admin"
 
+# Tag sweep configuration (SEC-01).
+sweep:
+  # Max concurrent tag-suggest jobs per bulk sweep run; remaining pages are
+  # re-enqueued when slots free up. Default: 10.
+  max_concurrent_jobs: 10
+
 # --- Parsed-but-unused placeholders this phase (Phase 2/3/4) ---
 agent:
   enabled: false

@@ -749,6 +749,14 @@ func (h *authHandlers) handleApplyTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Charset validation - defense-in-depth (SEC-02) reject before the page write.
+	for _, tag := range normalized {
+		if err := okf.ValidateTagCharset(tag); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
 	// Fetch the current page (404 on not-found). We need its frontmatter region + body
 	// to produce the new frontmatter byte-stably.
 	pg, err := h.pages.Get(r.Context(), path)

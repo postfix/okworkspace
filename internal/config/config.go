@@ -13,9 +13,10 @@ import (
 
 // Defaults applied when optional keys are omitted.
 const (
-	DefaultSessionCookieName = "okf_session"
-	DefaultSessionTTLHours   = 168 // 7 days
-	DefaultAdminUsername     = "admin"
+	DefaultSessionCookieName    = "okf_session"
+	DefaultSessionTTLHours      = 168 // 7 days
+	DefaultAdminUsername        = "admin"
+	DefaultSweepMaxConcurrent   = 10
 )
 
 // Environment overrides for deployment (systemd/Docker). Each takes precedence
@@ -41,6 +42,7 @@ type Config struct {
 	Agent       AgentConfig       `yaml:"agent"`
 	Search      SearchConfig      `yaml:"search"`
 	Attachments AttachmentsConfig `yaml:"attachments"`
+	Sweep       SweepConfig       `yaml:"sweep"`
 }
 
 type ServerConfig struct {
@@ -120,6 +122,13 @@ type AttachmentsConfig struct {
 	AllowedExtensions []string `yaml:"allowed_extensions"`
 }
 
+// SweepConfig configures the tag-suggest sweep fan-out (SEC-01). MaxConcurrentJobs
+// caps how many pages are enqueued per sweep run; remaining targets are naturally
+// handled by the worker drain or a re-run.
+type SweepConfig struct {
+	MaxConcurrentJobs int `yaml:"max_concurrent_jobs"`
+}
+
 // Load reads the YAML config at path, applies defaults for omitted optional
 // keys, and applies environment overrides.
 func Load(path string) (Config, error) {
@@ -167,6 +176,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Search.IndexDir == "" && c.Storage.DataDir != "" {
 		c.Search.IndexDir = filepath.Join(c.Storage.DataDir, "index")
+	}
+	if c.Sweep.MaxConcurrentJobs == 0 {
+		c.Sweep.MaxConcurrentJobs = DefaultSweepMaxConcurrent
 	}
 }
 

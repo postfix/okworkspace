@@ -5,7 +5,7 @@ The tagsweep API covers the per-page tag suggestion, bulk sweep, review queue, a
 **Base path:** `/api/v1`
 
 **Handler:** [`internal/server/handlers_tagsweep.go`](../../internal/server/handlers_tagsweep.go)
-**Routes:** [`internal/server/router.go`](../../internal/server/router.go) (lines 209, 233, 297-298, 306)
+**Routes:** [`internal/server/router.go`](../../internal/server/router.go) (lines 209, 233, 297-299, 307)
 
 ---
 
@@ -25,15 +25,19 @@ Suggests up to 5 normalized tags for a single page. Read-only -- no files are wr
 
 ```json
 {
-  "tags": ["release", "docs", "onboarding"],
-  "existing": [true, true, false],
+  "page_path": "docs/getting-started.md",
+  "suggestions": [
+    {"tag": "release", "existing": true},
+    {"tag": "docs", "existing": true},
+    {"tag": "onboarding", "existing": false}
+  ],
   "base_revision": "abc123def"
 }
 ```
 
-- `tags` -- normalized, deduped, capped list (max 5)
-- `existing` -- parallel array: `true` if tag already exists in workspace vocabulary
-- `base_revision` -- Git revision captured at suggest time (the optimistic-concurrency token for the later apply)
+- `page_path` -- the page the tags were suggested for.
+- `suggestions` -- array of `{tag, existing}` objects; `existing` is `true` if the tag already exists in workspace vocabulary.
+- `base_revision` -- Git revision captured at suggest time (the optimistic-concurrency token for the later apply).
 
 **Errors:**
 - `400` -- Invalid request (missing path, malformed body).
@@ -62,18 +66,14 @@ Applies approved tags to a single page byte-stably. The client-supplied tag list
 }
 ```
 
-**Response `200 OK`:**
-
-```json
-{"ok": true}
-```
+**Response `204 No Content`:** Empty body on success. The tags were written and committed.
 
 **Errors:**
-- `400` -- Invalid request.
+- `400` -- Invalid request (or tag charset validation failure).
 - `409` -- Conflict (page was edited since suggest -- must re-suggest).
 - `500` -- Generic unavailable.
 
-**Implementation:** Re-validates tags via `agent.ValidateTags`, writes via `okf.SetTags` through `pages.Service.Save` (single-writer commit). The client's `base_revision` is tested against the current file revision.
+**Implementation:** Re-validates tags via `agent.ValidateTags`, checks charset via `okf.ValidateTagCharset`, writes via `okf.SetTags` through `pages.Service.Save` (single-writer commit). The client's `base_revision` is tested against the current file revision.
 
 **Source:** [`internal/server/handlers_agent.go`](../../internal/server/handlers_agent.go), [`internal/okf/repair.go`](../../internal/okf/repair.go) `SetTags()`
 
@@ -99,17 +99,55 @@ An empty body defaults to `all=false`.
 **Response `202 Accepted`:**
 
 ```json
-{"ok": true, "queued": 42}
+{"ok": true, "queued": 10, "total": 42}
 ```
 
-- `queued` -- number of pages enqueued (0 when every page already has tags).
+- `queued` -- number of pages enqueued in this batch (capped at `sweep.max_concurrent_jobs`, default 10).
+- `total` -- total number of pages targeted. When `queued < total`, the admin can re-run the sweep for the remaining pages (re-staging supersedes previous pending rows).
 
 **Errors:**
 - `500` -- Generic unavailable.
 
-**Implementation:** Enumerates targets server-side via `tagsweep.Store.Targets()` (the client cannot inject arbitrary paths). Enqueues one `KindTagSuggest` job per target fire-and-forget through the shared single-drain jobs worker. Audited with scope + count.
+**Implementation:** Enumerates targets server-side via `tagsweep.Store.Targets()` (the client cannot inject arbitrary paths). Enqueues up to `sweep.max_concurrent_jobs` (default 10, configurable in `config.yaml`) target jobs fire-and-forget through the shared single-drain jobs worker; remaining pages are left for a subsequent sweep run. Audited with scope + count + total.
 
 **Source:** [`internal/server/handlers_tagsweep.go`](../../internal/server/handlers_tagsweep.go) `handleStartTagSweep()`, [`internal/tagsweep/store.go`](../../internal/tagsweep/store.go) `Targets()`
+
+---
+
+## `GET /api/v1/admin/tags/sweep/status`
+
+Returns the current sweep job progress (how many jobs are queued, running, done, failed) and the number of pages awaiting approval in the review queue.
+
+**Auth:** Admin only.
+
+**Response `200 OK`:**
+
+```json
+{
+  "progress": {
+    "queued": 0,
+    "processing": 3,
+    "done": 15,
+    "failed": 0,
+    "total": 18
+  },
+  "pending_approval": 3
+}
+```
+
+- `progress.queued` -- jobs waiting to start.
+- `progress.processing` -- jobs currently running (always 0 or 1 under the single-drain worker).
+- `progress.done` -- completed jobs.
+- `progress.failed` -- jobs that failed (LLM error, page not found).
+- `progress.total` -- total jobs enqueued for this sweep run.
+- `pending_approval` -- number of pages in `tag_suggestions` with `status='pending'` (the review queue count used for badge display).
+
+**Errors:**
+- `500` -- "Tag sweep is unavailable."
+
+**Implementation:** Queries the `jobs` table grouped by status, filtered to `kind='tag_suggest'`. Counts pending `tag_suggestions` rows separately. Used by the admin TagReviewView to display a progress bar during active sweeps (polled at 2s interval; auto-stops when no jobs remain).
+
+**Source:** [`internal/server/handlers_tagsweep.go`](../../internal/server/handlers_tagsweep.go) `handleTagSweepStatus()`, [`internal/tagsweep/store.go`](../../internal/tagsweep/store.go) `SweepStatus()`, `PendingApprovalCount()`
 
 ---
 
@@ -184,6 +222,6 @@ Per-page statuses:
 - `400` -- "There are no approvals to apply." (empty body), "Too many pages in one approval." (over 1000), or "Invalid request." (bad identifiers or NUL bytes).
 - `500` -- Generic unavailable.
 
-**Implementation:** For each approval: validates path, re-validates tags via `agent.ValidateTags`, reads staged `base_revision` from `tagsweep.GetPending` (server-side, not client-supplied), calls `pages.ApplyTagsBatch` for the atomic batch write, resolves applied pages' pending rows. Audited with non-secret counts.
+**Implementation:** For each approval: validates path, re-validates tags via `agent.ValidateTags`, checks charset via `okf.ValidateTagCharset` (rejects HTML metacharacters, Unicode, dots, slashes), reads staged `base_revision` from `tagsweep.GetPending` (server-side, not client-supplied), calls `pages.ApplyTagsBatch` for the atomic batch write, resolves applied pages' pending rows. Audited with non-secret counts.
 
 **Source:** [`internal/server/handlers_tagsweep.go`](../../internal/server/handlers_tagsweep.go) `handleApproveTagSuggestions()`, [`internal/pages/batch.go`](../../internal/pages/batch.go) `ApplyTagsBatch()`

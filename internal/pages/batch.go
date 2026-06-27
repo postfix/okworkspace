@@ -225,7 +225,9 @@ func SetTagsFrontmatter(frontmatter, body string, tags []string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("pages: set-tags parse: %w", err)
 	}
-	okf.SetTags(doc, tags)
+	if err := okf.SetTags(doc, tags); err != nil {
+		return "", fmt.Errorf("pages: set-tags: %w", err)
+	}
 	emitted, err := doc.Emit()
 	if err != nil {
 		return "", fmt.Errorf("pages: set-tags emit: %w", err)

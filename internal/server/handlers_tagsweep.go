@@ -12,6 +12,7 @@ import (
 	"github.com/postfix/okworkspace/internal/agent"
 	"github.com/postfix/okworkspace/internal/audit"
 	"github.com/postfix/okworkspace/internal/auth"
+	"github.com/postfix/okworkspace/internal/okf"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/tagsweep"
 )
@@ -68,8 +69,15 @@ func (h *authHandlers) handleStartTagSweep(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	maxConcurrent := h.config.Sweep.MaxConcurrentJobs
+	if maxConcurrent < 1 {
+		maxConcurrent = 10 // safety floor; config default is 10
+	}
 	queued := 0
 	for _, path := range targets {
+		if queued >= maxConcurrent {
+			break
+		}
 		if err := h.tagSweepJobs.Enqueue(r.Context(), tagsweep.KindTagSuggest, tagsweep.SuggestPayload(path)); err != nil {
 			// Best-effort: stop on the first enqueue error (rare — a DB failure). The
 			// jobs already enqueued stand; the admin can re-run the sweep (re-staging
@@ -92,11 +100,11 @@ func (h *authHandlers) handleStartTagSweep(w http.ResponseWriter, r *http.Reques
 	_ = h.audit.Record(r.Context(), audit.Event{
 		Action: audit.ActionTagSweep,
 		Actor:  actor,
-		Detail: fmt.Sprintf("scope=%s count=%d", scope, queued),
+		Detail: fmt.Sprintf("scope=%s count=%d total=%d", scope, queued, len(targets)),
 		Source: "web-ui",
 	})
 
-	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "queued": queued})
+	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "queued": queued, "total": len(targets)})
 }
 
 // approveTagSuggestionsRequest is the POST /admin/tags/approve body: the human's
@@ -185,6 +193,14 @@ func (h *authHandlers) handleApproveTagSuggestions(w http.ResponseWriter, r *htt
 		if err != nil {
 			skipped = append(skipped, pages.TagApplyResult{PagePath: path, Status: "skipped"})
 			continue
+		}
+
+		// Charset validation - defense-in-depth (SEC-02) reject before the page write.
+		for _, tag := range normalized {
+			if err := okf.ValidateTagCharset(tag); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 		}
 
 		// Read the STAGED base_revision from the queue — the server's record of which

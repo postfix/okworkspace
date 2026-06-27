@@ -1,6 +1,8 @@
 package okf
 
 import (
+	"fmt"
+	"regexp"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -145,6 +147,22 @@ func SetField(d *Doc, field, value string) {
 	d.FrontDirty = true
 }
 
+// tagCharsetRE matches tags that contain ONLY the allowed charset:
+// alphanumeric, underscore, dash, and space (SEC-02 defense-in-depth to prevent
+// HTML metacharacters from entering the system through tag names).
+var tagCharsetRE = regexp.MustCompile(`^[a-zA-Z0-9_ -]+$`)
+
+// ValidateTagCharset rejects a tag if it contains characters outside the
+// allowed charset [a-zA-Z0-9_ -]. This is a defense-in-depth check alongside
+// existing output encoding — it prevents HTML metacharacters from ever entering
+// the system through tag names (SEC-02).
+func ValidateTagCharset(tag string) error {
+	if !tagCharsetRE.MatchString(tag) {
+		return fmt.Errorf("invalid tag %q: only letters, numbers, underscores, dashes, and spaces are allowed", tag)
+	}
+	return nil
+}
+
 // SetTags surgically sets the top-level `tags` key to a BLOCK-style YAML
 // sequence (one `- tag` per line), creating the key if it is absent. It is the
 // yaml.SequenceNode analog of SetField and the byte-stable write primitive for
@@ -156,8 +174,16 @@ func SetField(d *Doc, field, value string) {
 // tags key is block style (distinct from appendField's empty-`[]` flow style).
 // SetTags writes EXACTLY the slice it is given, in order — it does NOT normalize,
 // dedupe, lowercase, or cap. Normalization is the caller's (Wave-2 handler's)
-// responsibility; SetTags is a pure structural editor.
-func SetTags(d *Doc, tags []string) {
+// responsibility; SetTags is a pure structural editor. As defense-in-depth it
+// validates the tag charset (SEC-02) and rejects tags with characters outside
+// [a-zA-Z0-9_ -]; a valid caller should have already validated.
+func SetTags(d *Doc, tags []string) error {
+	for _, tag := range tags {
+		if err := ValidateTagCharset(tag); err != nil {
+			return err
+		}
+	}
+
 	mapping := topMapping(d)
 	if mapping == nil {
 		mapping = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
@@ -182,12 +208,13 @@ func SetTags(d *Doc, tags []string) {
 			// the surrounding keys/comments are untouched.
 			mapping.Content[i+1] = seq
 			d.FrontDirty = true
-			return
+			return nil
 		}
 	}
 	key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: FieldTags}
 	mapping.Content = append(mapping.Content, key, seq)
 	d.FrontDirty = true
+	return nil
 }
 
 // fenceLine returns a "---" fence line terminated with the document's EOL.

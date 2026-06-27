@@ -150,7 +150,9 @@ func TestSetTags(t *testing.T) {
 				t.Fatalf("Parse: %v", err)
 			}
 
-			okf.SetTags(doc, tc.newTags)
+			if err := okf.SetTags(doc, tc.newTags); err != nil {
+			t.Fatalf("SetTags: %v", err)
+		}
 			if !doc.FrontDirty {
 				t.Fatal("SetTags did not set FrontDirty")
 			}
@@ -248,7 +250,9 @@ func TestSetTags_NoTagsKey_OnlyTagsLinesAdded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	okf.SetTags(doc, []string{"alpha", "beta"})
+	if err := okf.SetTags(doc, []string{"alpha", "beta"}); err != nil {
+		t.Fatalf("SetTags: %v", err)
+	}
 	out, err := doc.Emit()
 	if err != nil {
 		t.Fatalf("Emit: %v", err)
@@ -272,6 +276,20 @@ func TestSetTags_NoTagsKey_OnlyTagsLinesAdded(t *testing.T) {
 	tagLines := emittedTagLines(t, out)
 	if len(tagLines) != 3 || strings.TrimSpace(tagLines[0]) != "tags:" {
 		t.Fatalf("expected a fresh block-style tags: with 2 items, got %v", tagLines)
+	}
+}
+
+// TestSetTags_RejectsXSSCharset ensures SetTags rejects tags with HTML
+// metacharacters as defense-in-depth (SEC-02).
+func TestSetTags_RejectsXSSCharset(t *testing.T) {
+	src := []byte("---\ntitle: XSS\n---\n\nbody\n")
+	doc, err := okf.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	// </script> is outside the allowed charset [a-zA-Z0-9_ -].
+	if err := okf.SetTags(doc, []string{"</script>"}); err == nil {
+		t.Error("SetTags with </script> tag = nil, want error")
 	}
 }
 

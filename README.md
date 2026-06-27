@@ -71,6 +71,29 @@ The LLM API key is read at runtime from the variable named by `agent.api_key_env
 Run under **systemd** or **Docker** as a non-root single binary + data directory.
 See [`deploy/README.md`](deploy/README.md) for both paths.
 
+## v1.0 Features
+
+OKF Workspace v1.0 adds a **derived knowledge graph** and **LLM auto-tagging** on top of the core wiki:
+
+- **Global graph view** (`/app/graph`) -- a force-directed D3 visualization of every page and tag in the workspace as nodes, with typed edges for page-to-page links and page-to-tag membership. Nodes are sized by degree; orphan pages (no links, no tags) are visually distinct. Edge-type toggle chips filter by Links, Backlinks, and Shared Tags.
+- **Local graph dock** -- an expandable panel on each page view showing the page's neighborhood (1/2/3-hop BFS traversal over link edges), with tag edges and popular-tag capping to prevent hub-node domination.
+- **Backlinks panel** -- "Referenced by" listing on every page view showing all pages that link to the current page (reverse backlinks query) -- "Referenced by" listing on every page view showing all pages that link to the current page, with resolved titles.
+- **Per-page LLM tag suggestion** -- a provider-agnostic one-shot mode that reads the page body, biases toward the workspace's existing tag vocabulary, and returns up to 5 normalized tags. The apply path is gated through the same byte-stable `pages.Save` single-writer commit with optimistic concurrency (409 on moved revision).
+- **Bulk sweep & review queue** -- admin can sweep all untagged (or all) pages to enqueue one LLM tag-suggestion job per page. Results stage into a review queue; the admin approves per page through a batched apply that writes all approved tags in a single Git commit.
+- **Admin graph rebuild** -- `POST /api/v1/admin/graph/reindex` rebuilds the derived link/tag adjacency from on-disk files (the correctness backstop).
+
+For detailed architecture documentation, see [`docs/`](docs/README.md).
+
+## v1.1 Features
+
+OKF Workspace v1.1 adds **UX improvement, security hardening, and graph filtering**:
+
+- **Graph Filter Sidebar** -- a flat panel of controls alongside the graph edge-type toggles: node search (live filter by name/path), visibility toggles (Tags: ON, Orphans: ON, Attachments: OFF, Existing files only: OFF), graph groups (named/colored/filtered), and display controls (arrows toggle, text fade threshold, node size, link thickness sliders). Every control updates the graph live. Settings persist in localStorage.
+- **Sweep progress polling** -- the admin TagReviewView now polls `GET /admin/tags/sweep/status` every 2s while jobs are in-flight, showing a progress bar ("Processing sweep... N/M pages") and completion state. Non-blocking: user can navigate away and return.
+- **Sweep fan-out cap** -- configurable `sweep.max_concurrent_jobs` (default 10) prevents resource exhaustion from a single bulk sweep run. The response reports both `queued` and `total`.
+- **Tag charset validation** -- server-side input validation rejects tags containing characters outside `[a-zA-Z0-9_ -]` (no HTML metacharacters, Unicode, dots, or slashes). Defense-in-depth layered through `agent.ValidateTags`, `okf.ValidateTagCharset`, and `okf.SetTags`.
+- **Security scanning** -- `govulncheck` reports 0 reachable vulnerabilities; `go vet` is clean; transitive vulnerabilities (19, none reachable) documented for tracking.
+
 ## Security floor (Phase 0)
 
 - Argon2id password hashing; server-side sessions (HttpOnly + SameSite); CSRF on
