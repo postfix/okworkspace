@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ListChecks } from "lucide-react";
+import { Check, ChevronRight, ListChecks } from "lucide-react";
 
 import {
   approveTagSuggestions,
+  getSweepStatus,
   listTagSuggestions,
   suggestTags,
+  type SweepProgress,
+  type SweepStatusPayload,
   type TagSuggestion,
   type TagSuggestionEntry,
 } from "../api/client";
@@ -13,6 +16,7 @@ import { TagSuggestList } from "./TagSuggest";
 import "./TagReviewView.css";
 
 const QUEUE_KEY = ["tag-suggestions"];
+const SWEEP_STATUS_KEY = ["sweep-status"];
 
 // TagReviewView is the admin batch review queue (TAG-06). It lists every page
 // that currently has pending tag suggestions (the persisted, resumable backlog
@@ -44,6 +48,27 @@ export default function TagReviewView() {
     queryKey: QUEUE_KEY,
     queryFn: listTagSuggestions,
   });
+
+  // Sweep job status — polled every 2s while there are in-flight tag-suggest
+  // jobs. Drives the non-blocking progress indicator ("Applying... N/M pages").
+  // Polling auto-stops when no jobs are pending/running. Persists on navigation:
+  // re-mounting re-fetches status and resumes polling if jobs remain.
+  const { data: sweepStatus } = useQuery<SweepStatusPayload>({
+    queryKey: SWEEP_STATUS_KEY,
+    queryFn: getSweepStatus,
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      if (!d) return 2000;
+      const active = d.progress.queued > 0 || d.progress.processing > 0;
+      return active ? 2000 : false;
+    },
+  });
+
+  const hasActiveSweep =
+    (sweepStatus?.progress.queued ?? 0) > 0 ||
+    (sweepStatus?.progress.processing ?? 0) > 0;
+  const sweepCompleted =
+    sweepStatus && !hasActiveSweep && sweepStatus.progress.total > 0;
 
   // The currently-open page path (null = no page open, showing the backlog).
   const [openPath, setOpenPath] = useState<string | null>(null);
@@ -146,6 +171,49 @@ export default function TagReviewView() {
       </header>
 
       <div className="tagreview-body">
+        {sweepCompleted || hasActiveSweep ? (
+          <div
+            className="tagreview-sweep-progress"
+            role="status"
+            aria-live="polite"
+          >
+            {hasActiveSweep ? (
+              <>
+                <progress
+                  className="tagreview-sweep-bar"
+                  value={sweepStatus!.progress.done + sweepStatus!.progress.failed}
+                  max={sweepStatus!.progress.total}
+                />
+                <span className="tagreview-sweep-text">
+                  Processing sweep&hellip; {sweepStatus!.progress.done}/
+                  {sweepStatus!.progress.total} pages
+                </span>
+              </>
+            ) : (
+              <>
+                {sweepStatus!.progress.done > 0 ? (
+                  <Check
+                    size={16}
+                    aria-hidden="true"
+                    className="tagreview-sweep-check"
+                  />
+                ) : (
+                  <span className="tagreview-sweep-check-failed" aria-hidden="true">
+                    !
+                  </span>
+                )}
+                <span className="tagreview-sweep-text">
+                  {sweepStatus!.progress.done > 0
+                    ? `${sweepStatus!.progress.done} pages applied`
+                    : "Sweep completed with no successful pages"}
+                  {sweepStatus!.progress.failed > 0 &&
+                    ` (${sweepStatus!.progress.failed} failed)`}
+                </span>
+              </>
+            )}
+          </div>
+        ) : null}
+
         {isLoading ? (
           <p className="tagreview-loading">Loading pages to review…</p>
         ) : isError ? (

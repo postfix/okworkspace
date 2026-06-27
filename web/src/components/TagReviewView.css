@@ -163,3 +163,59 @@
   flex: 0 0 auto;
   color: var(--color-text-muted);
 }
+
+/* Sweep progress bar — shown while tag-suggest jobs are in-flight. */
+.tagreview-sweep-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  background: var(--color-accent-bg, var(--color-surface));
+  border: 1px solid var(--color-accent, var(--color-border));
+  border-radius: var(--radius-sm);
+}
+
+.tagreview-sweep-bar {
+  flex: 0 0 auto;
+  width: 120px;
+  height: 6px;
+  border-radius: var(--radius-xs);
+  accent-color: var(--color-accent, #8b5cf6);
+}
+
+.tagreview-sweep-bar::-webkit-progress-bar {
+  background: var(--color-border);
+  border-radius: var(--radius-xs);
+}
+
+.tagreview-sweep-bar::-webkit-progress-value {
+  background: var(--color-accent, #8b5cf6);
+  border-radius: var(--radius-xs);
+}
+
+.tagreview-sweep-text {
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text);
+}
+
+.tagreview-sweep-check {
+  flex: 0 0 auto;
+  color: var(--color-success, #22c55e);
+}
+
+.tagreview-sweep-check-failed {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-error, #ef4444);
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold, 600);
+  line-height: 1;
+}

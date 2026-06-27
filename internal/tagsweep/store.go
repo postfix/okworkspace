@@ -71,6 +71,79 @@ func OpenStore(db *sql.DB) *Store {
 // SetRepo attaches the content repo used by Targets for live-page enumeration.
 func (s *Store) SetRepo(r *repo.Repo) { s.repo = r }
 
+// SweepProgress is the aggregate job-queue state for tag-suggest jobs.
+type SweepProgress struct {
+	Queued     int `json:"queued"`
+	Processing int `json:"processing"`
+	Done       int `json:"done"`
+	Failed     int `json:"failed"`
+	Total      int `json:"total"`
+}
+
+// SweepStatus returns the current aggregate progress of tag-suggest jobs in the
+// shared jobs queue. It queries the jobs table directly (the same SQLite DB used
+// by the worker) and groups by status. Returns a zero-valued SweepProgress when
+// the DB is nil (no-panic for tests/harnesses).
+func (s *Store) SweepStatus(ctx context.Context) (SweepProgress, error) {
+	if s.db == nil {
+		return SweepProgress{}, nil
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT status, COUNT(1) FROM jobs WHERE kind='tag_suggest' GROUP BY status`)
+	if err != nil {
+		return SweepProgress{}, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var p SweepProgress
+	for rows.Next() {
+		var status string
+		var n int
+		if err := rows.Scan(&status, &n); err != nil {
+			return SweepProgress{}, err
+		}
+		switch status {
+		case statusPending:
+			p.Queued = n
+		case statusRunning:
+			p.Processing = n
+		case statusDone:
+			p.Done = n
+		case statusFailed:
+			p.Failed = n
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return SweepProgress{}, err
+	}
+	p.Total = p.Queued + p.Processing + p.Done + p.Failed
+	return p, nil
+}
+
+// status constants duplicated from the jobs package so tagsweep does not import
+// internal/jobs (avoiding a circular dependency). Values must match.
+const (
+	statusPending = "pending"
+	statusRunning = "running"
+	statusDone    = "done"
+	statusFailed  = "failed"
+)
+
+// PendingApprovalCount returns the number of page rows currently awaiting
+// review (status='pending' in tag_suggestions). A nil DB returns 0 (no error)
+// for test harness safety.
+func (s *Store) PendingApprovalCount(ctx context.Context) (int, error) {
+	if s.db == nil {
+		return 0, nil
+	}
+	var n int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(1) FROM tag_suggestions WHERE status='pending'`).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // StagePending stages a pending suggestion row for pagePath, superseding any
 // prior pending row for the same page (last suggestion wins) in one transaction:
 // DELETE the existing pending row, then INSERT the new one with suggestions =

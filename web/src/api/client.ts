@@ -1179,6 +1179,35 @@ export async function reindexGraph(): Promise<void> {
 // in batches. All three endpoints are admin-only + CSRF-gated server-side; the
 // client UI gate (Admin route / RequireAdmin) is convenience, never the boundary.
 
+// SweepProgress mirrors the backend's aggregate job-queue state for tag-suggest
+// jobs (Phase 15). It drives the non-blocking progress indicator in the admin UI.
+export interface SweepProgress {
+  queued: number;
+  processing: number;
+  done: number;
+  failed: number;
+  total: number;
+}
+
+// SweepStatusPayload is the response from GET /api/v1/admin/tags/sweep/status.
+export interface SweepStatusPayload {
+  progress: SweepProgress;
+  pending_approval: number;
+}
+
+// getSweepStatus fetches the current tag-sweep job progress (a GET, no CSRF).
+// Admin-only server-side; a non-admin caller gets 403. Returns the aggregate
+// job queue counts + the number of pages still awaiting approval.
+export async function getSweepStatus(): Promise<SweepStatusPayload> {
+  const res = await fetch("/api/v1/admin/tags/sweep/status", {
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    throw new Error("Couldn't load sweep status.");
+  }
+  return (await res.json()) as SweepStatusPayload;
+}
+
 // startTagSweep starts an admin tag-suggestion sweep (POST, CSRF, admin-only).
 // `all` drives the server-side target scope: false (default) = only untagged
 // pages, true = every page. The endpoint returns 202 immediately with the number

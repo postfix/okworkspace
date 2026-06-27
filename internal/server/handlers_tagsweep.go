@@ -260,6 +260,34 @@ func (h *authHandlers) handleApproveTagSuggestions(w http.ResponseWriter, r *htt
 	writeJSON(w, http.StatusOK, out)
 }
 
+// handleTagSweepStatus serves GET /api/v1/admin/tags/sweep/status (admin
+// subgroup, already behind RequireRole(admin)). It returns the current sweep
+// job progress (queued/processing/done/failed counts) plus the number of pages
+// still in the review queue. A nil store returns 500. The endpoint is a GET so
+// it requires no CSRF — admin auth is the only gate.
+func (h *authHandlers) handleTagSweepStatus(w http.ResponseWriter, r *http.Request) {
+	if h.tagSuggestions == nil {
+		writeError(w, http.StatusInternalServerError, tagSweepUnavailable)
+		return
+	}
+	progress, err := h.tagSuggestions.SweepStatus(r.Context())
+	if err != nil {
+		slog.Error("tag sweep status failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, tagSweepUnavailable)
+		return
+	}
+	pending, err := h.tagSuggestions.PendingApprovalCount(r.Context())
+	if err != nil {
+		slog.Error("tag sweep pending count failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, tagSweepUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"progress":         progress,
+		"pending_approval": pending,
+	})
+}
+
 // handleListTagSuggestions serves GET /api/v1/admin/tags/suggestions (admin
 // subgroup, already behind RequireRole(admin)). It lists the pages with a pending
 // staged suggestion (the review queue read). Page paths + tags are returned as

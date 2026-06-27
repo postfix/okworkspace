@@ -277,6 +277,102 @@ func TestListTagSuggestionsAdminOnly(t *testing.T) {
 	}
 }
 
+// TestTagSweepStatusAdminOnly: non-admin → 403; admin → 200.
+func TestTagSweepStatusAdminOnly(t *testing.T) {
+	f := newTagSweepServer(t)
+
+	editor := loginTagSweepEditor(t, f)
+	rec := getJSON(t, f.handler, "/api/v1/admin/tags/sweep/status", editor)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("editor status = %d, want 403 (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	admin := loginAsAdmin(t, f.handler, f.users)
+	rec = getJSON(t, f.handler, "/api/v1/admin/tags/sweep/status", admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin status = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTagSweepStatusReturnsProgress: with seeded tag_suggest jobs, status
+// returns the aggregate progress plus the pending_approval count.
+func TestTagSweepStatusReturnsProgress(t *testing.T) {
+	f := newTagSweepServer(t)
+	ctx := context.Background()
+
+	// Seed a pending tag_suggestion row so pending_approval > 0.
+	if err := f.store.StagePending(ctx, "a.md", []tagsweep.Suggestion{{Tag: "ops", Existing: true}}, "rev-1"); err != nil {
+		t.Fatalf("StagePending: %v", err)
+	}
+	// Seed tag_suggest jobs: 1 pending, 1 done.
+	if _, err := f.db.DB().Exec(
+		`INSERT INTO jobs (kind, payload, status, run_after, attempts) VALUES (?, '', ?, 0, 0)`,
+		tagsweep.KindTagSuggest, "pending"); err != nil {
+		t.Fatalf("seed pending job: %v", err)
+	}
+	if _, err := f.db.DB().Exec(
+		`INSERT INTO jobs (kind, payload, status, run_after, attempts) VALUES (?, '', ?, 0, 0)`,
+		tagsweep.KindTagSuggest, "done"); err != nil {
+		t.Fatalf("seed done job: %v", err)
+	}
+
+	admin := loginAsAdmin(t, f.handler, f.users)
+	rec := getJSON(t, f.handler, "/api/v1/admin/tags/sweep/status", admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Progress struct {
+			Queued     int `json:"queued"`
+			Processing int `json:"processing"`
+			Done       int `json:"done"`
+			Failed     int `json:"failed"`
+			Total      int `json:"total"`
+		} `json:"progress"`
+		PendingApproval int `json:"pending_approval"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v (body=%s)", err, rec.Body.String())
+	}
+	if resp.Progress.Queued != 1 {
+		t.Fatalf("Queued = %d, want 1", resp.Progress.Queued)
+	}
+	if resp.Progress.Done != 1 {
+		t.Fatalf("Done = %d, want 1", resp.Progress.Done)
+	}
+	if resp.Progress.Total != 2 {
+		t.Fatalf("Total = %d, want 2", resp.Progress.Total)
+	}
+	if resp.PendingApproval != 1 {
+		t.Fatalf("PendingApproval = %d, want 1", resp.PendingApproval)
+	}
+}
+
+// TestTagSweepStatusEmpty: no jobs and no pending suggestions returns zeros.
+func TestTagSweepStatusEmpty(t *testing.T) {
+	f := newTagSweepServer(t)
+	admin := loginAsAdmin(t, f.handler, f.users)
+	rec := getJSON(t, f.handler, "/api/v1/admin/tags/sweep/status", admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("empty status = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Progress struct {
+			Total int `json:"total"`
+		} `json:"progress"`
+		PendingApproval int `json:"pending_approval"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v (body=%s)", err, rec.Body.String())
+	}
+	if resp.Progress.Total != 0 {
+		t.Fatalf("empty Total = %d, want 0", resp.Progress.Total)
+	}
+	if resp.PendingApproval != 0 {
+		t.Fatalf("empty PendingApproval = %d, want 0", resp.PendingApproval)
+	}
+}
+
 // TestListTagSuggestionsReturnsPending: two staged pending rows → 200 with both
 // entries (page_path + suggestions + base_revision) in deterministic order.
 func TestListTagSuggestionsReturnsPending(t *testing.T) {

@@ -12,6 +12,16 @@ import (
 	"github.com/postfix/okworkspace/internal/store"
 )
 
+// seedJob inserts a row directly into the jobs table for testing SweepStatus.
+func seedJob(t *testing.T, st *store.Store, kind, status string) {
+	t.Helper()
+	if _, err := st.DB().Exec(
+		`INSERT INTO jobs (kind, payload, status, run_after, attempts)
+		 VALUES (?, '', ?, 0, 0)`, kind, status); err != nil {
+		t.Fatalf("seed job kind=%q status=%q: %v", kind, status, err)
+	}
+}
+
 // newTestStore wires a real tagsweep Store over a real content repo + migrated
 // SQLite store (mirrors the graph package's t.TempDir() harness convention). It
 // returns the tagsweep Store and the underlying *store.Store so a test can seed
@@ -314,5 +324,108 @@ func TestResolvePendingEmptyNoop(t *testing.T) {
 	got, _ := ts.ListPending(ctx)
 	if len(got) != 1 {
 		t.Fatalf("empty ResolvePending changed pending count: %+v", got)
+	}
+}
+
+// TestSweepStatusGroupsByStatus asserts SweepStatus returns correct counts for
+// each job status, scoped to tag_suggest jobs only.
+func TestSweepStatusGroupsByStatus(t *testing.T) {
+	ts, st, _ := newTestStore(t)
+	ctx := context.Background()
+
+	// Seed jobs: 2 pending, 1 running, 3 done, 1 failed — all tag_suggest.
+	seedJob(t, st, KindTagSuggest, statusPending)
+	seedJob(t, st, KindTagSuggest, statusPending)
+	seedJob(t, st, KindTagSuggest, statusRunning)
+	seedJob(t, st, KindTagSuggest, statusDone)
+	seedJob(t, st, KindTagSuggest, statusDone)
+	seedJob(t, st, KindTagSuggest, statusDone)
+	seedJob(t, st, KindTagSuggest, statusFailed)
+	// A non-tag_suggest job must NOT be counted.
+	seedJob(t, st, "other_kind", statusPending)
+
+	got, err := ts.SweepStatus(ctx)
+	if err != nil {
+		t.Fatalf("SweepStatus: %v", err)
+	}
+	if got.Queued != 2 {
+		t.Fatalf("Queued = %d, want 2", got.Queued)
+	}
+	if got.Processing != 1 {
+		t.Fatalf("Processing = %d, want 1", got.Processing)
+	}
+	if got.Done != 3 {
+		t.Fatalf("Done = %d, want 3", got.Done)
+	}
+	if got.Failed != 1 {
+		t.Fatalf("Failed = %d, want 1", got.Failed)
+	}
+	if got.Total != 7 {
+		t.Fatalf("Total = %d, want 7", got.Total)
+	}
+}
+
+// TestSweepStatusNilDB asserts a nil db returns zero progress (no panic).
+func TestSweepStatusNilDB(t *testing.T) {
+	s := &Store{db: nil}
+	got, err := s.SweepStatus(context.Background())
+	if err != nil {
+		t.Fatalf("SweepStatus nil db: %v", err)
+	}
+	if got.Total != 0 {
+		t.Fatalf("nil db Total = %d, want 0", got.Total)
+	}
+}
+
+// TestSweepStatusEmpty asserts zero tag_suggest jobs returns all zeros.
+func TestSweepStatusEmpty(t *testing.T) {
+	ts, _, _ := newTestStore(t)
+	got, err := ts.SweepStatus(context.Background())
+	if err != nil {
+		t.Fatalf("SweepStatus empty: %v", err)
+	}
+	if got.Total != 0 {
+		t.Fatalf("empty Total = %d, want 0", got.Total)
+	}
+}
+
+// TestPendingApprovalCount asserts it returns the count of pending tag_suggestions.
+func TestPendingApprovalCount(t *testing.T) {
+	ts, _, _ := newTestStore(t)
+	ctx := context.Background()
+
+	n, err := ts.PendingApprovalCount(ctx)
+	if err != nil {
+		t.Fatalf("PendingApprovalCount (empty): %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("empty PendingApprovalCount = %d, want 0", n)
+	}
+
+	if err := ts.StagePending(ctx, "a.md", []Suggestion{{Tag: "ops"}}, "r1"); err != nil {
+		t.Fatalf("StagePending a: %v", err)
+	}
+	if err := ts.StagePending(ctx, "b.md", []Suggestion{{Tag: "dev"}}, "r2"); err != nil {
+		t.Fatalf("StagePending b: %v", err)
+	}
+
+	n, err = ts.PendingApprovalCount(ctx)
+	if err != nil {
+		t.Fatalf("PendingApprovalCount: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("PendingApprovalCount = %d, want 2", n)
+	}
+}
+
+// TestPendingApprovalCountNilDB asserts nil db returns 0 (no panic).
+func TestPendingApprovalCountNilDB(t *testing.T) {
+	s := &Store{db: nil}
+	n, err := s.PendingApprovalCount(context.Background())
+	if err != nil {
+		t.Fatalf("PendingApprovalCount nil db: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("nil db count = %d, want 0", n)
 	}
 }

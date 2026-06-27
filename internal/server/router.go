@@ -295,6 +295,7 @@ func New(deps Deps) (http.Handler, error) {
 				// one KindTagSuggest job per page fire-and-forget (202, writes nothing);
 				// the review-queue read lists pages with pending staged suggestions.
 				admin.Post("/admin/tags/sweep", h.handleStartTagSweep)
+				admin.Get("/admin/tags/sweep/status", h.handleTagSweepStatus)
 				admin.Get("/admin/tags/suggestions", h.handleListTagSuggestions)
 				// Batched approve (TAG-06) — admin-only, inheriting the SAME
 				// RequireRole(admin) gate + nosurf CSRF. It approves one OR many pages'
