@@ -1,9 +1,9 @@
 ---
-status: partial
+status: passed
 phase: 13-visual-uat
 source: [13-01-PLAN.md]
 started: 2026-06-27T08:05:00Z
-updated: 2026-06-27T08:15:00Z
+updated: 2026-06-27T16:40:00Z
 ---
 
 ## Summary
@@ -12,10 +12,10 @@ updated: 2026-06-27T08:15:00Z
 |---|-----------|--------|-------|
 | 1 | Global graph renders all pages as nodes with degree sizing | PASS | Canvas (1260×1068) at `/app/graph`; 129 nodes returned from API. Deploy node degree 6 (tags); most nodes degree 0 (workspace data sparse). |
 | 2 | Orphan pages visually distinguished (no edges) | PASS | 124/129 nodes have 0 edges — appear as isolated nodes on canvas with no connecting lines. |
-| 3 | Zoom (scroll wheel) works smoothly | VISUAL | Scroll wheel zoom in/out performed without console errors. Smoothness judgment requires human eyes. |
-| 4 | Pan (drag canvas) works without losing nodes | VISUAL | Drag pan performed without errors. Node retention after pan requires visual confirmation. |
-| 5 | Hover highlights node, edges, neighbors | VISUAL | Canvas-based rendering — hover-highlight is pixel-level; requires human browser verification. |
-| 6 | Click on node navigates to that page | VISUAL | Canvas nodes at force-directed positions — click-to-navigate requires human verification. Sidebar navigation works (tested via "My workspace" click). |
+| 3 | Zoom (scroll wheel) works smoothly | PASS | Zoom in/out performed without errors. Human confirmed smooth. |
+| 4 | Pan (drag canvas) works without losing nodes | PASS | Drag pan performed without errors. Human confirmed. |
+| 5 | Hover highlights node, edges, neighbors | PASS | Human confirmed hover-highlight works correctly. |
+| 6 | Click on node navigates to that page | PASS | Human confirmed click-to-navigate works correctly. |
 | 7 | Edge toggle chips filter correctly | PASS | Links ON, Backlinks ON, Shared Tags OFF by default. Toggling works; shared state between global and local graph views confirmed. |
 | 8 | Shared Tags OFF by default; ON shows tag edges with capping | PASS | Default OFF confirmed; toggling ON shows tag edges. Toggle state shared across views. |
 | 9 | Local graph dock collapsed by default; expanding fetches `/graph/local` | PASS | "Show local graph" button present on page view; expands to reveal local force graph with edge toggles. |
