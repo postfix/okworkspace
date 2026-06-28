@@ -10,9 +10,9 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 ## Current State
 
-**Shipped: v1.1 Hardening & Polish (2026-06-27).** All 5 phases (9 plans) complete and verified — security review passed (zero blockers). Delivered: visual UAT confirming graph UI, `docs/` contributor architecture documentation, non-blocking bulk-approve progress UX, defense-in-depth security hardening (sweep fan-out cap, tag charset validation, govulncheck clean), and the graph filter sidebar (search, visibility toggles, display sliders, groups, reset).
+**Shipped: v1.2 Graph Schema Extension (2026-06-28).** Phase 18 extended the backend `GraphNode` struct with `Aliases`, `Tags`, `Exists`, and `type: "attachment"` — activating the 3 inert Phase 17 filter toggles (Attachments, Existing files only, search by aliases/tags). All 12 GF-02 criteria met.
 
-**Current milestone: v1.2 Graph Schema Extension** — Close the Phase 17 gap: extend the backend graph data model so the 3 inert filter toggles (Attachments, Existing files only, search by aliases/tags) become functional. Pure backend data plumbing — no new UI.
+**Current milestone: v1.3 Tag Management UX** — workspace-wide tag rename, merge, and delete across all pages. Riding the existing byte-stable `SetTagsFrontmatter` + single-writer `EnqueueCommit` path. Preview→approve safety contract; derived graph store consistency after bulk mutations.
 
 ## Requirements
 
@@ -38,12 +38,17 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 - ✓ **Documentation** — v1.1 — `docs/` contributor architecture docs (overview, graph subsystem, tag subsystem, API contracts) + root README update
 - ✓ **UX improvement** — v1.1 — non-blocking bulk-approve progress indicator with polling status endpoint
 - ✓ **Security hardening** — v1.1 — admin sweep fan-out cap, tag charset server-side validation, govulncheck triaged (0 reachable vulns)
+- ✓ **Graph schema extension** — v1.2 — extended backend GraphNode with aliases, tags, exists, and attachment type; activated 3 inert Phase 17 filter toggles
 
 ### Active
 
-<!-- v1.2 Graph Schema Extension -->
+<!-- v1.3 Tag Management UX -->
 
-- **GF-02:** Extend backend GraphNode to include `aliases`, `tags`, `exists` fields, and `type: "attachment"` for attachment nodes — activates the 3 inert Phase 17 filter toggles
+- **TM-01: Tag rename** — Rename a tag across all pages that carry it. Single operation, batched single-writer commit, preview→approve. Handles case-folding and whitespace normalization.
+- **TM-02: Tag merge** — Merge source tag into target tag across all pages. Removes source tag, adds target tag where source existed. Preview shows affected pages.
+- **TM-03: Tag delete** — Remove a tag from every page that carries it. Preview shows affected pages before commit.
+- **TM-04: Tag admin UI** — Admin-only surface for tag management operations with preview/approve flow. Rides the existing `SetTagsFrontmatter` byte-stable builder + single-writer commit path.
+- **TM-05: Graph store consistency** — Derived graph store stays consistent after bulk tag mutations (rebuild or incremental update of `page_tags`).
 
 ### Out of Scope
 
@@ -116,4 +121,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-24 after v1.0 milestone (Knowledge Graph & LLM Auto-Tagging) shipped*
+*Last updated: 2026-06-28 — v1.3 milestone (Tag Management UX) started*
