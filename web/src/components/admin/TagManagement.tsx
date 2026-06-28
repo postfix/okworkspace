@@ -1,6 +1,7 @@
-// TagManagement (TM-04 / v1.3) — admin-only tag management surface.
-// Renders the workspace tag list with page counts and rename/merge/delete
-// actions. Every destructive operation follows the preview→approve contract.
+// TagManagement (TM-04 / v1.3) — workspace-wide tag management surface.
+// TagManageLink: a small inline link for the page editor (opens as dialog).
+// TagManagement: the full tag table with rename/merge/delete dialogs.
+// Every destructive operation follows the preview→approve contract.
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2 } from "lucide-react";
@@ -261,5 +262,27 @@ function DeleteDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () => 
         {error && <p className="tagmgmt-error"><AlertTriangle size={14} /> {error}</p>}
       </div>
     </Dialog>
+  );
+}
+
+// TagManageLink is a small inline link that opens the full TagManagement as a
+// dialog. Placed next to TagSuggest in the page editor so workspace-wide tag
+// ops are reachable where users actually work with tags.
+export function TagManageLink() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="tagmgmt-link" onClick={() => setOpen(true)}>
+        Manage workspace tags
+      </button>
+      {open && (
+        <Dialog open title="Manage workspace tags" confirmLabel="Close" cancelLabel=""
+          onCancel={() => setOpen(false)}
+          onConfirm={() => setOpen(false)}
+        >
+          <TagManagement />
+        </Dialog>
+      )}
+    </>
   );
 }
