@@ -1,8 +1,8 @@
-// FilterControls (GF-01): compact inline controls — search icon with popover,
-// visibility toggles, display sliders in a popover, groups + reset as icon buttons.
-// Lives in the same flex row as the Graph title + EdgeToggles.
-import { useState, useRef, useEffect } from "react";
-import { Search, SlidersHorizontal, Plus, RotateCcw } from "lucide-react";
+// FilterControls (GF-01): inline controls — visibility toggles, always-visible
+// search, always-visible display sliders, groups + reset. Lives in the
+// graphview-header flex row alongside the Graph title and EdgeToggles.
+import { useRef } from "react";
+import { Plus, RotateCcw } from "lucide-react";
 import { useGraphFilters } from "../../stores/graphFilters";
 import "./FilterControls.css";
 
@@ -28,85 +28,38 @@ export default function FilterControls() {
   const addGroup = useGraphFilters((s) => s.addGroup);
   const reset = useGraphFilters((s) => s.reset);
 
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [displayOpen, setDisplayOpen] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const displayRef = useRef<HTMLDivElement>(null);
-
-  // Focus search input when popover opens.
-  useEffect(() => {
-    if (searchOpen) searchInputRef.current?.focus();
-  }, [searchOpen]);
-
-  // Close popovers on outside click.
-  useEffect(() => {
-    function onDown(e: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node))
-        setSearchOpen(false);
-      if (displayRef.current && !displayRef.current.contains(e.target as Node))
-        setDisplayOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, []);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="filtercontrols" role="group" aria-label="Graph filters">
-      {/* Visibility toggle chips — same chip pattern as EdgeToggles */}
+      {/* Visibility toggle chips */}
       <ToggleChip label="Tags" on={showTags} onToggle={toggleTag} />
       <ToggleChip label="Attachments" on={showAttachments} onToggle={toggleAttachments} />
       <ToggleChip label="Existing" on={existingFilesOnly} onToggle={toggleExistingFilesOnly} />
       <ToggleChip label="Orphans" on={showOrphans} onToggle={toggleOrphans} />
       <ToggleChip label="Arrows" on={showArrows} onToggle={toggleArrows} />
 
-      {/* Search icon + popover */}
-      <div className="filtercontrols-popover-host" ref={searchRef}>
-        <button
-          type="button"
-          className={`filtercontrols-icon-btn${searchOpen ? " filtercontrols-icon-btn-active" : ""}${searchQuery ? " filtercontrols-icon-btn-on" : ""}`}
-          onClick={() => { setSearchOpen((v) => !v); setDisplayOpen(false); }}
-          aria-label="Search graph"
-        >
-          <Search size={15} />
-        </button>
-        {searchOpen && (
-          <div className="filtercontrols-popover">
-            <input
-              ref={searchInputRef}
-              type="search"
-              className="filtercontrols-popover-search"
-              placeholder="Filter by name, tag, alias…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        )}
+      {/* Inline search — always visible */}
+      <input
+        ref={searchRef}
+        type="search"
+        className="filtercontrols-search"
+        placeholder="Filter by name, tag, alias…"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+      />
+
+      {/* Inline display sliders — always visible, compact horizontal */}
+      <div className="filtercontrols-sliders" role="group" aria-label="Display settings">
+        <SliderRow label="Fade" value={textFadeThreshold} min={0} max={1} step={0.01} onChange={setTextFadeThreshold} />
+        <SliderRow label="Size" value={nodeSize} min={0} max={1} step={0.01} onChange={setNodeSize} />
+        <SliderRow label="Thick" value={linkThickness} min={0} max={1} step={0.01} onChange={setLinkThickness} />
       </div>
 
-      {/* Display/settings icon + popover */}
-      <div className="filtercontrols-popover-host" ref={displayRef}>
-        <button
-          type="button"
-          className={`filtercontrols-icon-btn${displayOpen ? " filtercontrols-icon-btn-active" : ""}`}
-          onClick={() => { setDisplayOpen((v) => !v); setSearchOpen(false); }}
-          aria-label="Graph display settings"
-        >
-          <SlidersHorizontal size={15} />
-        </button>
-        {displayOpen && (
-          <div className="filtercontrols-popover filtercontrols-popover-wide">
-            <div className="filtercontrols-popover-sliders">
-              <SliderRow label="Text fade" value={textFadeThreshold} min={0} max={1} step={0.01} onChange={setTextFadeThreshold} />
-              <SliderRow label="Node size" value={nodeSize} min={0} max={1} step={0.01} onChange={setNodeSize} />
-              <SliderRow label="Link thickness" value={linkThickness} min={0} max={1} step={0.01} onChange={setLinkThickness} />
-            </div>
-            <button type="button" className="filtercontrols-popover-group-btn" onClick={addGroup}>
-              <Plus size={14} /> New group
-            </button>
-          </div>
-        )}
-      </div>
+      {/* New group */}
+      <button type="button" className="filtercontrols-group-btn" onClick={addGroup}>
+        <Plus size={14} /> New group
+      </button>
 
       {/* Reset */}
       <button
@@ -139,8 +92,8 @@ function SliderRow({ label, value, min, max, step, onChange }: {
   onChange: (v: number) => void;
 }) {
   return (
-    <label className="filtercontrols-popover-slider">
-      <span className="filtercontrols-popover-slider-label">{label}</span>
+    <label className="filtercontrols-slider">
+      <span className="filtercontrols-slider-label">{label}</span>
       <input
         type="range"
         value={value}

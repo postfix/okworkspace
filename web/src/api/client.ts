@@ -1274,6 +1274,74 @@ export async function approveTagSuggestions(
   });
 }
 
+// --- Tag management (v1.3 / TM-01..04, admin-only) ---
+// Workspace-wide tag rename, merge, and delete with preview→approve.
+
+export interface TagPreviewPage {
+  page_path: string;
+  current_tags: string[];
+  new_tags: string[];
+}
+
+export interface TagPreview {
+  tag: string;
+  affected_pages: TagPreviewPage[];
+  total_affected: number;
+}
+
+export interface TagEntry {
+  tag: string;
+  count: number;
+}
+
+export async function listTags(): Promise<TagEntry[]> {
+  const res = await fetch("/api/v1/admin/tags", { credentials: "same-origin" });
+  if (!res.ok) throw new Error("Couldn't load tags.");
+  return (await res.json()) as TagEntry[];
+}
+
+export interface TagApplyResult {
+  page_path: string;
+  status: string;
+}
+
+export interface TagApplyResponse {
+  action: string;
+  results: TagApplyResult[];
+}
+
+export async function renameTag(opts: {
+  old_name: string;
+  new_name: string;
+  preview?: boolean;
+}): Promise<TagPreview | TagApplyResponse> {
+  return mutate<TagPreview | TagApplyResponse>(
+    "/api/v1/admin/tags/rename",
+    opts,
+  );
+}
+
+export async function mergeTag(opts: {
+  source: string;
+  target: string;
+  preview?: boolean;
+}): Promise<TagPreview | TagApplyResponse> {
+  return mutate<TagPreview | TagApplyResponse>(
+    "/api/v1/admin/tags/merge",
+    opts,
+  );
+}
+
+export async function deleteTag(opts: {
+  tag: string;
+  preview?: boolean;
+}): Promise<TagPreview | TagApplyResponse> {
+  return mutate<TagPreview | TagApplyResponse>(
+    "/api/v1/admin/tags/delete",
+    opts,
+  );
+}
+
 // relativeMdLink computes a relative `.md` link destination from the page at
 // fromPath to the page at toPath (both repo-relative slash paths), matching the
 // canonical on-disk link format (D-05). Used by the LinkPicker so an inserted

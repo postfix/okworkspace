@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, UserPlus } from "lucide-react";
+import TagManagement from "../components/admin/TagManagement";
 
 import {
   createUser,
@@ -575,6 +576,8 @@ export default function Admin() {
         They won't be able to sign in until reactivated. Their account and history
         are kept.
       </Dialog>
+
+      <TagManagement />
     </div>
   );
 }

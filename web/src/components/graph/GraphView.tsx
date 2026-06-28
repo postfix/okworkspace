@@ -222,7 +222,11 @@ export default function GraphView({ activePath }: GraphViewProps) {
       const id = nodeId(node);
       const meta = nodeMeta.get(id);
       const type = meta?.type ?? "page";
-      const r = radiusFor(id);
+      // Scale visual radius in lockstep with nodeRelSize so the slider
+      // perceptibly grows/shrinks nodes AND the force simulation stays
+      // consistent. At default filterNodeSize=0.2 the scale is 1.0.
+      const visualScale = (2 + filterNodeSize * 8) / 3.6;
+      const r = radiusFor(id) * visualScale;
 
       const nodeColor = readVar("--graph-node-color", "#4cc9a0");
       const glowColor = readVar("--graph-node-glow", "rgba(76,201,160,0.18)");
@@ -238,7 +242,7 @@ export default function GraphView({ activePath }: GraphViewProps) {
       // Step 1: outer glow ring (the Obsidian bloom). Only for page nodes at
       // sufficient size; skips tags and min-radius orphans so the glow doesn't
       // overwhelm the canvas.
-      if (type !== "tag" && r > MIN_R + 0.5) {
+      if (type !== "tag" && r > (MIN_R * visualScale) + 0.5) {
         ctx.beginPath();
         ctx.arc(node.x ?? 0, node.y ?? 0, r + GLOW_SPREAD / globalScale, 0, 2 * Math.PI);
         ctx.fillStyle = dim ? withAlpha(glowColor, DIM_ALPHA * 2) : glowColor;
@@ -292,7 +296,7 @@ export default function GraphView({ activePath }: GraphViewProps) {
         ctx.fillText(meta.label, node.x ?? 0, (node.y ?? 0) + activeR + 1.5 / globalScale);
       }
     },
-    [nodeMeta, radiusFor, degrees, activePath, highlight, textFadeThreshold],
+    [nodeMeta, radiusFor, degrees, activePath, highlight, textFadeThreshold, filterNodeSize],
   );
 
   // Edge color by type: link edges are blue (references), tag edges are green,

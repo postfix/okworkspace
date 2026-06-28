@@ -1,0 +1,132 @@
+/* TagManagement (TM-04 / v1.3) — admin tag management surface. */
+.tagmgmt {
+  margin-top: var(--space-xl);
+}
+
+.tagmgmt-heading {
+  font-size: var(--font-size-lg);
+  margin: 0 0 var(--space-md);
+  color: var(--color-text);
+}
+
+.tagmgmt-status {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tagmgmt-error {
+  color: var(--color-danger, #ef4444);
+}
+
+.tagmgmt-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tagmgmt-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tagmgmt-table td {
+  padding: 6px 12px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.tagmgmt-table code {
+  font-size: 13px;
+  color: var(--color-accent, #8b5cf6);
+  background: var(--color-bg-elevated);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.tagmgmt-count-col {
+  width: 70px;
+  text-align: center !important;
+}
+
+.tagmgmt-actions-col {
+  width: 100px;
+  text-align: right !important;
+}
+
+.tagmgmt-actions-col button {
+  padding: 2px 6px;
+}
+
+/* Dialog internals */
+.tagmgmt-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tagmgmt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.tagmgmt-field .input,
+.tagmgmt-field select {
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  padding: 0 10px;
+  font-size: 14px;
+  font-family: var(--font-family-ui, system-ui, sans-serif);
+}
+
+.tagmgmt-field .input:focus,
+.tagmgmt-field select:focus {
+  outline: none;
+  border-color: var(--color-accent-border);
+}
+
+.tagmgmt-preview {
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.tagmgmt-preview-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.tagmgmt-preview-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: 12px;
+}
+
+.tagmgmt-preview-list li:last-child {
+  border-bottom: none;
+}
+
+.tagmgmt-tag-change {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}

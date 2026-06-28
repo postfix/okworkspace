@@ -510,6 +510,40 @@ func (s *Store) tagPageCounts(ctx context.Context) (map[string]int, error) {
 	return out, rows.Err()
 }
 
+// PagesByTag returns every page path that carries the given tag (from the
+// DERIVED page_tags cache, never the source-of-truth files). It is the key
+// query backing tag-rename/merge/delete preview enumeration (TM-01..03).
+// Returns an empty slice when no pages carry the tag — callers never
+// special-case nil. A nil db is treated as an empty store.
+func (s *Store) PagesByTag(ctx context.Context, tag string) ([]string, error) {
+	out := []string{}
+	if s.db == nil {
+		return out, nil
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT page_path FROM page_tags WHERE LOWER(tag) = LOWER(?) ORDER BY page_path`, tag)
+	if err != nil {
+		return out, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return out, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// TagPageCounts returns, per tag, the number of distinct pages carrying it
+// (from the DERIVED page_tags cache). This is the query backing the tag-list
+// summary in the admin UI (TM-04). Returns an empty map when the store is
+// empty — callers never special-case nil.
+func (s *Store) TagPageCounts(ctx context.Context) (map[string]int, error) {
+	return s.tagPageCounts(ctx)
+}
+
 // titleFor resolves a page's display title by reading ONLY its frontmatter title
 // through the SEC-01 resolver (s.repo), with a basename fallback. This is the only
 // place the query layer touches files, and only for titles, never bodies. A nil

@@ -305,6 +305,16 @@ func New(deps Deps) (http.Handler, error) {
 				// client tag list and any claimed revision are NEVER trusted, mirroring
 				// handleApplyTags. A stale page 409s individually without sinking the batch.
 				admin.Post("/admin/tags/approve", h.handleApproveTagSuggestions)
+				// Tag management (v1.3 / TM-01..04) — admin-only. Tag list (GET)
+				// returns workspace tags + page counts. Rename/merge/delete (POST)
+				// each follow the preview→approve safety contract: preview=true
+				// returns affected pages, approve applies through SetTagsFrontmatter
+				// → ApplyTagsBatch (N pages → ONE commit). Server-side tag
+				// re-validation and per-page 409 handling mirror /admin/tags/approve.
+				admin.Get("/admin/tags", h.handleTagList)
+				admin.Post("/admin/tags/rename", h.handleTagRename)
+				admin.Post("/admin/tags/merge", h.handleTagMerge)
+				admin.Post("/admin/tags/delete", h.handleTagDelete)
 			})
 		})
 	})

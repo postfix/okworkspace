@@ -59,6 +59,12 @@ const (
 	ActionAgentPrompt        = "agent_prompt"
 	ActionAgentPatchProposal = "agent_patch_proposal"
 	ActionAgentPatchApproval = "agent_patch_approval"
+
+	// Tag management actions (Phase 19 / v1.3). Admin-only workspace-wide tag
+	// rename, merge, and delete through the single-writer commit path.
+	ActionTagRename = "tag_rename"
+	ActionTagMerge  = "tag_merge"
+	ActionTagDelete = "tag_delete"
 )
 
 // Event is one audit record. It carries only non-secret provenance — there is
