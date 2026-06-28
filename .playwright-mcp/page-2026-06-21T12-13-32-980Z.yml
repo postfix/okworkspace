@@ -1,0 +1,36 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "OKF Workspace" [ref=e5] [cursor=pointer]
+    - generic [ref=e6]:
+      - button "Search workspace (⌘K)" [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+        - generic [ref=e11]: Search
+        - generic [ref=e12]: ⌘K
+      - button "Administrator" [ref=e14] [cursor=pointer]:
+        - generic [ref=e15]: Administrator
+        - img [ref=e16]
+  - generic [ref=e18]:
+    - navigation "Workspace navigation" [ref=e19]:
+      - generic [ref=e20]:
+        - button "New page" [ref=e21] [cursor=pointer]:
+          - img [ref=e22]
+          - generic [ref=e25]: New page
+        - button "New folder" [ref=e26] [cursor=pointer]:
+          - img [ref=e27]
+          - generic [ref=e29]: New folder
+      - status [ref=e30]: Loading…
+      - generic [ref=e31]:
+        - generic [ref=e32]: Recent
+        - list [ref=e33]:
+          - listitem [ref=e34]:
+            - button "Phase 6 Live Preview Check" [ref=e35] [cursor=pointer]:
+              - img [ref=e36]
+              - generic [ref=e39]: Phase 6 Live Preview Check
+      - button "Trash" [ref=e41] [cursor=pointer]:
+        - img [ref=e42]
+        - generic [ref=e45]: Trash
+      - button "Admin" [ref=e47] [cursor=pointer]:
+        - img [ref=e48]
+        - generic [ref=e50]: Admin
+    - main [ref=e51]:
+      - paragraph [ref=e52]: Loading…

@@ -1,0 +1,244 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "Hide file tree" [pressed] [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search workspace (⌘K)" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e14]: Search
+        - generic [ref=e15]: ⌘K
+    - generic [ref=e16]:
+      - generic "Storage healthy" [ref=e77]:
+        - generic [ref=e79]: Storage healthy
+      - button "Show assistant" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e20]: Assistant
+      - button "Administrator" [ref=e22] [cursor=pointer]:
+        - generic [ref=e23]: Administrator
+        - img [ref=e24]
+  - generic [ref=e26]:
+    - navigation "Workspace navigation" [ref=e27]:
+      - generic [ref=e28]:
+        - button "New page" [ref=e29] [cursor=pointer]:
+          - img [ref=e30]
+        - button "New folder" [ref=e33] [cursor=pointer]:
+          - img [ref=e34]
+        - button "Collapse all folders" [ref=e36] [cursor=pointer]:
+          - img [ref=e37]
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - img [ref=e82]
+          - textbox "Filter files" [ref=e85]:
+            - /placeholder: Filter files…
+        - list "Pages" [ref=e86]:
+          - listitem [ref=e87]:
+            - generic [ref=e88]:
+              - button "Collapse attachments" [expanded] [ref=e89] [cursor=pointer]:
+                - img [ref=e90]
+              - img [ref=e92]
+              - generic [ref=e94]: attachments
+          - listitem [ref=e95]:
+            - generic [ref=e96]:
+              - button "Collapse dewdewd" [expanded] [ref=e97] [cursor=pointer]:
+                - img [ref=e98]
+              - img [ref=e100]
+              - generic [ref=e102]: dewdewd
+            - list [ref=e103]:
+              - listitem [ref=e104]:
+                - generic [ref=e105]:
+                  - button "Collapse 1" [expanded] [ref=e106] [cursor=pointer]:
+                    - img [ref=e107]
+                  - img [ref=e109]
+                  - generic [ref=e111]: "1"
+                - list [ref=e112]:
+                  - listitem [ref=e113]:
+                    - generic [ref=e114]:
+                      - button "Collapse 2" [expanded] [ref=e115] [cursor=pointer]:
+                        - img [ref=e116]
+                      - img [ref=e118]
+                      - generic [ref=e120]: "2"
+                  - listitem [ref=e121]:
+                    - button "1" [ref=e122] [cursor=pointer]:
+                      - img [ref=e123]
+                      - generic [ref=e126]: "1"
+                  - listitem [ref=e127]:
+                    - button "2" [ref=e128] [cursor=pointer]:
+                      - img [ref=e129]
+                      - generic [ref=e132]: "2"
+          - listitem [ref=e133]:
+            - generic [ref=e134]:
+              - button "Collapse my-new-work-space" [expanded] [ref=e135] [cursor=pointer]:
+                - img [ref=e136]
+              - img [ref=e138]
+              - generic [ref=e140]: my-new-work-space
+            - list [ref=e141]:
+              - listitem [ref=e142]:
+                - button "My new work space" [ref=e143] [cursor=pointer]:
+                  - img [ref=e144]
+                  - generic [ref=e147]: My new work space
+              - listitem [ref=e148]:
+                - button "test3" [ref=e149] [cursor=pointer]:
+                  - img [ref=e150]
+                  - generic [ref=e153]: test3
+          - listitem [ref=e154]:
+            - generic [ref=e155]:
+              - button "Collapse my-workspace" [expanded] [ref=e156] [cursor=pointer]:
+                - img [ref=e157]
+              - img [ref=e159]
+              - generic [ref=e161]: my-workspace
+            - list [ref=e162]:
+              - listitem [ref=e163]:
+                - button "My workspace" [ref=e164] [cursor=pointer]:
+                  - img [ref=e165]
+                  - generic [ref=e168]: My workspace
+          - listitem [ref=e169]:
+            - generic [ref=e170]:
+              - button "Collapse mynew-workspace" [expanded] [ref=e171] [cursor=pointer]:
+                - img [ref=e172]
+              - img [ref=e174]
+              - generic [ref=e176]: mynew-workspace
+            - list [ref=e177]:
+              - listitem [ref=e178]:
+                - button "Mynew workspace" [ref=e179] [cursor=pointer]:
+                  - img [ref=e180]
+                  - generic [ref=e183]: Mynew workspace
+          - listitem [ref=e184]:
+            - generic [ref=e185]:
+              - button "Collapse mynewworkspace" [expanded] [ref=e186] [cursor=pointer]:
+                - img [ref=e187]
+              - img [ref=e189]
+              - generic [ref=e191]: mynewworkspace
+            - list [ref=e192]:
+              - listitem [ref=e193]:
+                - button "Mynewworkspace" [ref=e194] [cursor=pointer]:
+                  - img [ref=e195]
+                  - generic [ref=e198]: Mynewworkspace
+          - listitem [ref=e199]:
+            - generic [ref=e200]:
+              - button "Collapse runbooks" [expanded] [ref=e201] [cursor=pointer]:
+                - img [ref=e202]
+              - img [ref=e204]
+              - generic [ref=e206]: runbooks
+            - list [ref=e207]:
+              - listitem [ref=e208]:
+                - button "dewdwe" [ref=e209] [cursor=pointer]:
+                  - img [ref=e210]
+                  - generic [ref=e213]: dewdwe
+              - listitem [ref=e214]:
+                - button "new" [ref=e215] [cursor=pointer]:
+                  - img [ref=e216]
+                  - generic [ref=e219]: new
+          - listitem [ref=e220]:
+            - generic [ref=e221]:
+              - button "Collapse test" [expanded] [ref=e222] [cursor=pointer]:
+                - img [ref=e223]
+              - img [ref=e225]
+              - generic [ref=e227]: test
+            - list [ref=e228]:
+              - listitem [ref=e229]:
+                - button "test" [ref=e230] [cursor=pointer]:
+                  - img [ref=e231]
+                  - generic [ref=e234]: test
+          - listitem [ref=e235]:
+            - generic [ref=e236]:
+              - button "Collapse wedfwedwedwed" [expanded] [ref=e237] [cursor=pointer]:
+                - img [ref=e238]
+              - img [ref=e240]
+              - generic [ref=e242]: wedfwedwedwed
+            - list [ref=e243]:
+              - listitem [ref=e244]:
+                - button "wedfwedwedwed" [ref=e245] [cursor=pointer]:
+                  - img [ref=e246]
+                  - generic [ref=e249]: wedfwedwedwed
+          - listitem [ref=e250]:
+            - generic [ref=e251]:
+              - button "Collapse zphase7" [expanded] [ref=e252] [cursor=pointer]:
+                - img [ref=e253]
+              - img [ref=e255]
+              - generic [ref=e257]: zphase7
+          - listitem [ref=e258]:
+            - generic [ref=e259]:
+              - button "Collapse zphase7renamed" [expanded] [ref=e260] [cursor=pointer]:
+                - img [ref=e261]
+              - img [ref=e263]
+              - generic [ref=e265]: zphase7renamed
+            - list [ref=e266]:
+              - listitem [ref=e267]:
+                - button "zphase7" [ref=e268] [cursor=pointer]:
+                  - img [ref=e269]
+                  - generic [ref=e272]: zphase7
+          - listitem [ref=e273]:
+            - button "Deploy" [ref=e274] [cursor=pointer]:
+              - img [ref=e275]
+              - generic [ref=e278]: Deploy
+          - listitem [ref=e279]:
+            - button "Phase 6 Live Preview Check" [ref=e280] [cursor=pointer]:
+              - img [ref=e281]
+              - generic [ref=e284]: Phase 6 Live Preview Check
+      - generic [ref=e41]:
+        - generic [ref=e42]: Recent
+        - list [ref=e43]:
+          - listitem [ref=e44]:
+            - button "Deploy" [ref=e45] [cursor=pointer]:
+              - img [ref=e46]
+              - generic [ref=e49]: Deploy
+          - listitem [ref=e50]:
+            - button "My new work space" [ref=e51] [cursor=pointer]:
+              - img [ref=e52]
+              - generic [ref=e55]: My new work space
+          - listitem [ref=e56]:
+            - button "test3" [ref=e57] [cursor=pointer]:
+              - img [ref=e58]
+              - generic [ref=e61]: test3
+      - button "Trash" [ref=e63] [cursor=pointer]:
+        - img [ref=e64]
+        - generic [ref=e67]: Trash
+      - button "Admin" [ref=e69] [cursor=pointer]:
+        - img [ref=e70]
+        - generic [ref=e72]: Admin
+    - separator "Resize sidebar" [ref=e73]
+    - main [ref=e75]:
+      - article [ref=e286]:
+        - generic [ref=e287]:
+          - heading "Deploy" [level=1] [ref=e288]
+          - generic [ref=e289]:
+            - button "Edit page" [ref=e290] [cursor=pointer]:
+              - img [ref=e291]
+            - button "Attachments" [ref=e294] [cursor=pointer]:
+              - img [ref=e295]
+            - button "Page actions" [ref=e299] [cursor=pointer]:
+              - img [ref=e300]
+        - textbox [ref=e307]:
+          - generic [ref=e308]: "## Hello"
+          - generic [ref=e310]: Deployment checklist
+          - generic [ref=e312]: "- build the binary"
+          - generic [ref=e313]: "- run the tests"
+          - generic [ref=e314]: "- deploy to the server"
+        - dialog "Attachments" [ref=e316]:
+          - heading "Attachments" [level=2] [ref=e317]
+          - region "Attachments" [ref=e319]:
+            - generic [active] [ref=e322] [cursor=pointer]:
+              - button "Choose File" [ref=e323]
+              - img [ref=e324]
+              - generic [ref=e327]:
+                - generic [ref=e328]: Drop a file here or click to browse
+                - generic [ref=e329]: Up to 100 MB · pdf, docx, txt, png, jpg, svg
+            - generic [ref=e331]:
+              - img [ref=e334]
+              - generic [ref=e337]:
+                - generic "okf-test-upload.txt" [ref=e338]
+                - generic [ref=e339]: 22 B · admin · Jun 23, 2026
+                - generic [ref=e341]:
+                  - img [ref=e342]
+                  - text: Text extracted
+              - generic [ref=e344]:
+                - link "Download" [ref=e345] [cursor=pointer]:
+                  - /url: /api/v1/attachments/01KVTDN6P5KEJT0KCEZ6T7580F/download
+                  - img [ref=e346]
+                  - generic [ref=e349]: Download
+                - button "Ask the assistant about this file" [ref=e350] [cursor=pointer]:
+                  - img [ref=e351]
+                - button "Replace attachment" [ref=e353] [cursor=pointer]:
+                  - img [ref=e354]
+                - button "Remove attachment" [ref=e357] [cursor=pointer]:
+                  - img [ref=e358]

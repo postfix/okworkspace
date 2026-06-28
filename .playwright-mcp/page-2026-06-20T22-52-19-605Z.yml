@@ -1,0 +1,159 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "OKF Workspace" [ref=e5] [cursor=pointer]
+    - generic [ref=e6]:
+      - generic "Storage healthy" [ref=e194]:
+        - generic [ref=e196]: Storage healthy
+      - button "Administrator" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Administrator
+        - img [ref=e10]
+  - generic [ref=e12]:
+    - navigation "Workspace navigation" [ref=e13]:
+      - generic [ref=e14]:
+        - button "New page" [ref=e15] [cursor=pointer]:
+          - img [ref=e16]
+          - generic [ref=e19]: New page
+        - button "New folder" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e23]: New folder
+      - list "Pages" [ref=e25]:
+        - listitem [ref=e26]:
+          - generic [ref=e27]:
+            - button "Collapse architecture" [expanded] [ref=e28] [cursor=pointer]:
+              - img [ref=e29]
+            - img [ref=e31]
+            - generic [ref=e33]: architecture
+          - list [ref=e34]:
+            - listitem [ref=e35]:
+              - button "Architecture" [ref=e36] [cursor=pointer]:
+                - img [ref=e37]
+                - generic [ref=e40]: Architecture
+        - listitem [ref=e41]:
+          - generic [ref=e42]:
+            - button "Collapse decisions" [expanded] [ref=e43] [cursor=pointer]:
+              - img [ref=e44]
+            - img [ref=e46]
+            - generic [ref=e48]: decisions
+          - list [ref=e49]:
+            - listitem [ref=e50]:
+              - button "Decisions" [ref=e51] [cursor=pointer]:
+                - img [ref=e52]
+                - generic [ref=e55]: Decisions
+        - listitem [ref=e56]:
+          - generic [ref=e57]:
+            - button "Collapse docs" [expanded] [ref=e58] [cursor=pointer]:
+              - img [ref=e59]
+            - img [ref=e61]
+            - generic [ref=e63]: docs
+          - list [ref=e64]:
+            - listitem [ref=e65]:
+              - button "docs" [ref=e66] [cursor=pointer]:
+                - img [ref=e67]
+                - generic [ref=e70]: docs
+            - listitem [ref=e71]:
+              - button "Guide" [ref=e72] [cursor=pointer]:
+                - img [ref=e73]
+                - generic [ref=e76]: Guide
+            - listitem [ref=e77]:
+              - button "Setup" [ref=e78] [cursor=pointer]:
+                - img [ref=e79]
+                - generic [ref=e82]: Setup
+        - listitem [ref=e83]:
+          - generic [ref=e84]:
+            - button "Collapse runbooks" [expanded] [ref=e85] [cursor=pointer]:
+              - img [ref=e86]
+            - img [ref=e88]
+            - generic [ref=e90]: runbooks
+          - list [ref=e91]:
+            - listitem [ref=e92]:
+              - button "Deploy" [ref=e93] [cursor=pointer]:
+                - img [ref=e94]
+                - generic [ref=e97]: Deploy
+            - listitem [ref=e98]:
+              - button "runbooks" [ref=e99] [cursor=pointer]:
+                - img [ref=e100]
+                - generic [ref=e103]: runbooks
+        - listitem [ref=e104]:
+          - button "Alpha" [ref=e105] [cursor=pointer]:
+            - img [ref=e106]
+            - generic [ref=e109]: Alpha
+        - listitem [ref=e110]:
+          - button "Beta" [ref=e111] [cursor=pointer]:
+            - img [ref=e112]
+            - generic [ref=e115]: Beta
+        - listitem [ref=e116]:
+          - button "Note" [ref=e117] [cursor=pointer]:
+            - img [ref=e118]
+            - generic [ref=e121]: Note
+        - listitem [ref=e122]:
+          - button "Note" [ref=e123] [cursor=pointer]:
+            - img [ref=e124]
+            - generic [ref=e127]: Note
+        - listitem [ref=e128]:
+          - button "RevTest" [ref=e129] [cursor=pointer]:
+            - img [ref=e130]
+            - generic [ref=e133]: RevTest
+        - listitem [ref=e134]:
+          - button "Welcome to your workspace" [ref=e135] [cursor=pointer]:
+            - img [ref=e136]
+            - generic [ref=e139]: Welcome to your workspace
+      - generic [ref=e141]:
+        - generic [ref=e142]: Recent
+        - list [ref=e143]:
+          - listitem [ref=e197]:
+            - button "Alpha" [ref=e198] [cursor=pointer]:
+              - img [ref=e199]
+              - generic [ref=e202]: Alpha
+          - listitem [ref=e144]:
+            - button "Guide" [ref=e145] [cursor=pointer]:
+              - img [ref=e146]
+              - generic [ref=e149]: Guide
+          - listitem [ref=e150]:
+            - button "Setup" [ref=e151] [cursor=pointer]:
+              - img [ref=e152]
+              - generic [ref=e155]: Setup
+          - listitem [ref=e156]:
+            - button "Deploy" [ref=e157] [cursor=pointer]:
+              - img [ref=e158]
+              - generic [ref=e161]: Deploy
+      - button "Trash" [ref=e163] [cursor=pointer]:
+        - img [ref=e164]
+        - generic [ref=e167]: Trash
+      - button "Admin" [ref=e169] [cursor=pointer]:
+        - img [ref=e170]
+        - generic [ref=e172]: Admin
+    - main [ref=e173]:
+      - article [ref=e175]:
+        - generic [ref=e176]:
+          - heading "Alpha" [level=1] [ref=e177]
+          - generic [ref=e178]:
+            - button "Edit page" [ref=e179] [cursor=pointer]:
+              - img [ref=e180]
+              - generic [ref=e183]: Edit page
+            - button "Page actions" [ref=e185] [cursor=pointer]:
+              - img [ref=e186]
+        - generic [ref=e190]:
+          - heading "Alpha" [level=1] [ref=e191]
+          - paragraph [ref=e192]:
+            - text: See
+            - link "the Beta page" [ref=e193] [cursor=pointer]:
+              - /url: /app/page/bravo.md
+            - text: for details.
+        - dialog "Version history" [ref=e230]:
+          - heading "Version history" [level=2] [ref=e231]
+          - list [ref=e233]:
+            - listitem [ref=e234]:
+              - generic [ref=e235]: Renamed by admin · 1 minute ago
+              - generic [ref=e236]:
+                - button "View this version" [ref=e237] [cursor=pointer]
+                - button "Restore this version" [ref=e238] [cursor=pointer]
+            - listitem [ref=e239]:
+              - generic [ref=e240]: Edited by admin · 1 minute ago
+              - generic [ref=e241]:
+                - button "View this version" [ref=e242] [cursor=pointer]
+                - button "Restore this version" [ref=e243] [cursor=pointer]
+            - listitem [ref=e244]:
+              - generic [ref=e245]: Created by admin · 1 minute ago
+              - generic [ref=e246]:
+                - button "View this version" [ref=e247] [cursor=pointer]
+                - button "Restore this version" [ref=e248] [cursor=pointer]

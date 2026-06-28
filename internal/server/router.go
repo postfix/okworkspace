@@ -206,6 +206,9 @@ func New(deps Deps) (http.Handler, error) {
 			// consequential editor+CSRF write (registered in the editor subgroup
 			// below). NEITHER is an Eino tool — the read-only 5-tool boundary is
 			// unchanged (AGNT-11).
+			// Tag vocabulary for autocomplete (v1.3 / TM-04) — any-authed read.
+			// Returns the sorted distinct tag list from the derived graph cache.
+			authed.Get("/tags/vocabulary", h.handleTagVocabulary)
 			authed.Post("/agent/suggest-tags", h.handleSuggestTags)
 
 			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin

@@ -14,6 +14,7 @@ import {
   type Page,
 } from "../api/client";
 import { readField, setField } from "../lib/frontmatter";
+import { readTags, setTags } from "../lib/tag-frontmatter";
 import { getConnId } from "../lib/connId";
 import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
 import DiffReviewDialog, {
@@ -25,7 +26,7 @@ import LivePreviewEditor from "../components/LivePreviewEditor";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
-import TagSuggest from "../components/TagSuggest";
+import InlineTagEditor from "../components/InlineTagEditor";
 import { TagManageLink } from "../components/admin/TagManagement";
 import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
@@ -639,10 +640,18 @@ export default function PageEditor() {
             onChange={(e) => onFieldChange("description", e.target.value)}
           />
         </div>
-        {/* TAG-01/TAG-02: the on-demand "Suggest tags" trust surface. */}
-        <TagSuggest pagePath={path} />
-        {/* TM-04: workspace-wide tag management — accessible where users
-            actually work with tags. Opens a dialog with rename/merge/delete. */}
+        <InlineTagEditor
+          pagePath={path}
+          tags={readTags(frontmatter)}
+          onTagsChange={(newTags) => {
+            setFrontmatter((fm) => {
+              const next = setTags(fm, newTags);
+              frontmatterRef.current = next;
+              return next;
+            });
+            setSaveState("idle");
+          }}
+        />
         <TagManageLink />
       </div>
 

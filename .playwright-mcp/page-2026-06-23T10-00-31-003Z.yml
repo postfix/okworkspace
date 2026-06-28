@@ -1,0 +1,146 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - button "Hide file tree" [pressed] [ref=e317] [cursor=pointer]:
+      - img [ref=e318]
+    - generic [ref=e10]:
+      - generic "Storage healthy" [ref=e11]:
+        - generic [ref=e13]: Storage healthy
+      - button "Search workspace (⌘K)" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+        - generic [ref=e18]: Search
+        - generic [ref=e19]: ⌘K
+      - button "Show assistant" [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+        - generic [ref=e23]: Assistant
+      - button "Administrator" [ref=e25] [cursor=pointer]:
+        - generic [ref=e26]: Administrator
+        - img [ref=e27]
+  - generic [ref=e29]:
+    - navigation "Workspace navigation" [ref=e321]:
+      - generic [ref=e322]:
+        - button "New page" [ref=e323] [cursor=pointer]:
+          - img [ref=e324]
+        - button "New folder" [ref=e327] [cursor=pointer]:
+          - img [ref=e328]
+        - button "Collapse all folders" [active] [ref=e330] [cursor=pointer]:
+          - img [ref=e331]
+      - list "Pages" [ref=e335]:
+        - listitem [ref=e336]:
+          - generic [ref=e337]:
+            - button "Expand dewdewd" [ref=e561] [cursor=pointer]:
+              - img [ref=e562]
+            - img [ref=e341]
+            - generic [ref=e343]: dewdewd
+        - listitem [ref=e374]:
+          - generic [ref=e375]:
+            - button "Expand my-new-work-space" [ref=e564] [cursor=pointer]:
+              - img [ref=e565]
+            - img [ref=e379]
+            - generic [ref=e381]: my-new-work-space
+        - listitem [ref=e395]:
+          - generic [ref=e396]:
+            - button "Expand my-workspace" [ref=e567] [cursor=pointer]:
+              - img [ref=e568]
+            - img [ref=e400]
+            - generic [ref=e402]: my-workspace
+        - listitem [ref=e410]:
+          - generic [ref=e411]:
+            - button "Expand mynew-workspace" [ref=e570] [cursor=pointer]:
+              - img [ref=e571]
+            - img [ref=e415]
+            - generic [ref=e417]: mynew-workspace
+        - listitem [ref=e425]:
+          - generic [ref=e426]:
+            - button "Expand mynewworkspace" [ref=e573] [cursor=pointer]:
+              - img [ref=e574]
+            - img [ref=e430]
+            - generic [ref=e432]: mynewworkspace
+        - listitem [ref=e440]:
+          - generic [ref=e441]:
+            - button "Expand runbooks" [ref=e576] [cursor=pointer]:
+              - img [ref=e577]
+            - img [ref=e445]
+            - generic [ref=e447]: runbooks
+        - listitem [ref=e461]:
+          - generic [ref=e462]:
+            - button "Expand test" [ref=e579] [cursor=pointer]:
+              - img [ref=e580]
+            - img [ref=e466]
+            - generic [ref=e468]: test
+        - listitem [ref=e476]:
+          - generic [ref=e477]:
+            - button "Expand wedfwedwedwed" [ref=e582] [cursor=pointer]:
+              - img [ref=e583]
+            - img [ref=e481]
+            - generic [ref=e483]: wedfwedwedwed
+        - listitem [ref=e491]:
+          - generic [ref=e492]:
+            - button "Expand zphase7" [ref=e585] [cursor=pointer]:
+              - img [ref=e586]
+            - img [ref=e496]
+            - generic [ref=e498]: zphase7
+        - listitem [ref=e499]:
+          - generic [ref=e500]:
+            - button "Expand zphase7renamed" [ref=e588] [cursor=pointer]:
+              - img [ref=e589]
+            - img [ref=e504]
+            - generic [ref=e506]: zphase7renamed
+        - listitem [ref=e514]:
+          - button "Deploy" [ref=e515] [cursor=pointer]:
+            - img [ref=e516]
+            - generic [ref=e519]: Deploy
+        - listitem [ref=e520]:
+          - button "Phase 6 Live Preview Check" [ref=e521] [cursor=pointer]:
+            - img [ref=e522]
+            - generic [ref=e525]: Phase 6 Live Preview Check
+      - generic [ref=e527]:
+        - generic [ref=e528]: Recent
+        - list [ref=e529]:
+          - listitem [ref=e530]:
+            - button "Deploy" [ref=e531] [cursor=pointer]:
+              - img [ref=e532]
+              - generic [ref=e535]: Deploy
+          - listitem [ref=e536]:
+            - button "My new work space" [ref=e537] [cursor=pointer]:
+              - img [ref=e538]
+              - generic [ref=e541]: My new work space
+          - listitem [ref=e542]:
+            - button "test3" [ref=e543] [cursor=pointer]:
+              - img [ref=e544]
+              - generic [ref=e547]: test3
+      - button "Trash" [ref=e549] [cursor=pointer]:
+        - img [ref=e550]
+        - generic [ref=e553]: Trash
+      - button "Admin" [ref=e555] [cursor=pointer]:
+        - img [ref=e556]
+        - generic [ref=e558]: Admin
+    - separator "Resize sidebar" [ref=e559]
+    - main [ref=e270]:
+      - article [ref=e271]:
+        - generic [ref=e272]:
+          - heading "Deploy" [level=1] [ref=e273]
+          - generic [ref=e274]:
+            - button "Edit page" [ref=e275] [cursor=pointer]:
+              - img [ref=e276]
+              - generic [ref=e279]: Edit page
+            - button "Page actions" [ref=e281] [cursor=pointer]:
+              - img [ref=e282]
+        - textbox [ref=e289]:
+          - generic [ref=e290]: "## Hello"
+          - generic [ref=e292]: Deployment checklist
+          - generic [ref=e294]: "- build the binary"
+          - generic [ref=e295]: "- run the tests"
+          - generic [ref=e296]: "- deploy to the server"
+        - region "Attachments" [ref=e297]:
+          - generic [ref=e298]:
+            - heading "Attachments" [level=2] [ref=e299]
+            - button "Add files" [ref=e300] [cursor=pointer]
+          - generic [ref=e303] [cursor=pointer]:
+            - button "Choose File" [ref=e304]
+            - img [ref=e305]
+            - generic [ref=e308]:
+              - generic [ref=e309]: Drop a file here or click to browse
+              - generic [ref=e310]: Up to 100 MB · pdf, docx, txt, png, jpg, svg
+          - generic [ref=e311]:
+            - paragraph [ref=e312]: No attachments yet
+            - paragraph [ref=e313]: Drop a file above to attach it to this page.

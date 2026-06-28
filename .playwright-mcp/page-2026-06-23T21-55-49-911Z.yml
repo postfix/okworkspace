@@ -1,0 +1,734 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "Hide file tree" [pressed] [ref=e6] [cursor=pointer]:
+      - img [ref=e7]
+    - button "Search workspace (⌘K)" [ref=e10]:
+      - img [ref=e11]
+      - generic [ref=e14]: Search
+      - generic [ref=e15]: ⌘K
+    - generic [ref=e16]:
+      - generic "Storage healthy" [ref=e17]:
+        - generic [ref=e19]: Storage healthy
+      - button "Hide assistant" [pressed] [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+        - generic [ref=e24]: Assistant
+      - button "Administrator" [ref=e26] [cursor=pointer]:
+        - generic [ref=e27]: Administrator
+        - img [ref=e28]
+  - generic [ref=e30]:
+    - navigation "Workspace navigation" [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - button "New page" [ref=e34] [cursor=pointer]:
+            - img [ref=e35]
+          - button "New folder" [ref=e38] [cursor=pointer]:
+            - img [ref=e39]
+          - button "Collapse all folders" [ref=e41] [cursor=pointer]:
+            - img [ref=e42]
+        - generic [ref=e45]:
+          - img [ref=e46]
+          - textbox "Filter files" [ref=e49]:
+            - /placeholder: Filter files…
+      - generic [ref=e50]:
+        - list "Pages" [ref=e52]:
+          - listitem [ref=e53]:
+            - generic [ref=e54]:
+              - button "Collapse dewdewd" [expanded] [ref=e55] [cursor=pointer]:
+                - img [ref=e56]
+              - img [ref=e58]
+              - generic [ref=e60]: dewdewd
+            - list [ref=e61]:
+              - listitem [ref=e62]:
+                - generic [ref=e63]:
+                  - button "Collapse 1" [expanded] [ref=e64] [cursor=pointer]:
+                    - img [ref=e65]
+                  - img [ref=e67]
+                  - generic [ref=e69]: "1"
+                - list [ref=e70]:
+                  - listitem [ref=e71]:
+                    - generic [ref=e72]:
+                      - button "Collapse 2" [expanded] [ref=e73] [cursor=pointer]:
+                        - img [ref=e74]
+                      - img [ref=e76]
+                      - generic [ref=e78]: "2"
+                  - listitem [ref=e79]:
+                    - button "1" [ref=e80] [cursor=pointer]:
+                      - img [ref=e81]
+                      - generic [ref=e84]: "1"
+                  - listitem [ref=e85]:
+                    - button "2" [ref=e86] [cursor=pointer]:
+                      - img [ref=e87]
+                      - generic [ref=e90]: "2"
+          - listitem [ref=e91]:
+            - generic [ref=e92]:
+              - button "Collapse my-new-work-space" [expanded] [ref=e93] [cursor=pointer]:
+                - img [ref=e94]
+              - img [ref=e96]
+              - generic [ref=e98]: my-new-work-space
+            - list [ref=e99]:
+              - listitem [ref=e100]:
+                - button "My new work space" [ref=e101] [cursor=pointer]:
+                  - img [ref=e102]
+                  - generic [ref=e105]: My new work space
+              - listitem [ref=e106]:
+                - button "test3" [ref=e107] [cursor=pointer]:
+                  - img [ref=e108]
+                  - generic [ref=e111]: test3
+          - listitem [ref=e112]:
+            - generic [ref=e113]:
+              - button "Collapse my-workspace" [expanded] [ref=e114] [cursor=pointer]:
+                - img [ref=e115]
+              - img [ref=e117]
+              - generic [ref=e119]: my-workspace
+            - list [ref=e120]:
+              - listitem [ref=e121]:
+                - button "My workspace" [ref=e122] [cursor=pointer]:
+                  - img [ref=e123]
+                  - generic [ref=e126]: My workspace
+          - listitem [ref=e127]:
+            - generic [ref=e128]:
+              - button "Collapse mynew-workspace" [expanded] [ref=e129] [cursor=pointer]:
+                - img [ref=e130]
+              - img [ref=e132]
+              - generic [ref=e134]: mynew-workspace
+            - list [ref=e135]:
+              - listitem [ref=e136]:
+                - button "Mynew workspace" [ref=e137] [cursor=pointer]:
+                  - img [ref=e138]
+                  - generic [ref=e141]: Mynew workspace
+          - listitem [ref=e142]:
+            - generic [ref=e143]:
+              - button "Collapse mynewworkspace" [expanded] [ref=e144] [cursor=pointer]:
+                - img [ref=e145]
+              - img [ref=e147]
+              - generic [ref=e149]: mynewworkspace
+            - list [ref=e150]:
+              - listitem [ref=e151]:
+                - button "Mynewworkspace" [ref=e152] [cursor=pointer]:
+                  - img [ref=e153]
+                  - generic [ref=e156]: Mynewworkspace
+          - listitem [ref=e157]:
+            - generic [ref=e158]:
+              - button "Collapse r6src" [expanded] [ref=e159] [cursor=pointer]:
+                - img [ref=e160]
+              - img [ref=e162]
+              - generic [ref=e164]: r6src
+            - list [ref=e165]:
+              - listitem [ref=e166]:
+                - button "r6 inner" [ref=e167] [cursor=pointer]:
+                  - img [ref=e168]
+                  - generic [ref=e171]: r6 inner
+              - listitem [ref=e172]:
+                - button "r6src" [ref=e173] [cursor=pointer]:
+                  - img [ref=e174]
+                  - generic [ref=e177]: r6src
+          - listitem [ref=e178]:
+            - generic [ref=e179]:
+              - button "Collapse rstress" [expanded] [ref=e180] [cursor=pointer]:
+                - img [ref=e181]
+              - img [ref=e183]
+              - generic [ref=e185]: rstress
+            - list [ref=e186]:
+              - listitem [ref=e187]:
+                - generic [ref=e188]:
+                  - button "Collapse r5dest" [expanded] [ref=e189] [cursor=pointer]:
+                    - img [ref=e190]
+                  - img [ref=e192]
+                  - generic [ref=e194]: r5dest
+              - listitem [ref=e195]:
+                - generic [ref=e196]:
+                  - button "Collapse r6renamed" [expanded] [ref=e197] [cursor=pointer]:
+                    - img [ref=e198]
+                  - img [ref=e200]
+                  - generic [ref=e202]: r6renamed
+                - list [ref=e203]:
+                  - listitem [ref=e204]:
+                    - button "r6 inner" [ref=e205] [cursor=pointer]:
+                      - img [ref=e206]
+                      - generic [ref=e209]: r6 inner
+                  - listitem [ref=e210]:
+                    - button "r6src" [ref=e211] [cursor=pointer]:
+                      - img [ref=e212]
+                      - generic [ref=e215]: r6src
+              - listitem [ref=e216]:
+                - generic [ref=e217]:
+                  - button "Collapse r6src" [expanded] [ref=e218] [cursor=pointer]:
+                    - img [ref=e219]
+                  - img [ref=e221]
+                  - generic [ref=e223]: r6src
+                - list [ref=e224]:
+                  - listitem [ref=e225]:
+                    - button "r6 inner" [ref=e226] [cursor=pointer]:
+                      - img [ref=e227]
+                      - generic [ref=e230]: r6 inner
+                  - listitem [ref=e231]:
+                    - button "r6 inner" [ref=e232] [cursor=pointer]:
+                      - img [ref=e233]
+                      - generic [ref=e236]: r6 inner
+                  - listitem [ref=e237]:
+                    - button "r6src" [ref=e238] [cursor=pointer]:
+                      - img [ref=e239]
+                      - generic [ref=e242]: r6src
+              - listitem [ref=e243]:
+                - button "r1 orig" [ref=e244] [cursor=pointer]:
+                  - img [ref=e245]
+                  - generic [ref=e248]: r1 orig
+              - listitem [ref=e249]:
+                - button "r1 orig" [ref=e250] [cursor=pointer]:
+                  - img [ref=e251]
+                  - generic [ref=e254]: r1 orig
+              - listitem [ref=e255]:
+                - button "r1 orig" [ref=e256] [cursor=pointer]:
+                  - img [ref=e257]
+                  - generic [ref=e260]: r1 orig
+              - listitem [ref=e261]:
+                - button "r1 orig" [ref=e262] [cursor=pointer]:
+                  - img [ref=e263]
+                  - generic [ref=e266]: r1 orig
+              - listitem [ref=e267]:
+                - button "r1 orig" [ref=e268] [cursor=pointer]:
+                  - img [ref=e269]
+                  - generic [ref=e272]: r1 orig
+              - listitem [ref=e273]:
+                - button "r2 one" [ref=e274] [cursor=pointer]:
+                  - img [ref=e275]
+                  - generic [ref=e278]: r2 one
+              - listitem [ref=e279]:
+                - button "r2 one" [ref=e280] [cursor=pointer]:
+                  - img [ref=e281]
+                  - generic [ref=e284]: r2 one
+              - listitem [ref=e285]:
+                - button "r2 two" [ref=e286] [cursor=pointer]:
+                  - img [ref=e287]
+                  - generic [ref=e290]: r2 two
+              - listitem [ref=e291]:
+                - button "r2 two" [ref=e292] [cursor=pointer]:
+                  - img [ref=e293]
+                  - generic [ref=e296]: r2 two
+              - listitem [ref=e297]:
+                - button "r2 two" [ref=e298] [cursor=pointer]:
+                  - img [ref=e299]
+                  - generic [ref=e302]: r2 two
+              - listitem [ref=e303]:
+                - button "r4 contested" [ref=e304] [cursor=pointer]:
+                  - img [ref=e305]
+                  - generic [ref=e308]: r4 contested
+              - listitem [ref=e309]:
+                - button "r4 contested" [ref=e310] [cursor=pointer]:
+                  - img [ref=e311]
+                  - generic [ref=e314]: r4 contested
+              - listitem [ref=e315]:
+                - button "r7 restoreme" [ref=e316] [cursor=pointer]:
+                  - img [ref=e317]
+                  - generic [ref=e320]: r7 restoreme
+              - listitem [ref=e321]:
+                - button "r7 restoreme" [ref=e322] [cursor=pointer]:
+                  - img [ref=e323]
+                  - generic [ref=e326]: r7 restoreme
+              - listitem [ref=e327]:
+                - button "r7 restoreme" [ref=e328] [cursor=pointer]:
+                  - img [ref=e329]
+                  - generic [ref=e332]: r7 restoreme
+              - listitem [ref=e333]:
+                - button "rstress" [ref=e334] [cursor=pointer]:
+                  - img [ref=e335]
+                  - generic [ref=e338]: rstress
+          - listitem [ref=e339]:
+            - generic [ref=e340]:
+              - button "Collapse runbooks" [expanded] [ref=e341] [cursor=pointer]:
+                - img [ref=e342]
+              - img [ref=e344]
+              - generic [ref=e346]: runbooks
+            - list [ref=e347]:
+              - listitem [ref=e348]:
+                - button "dewdwe" [ref=e349] [cursor=pointer]:
+                  - img [ref=e350]
+                  - generic [ref=e353]: dewdwe
+              - listitem [ref=e354]:
+                - button "new" [ref=e355] [cursor=pointer]:
+                  - img [ref=e356]
+                  - generic [ref=e359]: new
+          - listitem [ref=e360]:
+            - generic [ref=e361]:
+              - button "Collapse s6sub" [expanded] [ref=e362] [cursor=pointer]:
+                - img [ref=e363]
+              - img [ref=e365]
+              - generic [ref=e367]: s6sub
+            - list [ref=e368]:
+              - listitem [ref=e369]:
+                - button "s6 inner" [ref=e370] [cursor=pointer]:
+                  - img [ref=e371]
+                  - generic [ref=e374]: s6 inner
+              - listitem [ref=e375]:
+                - button "s6sub" [ref=e376] [cursor=pointer]:
+                  - img [ref=e377]
+                  - generic [ref=e380]: s6sub
+          - listitem [ref=e381]:
+            - generic [ref=e382]:
+              - button "Collapse stress" [expanded] [ref=e383] [cursor=pointer]:
+                - img [ref=e384]
+              - img [ref=e386]
+              - generic [ref=e388]: stress
+            - list [ref=e389]:
+              - listitem [ref=e390]:
+                - generic [ref=e391]:
+                  - button "Collapse s6sub" [expanded] [ref=e392] [cursor=pointer]:
+                    - img [ref=e393]
+                  - img [ref=e395]
+                  - generic [ref=e397]: s6sub
+                - list [ref=e398]:
+                  - listitem [ref=e399]:
+                    - button "s6 inner" [ref=e400] [cursor=pointer]:
+                      - img [ref=e401]
+                      - generic [ref=e404]: s6 inner
+                  - listitem [ref=e405]:
+                    - button "s6 inner" [ref=e406] [cursor=pointer]:
+                      - img [ref=e407]
+                      - generic [ref=e410]: s6 inner
+                  - listitem [ref=e411]:
+                    - button "s6 inner" [ref=e412] [cursor=pointer]:
+                      - img [ref=e413]
+                      - generic [ref=e416]: s6 inner
+                  - listitem [ref=e417]:
+                    - button "s6sub" [ref=e418] [cursor=pointer]:
+                      - img [ref=e419]
+                      - generic [ref=e422]: s6sub
+              - listitem [ref=e423]:
+                - button "admin new 3" [ref=e424] [cursor=pointer]:
+                  - img [ref=e425]
+                  - generic [ref=e428]: admin new 3
+              - listitem [ref=e429]:
+                - button "admin new 4" [ref=e430] [cursor=pointer]:
+                  - img [ref=e431]
+                  - generic [ref=e434]: admin new 4
+              - listitem [ref=e435]:
+                - button "alice new 0" [ref=e436] [cursor=pointer]:
+                  - img [ref=e437]
+                  - generic [ref=e440]: alice new 0
+              - listitem [ref=e441]:
+                - button "alice new 2" [ref=e442] [cursor=pointer]:
+                  - img [ref=e443]
+                  - generic [ref=e446]: alice new 2
+              - listitem [ref=e447]:
+                - button "alice new 4" [ref=e448] [cursor=pointer]:
+                  - img [ref=e449]
+                  - generic [ref=e452]: alice new 4
+              - listitem [ref=e453]:
+                - button "bob new 0" [ref=e454] [cursor=pointer]:
+                  - img [ref=e455]
+                  - generic [ref=e458]: bob new 0
+              - listitem [ref=e459]:
+                - button "bob new 0" [ref=e460] [cursor=pointer]:
+                  - img [ref=e461]
+                  - generic [ref=e464]: bob new 0
+              - listitem [ref=e465]:
+                - button "bob new 3" [ref=e466] [cursor=pointer]:
+                  - img [ref=e467]
+                  - generic [ref=e470]: bob new 3
+              - listitem [ref=e471]:
+                - button "carol new 0" [ref=e472] [cursor=pointer]:
+                  - img [ref=e473]
+                  - generic [ref=e476]: carol new 0
+              - listitem [ref=e477]:
+                - button "carol new 4" [ref=e478] [cursor=pointer]:
+                  - img [ref=e479]
+                  - generic [ref=e482]: carol new 4
+              - listitem [ref=e483]:
+                - button "dave new 0" [ref=e484] [cursor=pointer]:
+                  - img [ref=e485]
+                  - generic [ref=e488]: dave new 0
+              - listitem [ref=e489]:
+                - button "dave new 1" [ref=e490] [cursor=pointer]:
+                  - img [ref=e491]
+                  - generic [ref=e494]: dave new 1
+              - listitem [ref=e495]:
+                - button "dave new 2" [ref=e496] [cursor=pointer]:
+                  - img [ref=e497]
+                  - generic [ref=e500]: dave new 2
+              - listitem [ref=e501]:
+                - button "dave new 3" [ref=e502] [cursor=pointer]:
+                  - img [ref=e503]
+                  - generic [ref=e506]: dave new 3
+              - listitem [ref=e507]:
+                - button "dave new 4" [ref=e508] [cursor=pointer]:
+                  - img [ref=e509]
+                  - generic [ref=e512]: dave new 4
+              - listitem [ref=e513]:
+                - button "ed new 2" [ref=e514] [cursor=pointer]:
+                  - img [ref=e515]
+                  - generic [ref=e518]: ed new 2
+              - listitem [ref=e519]:
+                - button "repro dup 1" [ref=e520] [cursor=pointer]:
+                  - img [ref=e521]
+                  - generic [ref=e524]: repro dup 1
+              - listitem [ref=e525]:
+                - button "repro dup 1" [ref=e526] [cursor=pointer]:
+                  - img [ref=e527]
+                  - generic [ref=e530]: repro dup 1
+              - listitem [ref=e531]:
+                - button "repro dup 1" [ref=e532] [cursor=pointer]:
+                  - img [ref=e533]
+                  - generic [ref=e536]: repro dup 1
+              - listitem [ref=e537]:
+                - button "repro dup 1" [ref=e538] [cursor=pointer]:
+                  - img [ref=e539]
+                  - generic [ref=e542]: repro dup 1
+              - listitem [ref=e543]:
+                - button "repro dup 1" [ref=e544] [cursor=pointer]:
+                  - img [ref=e545]
+                  - generic [ref=e548]: repro dup 1
+              - listitem [ref=e549]:
+                - button "repro dup 2" [ref=e550] [cursor=pointer]:
+                  - img [ref=e551]
+                  - generic [ref=e554]: repro dup 2
+              - listitem [ref=e555]:
+                - button "repro dup 2" [ref=e556] [cursor=pointer]:
+                  - img [ref=e557]
+                  - generic [ref=e560]: repro dup 2
+              - listitem [ref=e561]:
+                - button "repro dup 2" [ref=e562] [cursor=pointer]:
+                  - img [ref=e563]
+                  - generic [ref=e566]: repro dup 2
+              - listitem [ref=e567]:
+                - button "repro dup 2" [ref=e568] [cursor=pointer]:
+                  - img [ref=e569]
+                  - generic [ref=e572]: repro dup 2
+              - listitem [ref=e573]:
+                - button "repro dup 2" [ref=e574] [cursor=pointer]:
+                  - img [ref=e575]
+                  - generic [ref=e578]: repro dup 2
+              - listitem [ref=e579]:
+                - button "repro dup 3" [ref=e580] [cursor=pointer]:
+                  - img [ref=e581]
+                  - generic [ref=e584]: repro dup 3
+              - listitem [ref=e585]:
+                - button "repro dup 3" [ref=e586] [cursor=pointer]:
+                  - img [ref=e587]
+                  - generic [ref=e590]: repro dup 3
+              - listitem [ref=e591]:
+                - button "repro dup 3" [ref=e592] [cursor=pointer]:
+                  - img [ref=e593]
+                  - generic [ref=e596]: repro dup 3
+              - listitem [ref=e597]:
+                - button "repro dup 3" [ref=e598] [cursor=pointer]:
+                  - img [ref=e599]
+                  - generic [ref=e602]: repro dup 3
+              - listitem [ref=e603]:
+                - button "repro dup 3" [ref=e604] [cursor=pointer]:
+                  - img [ref=e605]
+                  - generic [ref=e608]: repro dup 3
+              - listitem [ref=e609]:
+                - button "repro save 1" [ref=e610] [cursor=pointer]:
+                  - img [ref=e611]
+                  - generic [ref=e614]: repro save 1
+              - listitem [ref=e615]:
+                - button "repro save 1" [ref=e616] [cursor=pointer]:
+                  - img [ref=e617]
+                  - generic [ref=e620]: repro save 1
+              - listitem [ref=e621]:
+                - button "repro save 1" [ref=e622] [cursor=pointer]:
+                  - img [ref=e623]
+                  - generic [ref=e626]: repro save 1
+              - listitem [ref=e627]:
+                - button "repro save 2" [ref=e628] [cursor=pointer]:
+                  - img [ref=e629]
+                  - generic [ref=e632]: repro save 2
+              - listitem [ref=e633]:
+                - button "repro save 2" [ref=e634] [cursor=pointer]:
+                  - img [ref=e635]
+                  - generic [ref=e638]: repro save 2
+              - listitem [ref=e639]:
+                - button "repro save 2" [ref=e640] [cursor=pointer]:
+                  - img [ref=e641]
+                  - generic [ref=e644]: repro save 2
+              - listitem [ref=e645]:
+                - button "repro save 3" [ref=e646] [cursor=pointer]:
+                  - img [ref=e647]
+                  - generic [ref=e650]: repro save 3
+              - listitem [ref=e651]:
+                - button "repro save 3" [ref=e652] [cursor=pointer]:
+                  - img [ref=e653]
+                  - generic [ref=e656]: repro save 3
+              - listitem [ref=e657]:
+                - button "repro save 3" [ref=e658] [cursor=pointer]:
+                  - img [ref=e659]
+                  - generic [ref=e662]: repro save 3
+              - listitem [ref=e663]:
+                - button "s1 conflict" [ref=e664] [cursor=pointer]:
+                  - img [ref=e665]
+                  - generic [ref=e668]: s1 conflict
+              - listitem [ref=e669]:
+                - button "s1 conflict" [ref=e670] [cursor=pointer]:
+                  - img [ref=e671]
+                  - generic [ref=e674]: s1 conflict
+              - listitem [ref=e675]:
+                - button "s1 conflict" [ref=e676] [cursor=pointer]:
+                  - img [ref=e677]
+                  - generic [ref=e680]: s1 conflict
+              - listitem [ref=e681]:
+                - button "s2 editdelete" [ref=e682] [cursor=pointer]:
+                  - img [ref=e683]
+                  - generic [ref=e686]: s2 editdelete
+              - listitem [ref=e687]:
+                - button "s2 editdelete" [ref=e688] [cursor=pointer]:
+                  - img [ref=e689]
+                  - generic [ref=e692]: s2 editdelete
+              - listitem [ref=e693]:
+                - button "s2 editdelete" [ref=e694] [cursor=pointer]:
+                  - img [ref=e695]
+                  - generic [ref=e698]: s2 editdelete
+              - listitem [ref=e699]:
+                - button "s3 renamesave" [ref=e700] [cursor=pointer]:
+                  - img [ref=e701]
+                  - generic [ref=e704]: s3 renamesave
+              - listitem [ref=e705]:
+                - button "s3 renamesave" [ref=e706] [cursor=pointer]:
+                  - img [ref=e707]
+                  - generic [ref=e710]: s3 renamesave
+              - listitem [ref=e711]:
+                - button "s3 renamesave" [ref=e712] [cursor=pointer]:
+                  - img [ref=e713]
+                  - generic [ref=e716]: s3 renamesave
+              - listitem [ref=e717]:
+                - button "s4 doublerename" [ref=e718] [cursor=pointer]:
+                  - img [ref=e719]
+                  - generic [ref=e722]: s4 doublerename
+              - listitem [ref=e723]:
+                - button "s4 doublerename" [ref=e724] [cursor=pointer]:
+                  - img [ref=e725]
+                  - generic [ref=e728]: s4 doublerename
+              - listitem [ref=e729]:
+                - button "s4 doublerename" [ref=e730] [cursor=pointer]:
+                  - img [ref=e731]
+                  - generic [ref=e734]: s4 doublerename
+              - listitem [ref=e735]:
+                - button "s4 doublerename" [ref=e736] [cursor=pointer]:
+                  - img [ref=e737]
+                  - generic [ref=e740]: s4 doublerename
+              - listitem [ref=e741]:
+                - button "s4 doublerename" [ref=e742] [cursor=pointer]:
+                  - img [ref=e743]
+                  - generic [ref=e746]: s4 doublerename
+              - listitem [ref=e747]:
+                - button "s5 sametitle" [ref=e748] [cursor=pointer]:
+                  - img [ref=e749]
+                  - generic [ref=e752]: s5 sametitle
+              - listitem [ref=e753]:
+                - button "s5 sametitle" [ref=e754] [cursor=pointer]:
+                  - img [ref=e755]
+                  - generic [ref=e758]: s5 sametitle
+              - listitem [ref=e759]:
+                - button "s5 sametitle" [ref=e760] [cursor=pointer]:
+                  - img [ref=e761]
+                  - generic [ref=e764]: s5 sametitle
+              - listitem [ref=e765]:
+                - button "s5 sametitle" [ref=e766] [cursor=pointer]:
+                  - img [ref=e767]
+                  - generic [ref=e770]: s5 sametitle
+              - listitem [ref=e771]:
+                - button "s5 sametitle" [ref=e772] [cursor=pointer]:
+                  - img [ref=e773]
+                  - generic [ref=e776]: s5 sametitle
+              - listitem [ref=e777]:
+                - button "s7 copy of source" [ref=e778] [cursor=pointer]:
+                  - img [ref=e779]
+                  - generic [ref=e782]: s7 copy of source
+              - listitem [ref=e783]:
+                - button "s7 copy of source" [ref=e784] [cursor=pointer]:
+                  - img [ref=e785]
+                  - generic [ref=e788]: s7 copy of source
+              - listitem [ref=e789]:
+                - button "s7 copy of source" [ref=e790] [cursor=pointer]:
+                  - img [ref=e791]
+                  - generic [ref=e794]: s7 copy of source
+              - listitem [ref=e795]:
+                - button "storm 0" [ref=e796] [cursor=pointer]:
+                  - img [ref=e797]
+                  - generic [ref=e800]: storm 0
+              - listitem [ref=e801]:
+                - button "storm 0" [ref=e802] [cursor=pointer]:
+                  - img [ref=e803]
+                  - generic [ref=e806]: storm 0
+              - listitem [ref=e807]:
+                - button "storm 0" [ref=e808] [cursor=pointer]:
+                  - img [ref=e809]
+                  - generic [ref=e812]: storm 0
+              - listitem [ref=e813]:
+                - button "storm 0" [ref=e814] [cursor=pointer]:
+                  - img [ref=e815]
+                  - generic [ref=e818]: storm 0
+              - listitem [ref=e819]:
+                - button "storm 0" [ref=e820] [cursor=pointer]:
+                  - img [ref=e821]
+                  - generic [ref=e824]: storm 0
+              - listitem [ref=e825]:
+                - button "storm 1" [ref=e826] [cursor=pointer]:
+                  - img [ref=e827]
+                  - generic [ref=e830]: storm 1
+              - listitem [ref=e831]:
+                - button "storm 1" [ref=e832] [cursor=pointer]:
+                  - img [ref=e833]
+                  - generic [ref=e836]: storm 1
+              - listitem [ref=e837]:
+                - button "storm 1" [ref=e838] [cursor=pointer]:
+                  - img [ref=e839]
+                  - generic [ref=e842]: storm 1
+              - listitem [ref=e843]:
+                - button "storm 2" [ref=e844] [cursor=pointer]:
+                  - img [ref=e845]
+                  - generic [ref=e848]: storm 2
+              - listitem [ref=e849]:
+                - button "storm 2" [ref=e850] [cursor=pointer]:
+                  - img [ref=e851]
+                  - generic [ref=e854]: storm 2
+              - listitem [ref=e855]:
+                - button "storm 3" [ref=e856] [cursor=pointer]:
+                  - img [ref=e857]
+                  - generic [ref=e860]: storm 3
+              - listitem [ref=e861]:
+                - button "storm 3" [ref=e862] [cursor=pointer]:
+                  - img [ref=e863]
+                  - generic [ref=e866]: storm 3
+              - listitem [ref=e867]:
+                - button "storm 3" [ref=e868] [cursor=pointer]:
+                  - img [ref=e869]
+                  - generic [ref=e872]: storm 3
+              - listitem [ref=e873]:
+                - button "storm 3" [ref=e874] [cursor=pointer]:
+                  - img [ref=e875]
+                  - generic [ref=e878]: storm 3
+              - listitem [ref=e879]:
+                - button "storm 3" [ref=e880] [cursor=pointer]:
+                  - img [ref=e881]
+                  - generic [ref=e884]: storm 3
+              - listitem [ref=e885]:
+                - button "storm 4" [ref=e886] [cursor=pointer]:
+                  - img [ref=e887]
+                  - generic [ref=e890]: storm 4
+              - listitem [ref=e891]:
+                - button "storm 4" [ref=e892] [cursor=pointer]:
+                  - img [ref=e893]
+                  - generic [ref=e896]: storm 4
+              - listitem [ref=e897]:
+                - button "storm 5" [ref=e898] [cursor=pointer]:
+                  - img [ref=e899]
+                  - generic [ref=e902]: storm 5
+              - listitem [ref=e903]:
+                - button "storm 5" [ref=e904] [cursor=pointer]:
+                  - img [ref=e905]
+                  - generic [ref=e908]: storm 5
+              - listitem [ref=e909]:
+                - button "storm 5" [ref=e910] [cursor=pointer]:
+                  - img [ref=e911]
+                  - generic [ref=e914]: storm 5
+              - listitem [ref=e915]:
+                - button "stress" [ref=e916] [cursor=pointer]:
+                  - img [ref=e917]
+                  - generic [ref=e920]: stress
+          - listitem [ref=e921]:
+            - generic [ref=e922]:
+              - button "Collapse test" [expanded] [ref=e923] [cursor=pointer]:
+                - img [ref=e924]
+              - img [ref=e926]
+              - generic [ref=e928]: test
+            - list [ref=e929]:
+              - listitem [ref=e930]:
+                - button "test" [ref=e931] [cursor=pointer]:
+                  - img [ref=e932]
+                  - generic [ref=e935]: test
+          - listitem [ref=e936]:
+            - generic [ref=e937]:
+              - button "Collapse wedfwedwedwed" [expanded] [ref=e938] [cursor=pointer]:
+                - img [ref=e939]
+              - img [ref=e941]
+              - generic [ref=e943]: wedfwedwedwed
+            - list [ref=e944]:
+              - listitem [ref=e945]:
+                - button "wedfwedwedwed" [ref=e946] [cursor=pointer]:
+                  - img [ref=e947]
+                  - generic [ref=e950]: wedfwedwedwed
+          - listitem [ref=e951]:
+            - generic [ref=e952]:
+              - button "Collapse zphase7" [expanded] [ref=e953] [cursor=pointer]:
+                - img [ref=e954]
+              - img [ref=e956]
+              - generic [ref=e958]: zphase7
+          - listitem [ref=e959]:
+            - generic [ref=e960]:
+              - button "Collapse zphase7renamed" [expanded] [ref=e961] [cursor=pointer]:
+                - img [ref=e962]
+              - img [ref=e964]
+              - generic [ref=e966]: zphase7renamed
+            - list [ref=e967]:
+              - listitem [ref=e968]:
+                - button "zphase7" [ref=e969] [cursor=pointer]:
+                  - img [ref=e970]
+                  - generic [ref=e973]: zphase7
+          - listitem [ref=e974]:
+            - button "Deploy" [ref=e975] [cursor=pointer]:
+              - img [ref=e976]
+              - generic [ref=e979]: Deploy
+            - list [ref=e980]:
+              - listitem [ref=e981]:
+                - link "Black Hat Rust.pdf" [ref=e982] [cursor=pointer]:
+                  - /url: /api/v1/attachments/01KVTECYQT478HCPM1MFNKKGG2/download
+                  - img [ref=e983]
+                  - generic [ref=e986]: Black Hat Rust.pdf
+              - listitem [ref=e987]:
+                - link "okf-test-upload.txt" [ref=e988] [cursor=pointer]:
+                  - /url: /api/v1/attachments/01KVTDN6P5KEJT0KCEZ6T7580F/download
+                  - img [ref=e989]
+                  - generic [ref=e992]: okf-test-upload.txt
+          - listitem [ref=e993]:
+            - button "Phase 6 Live Preview Check" [ref=e994] [cursor=pointer]:
+              - img [ref=e995]
+              - generic [ref=e998]: Phase 6 Live Preview Check
+          - listitem [ref=e999]:
+            - button "UAT Collab P5 1782251673730" [ref=e1000] [cursor=pointer]:
+              - img [ref=e1001]
+              - generic [ref=e1004]: UAT Collab P5 1782251673730
+        - button "Trash" [ref=e1006] [cursor=pointer]:
+          - img [ref=e1007]
+          - generic [ref=e1010]: Trash
+        - generic [ref=e1011]:
+          - generic [ref=e1012]: Recent
+          - list [ref=e1013]:
+            - listitem [ref=e1014]:
+              - button "Deploy" [ref=e1015] [cursor=pointer]:
+                - img [ref=e1016]
+                - generic [ref=e1019]: Deploy
+            - listitem [ref=e1020]:
+              - button "My new work space" [ref=e1021] [cursor=pointer]:
+                - img [ref=e1022]
+                - generic [ref=e1025]: My new work space
+            - listitem [ref=e1026]:
+              - button "test3" [ref=e1027] [cursor=pointer]:
+                - img [ref=e1028]
+                - generic [ref=e1031]: test3
+      - button "Admin settings" [ref=e1033] [cursor=pointer]:
+        - img [ref=e1034]
+    - separator "Resize sidebar" [ref=e1037]
+    - main [ref=e1039]:
+      - generic [ref=e1040]:
+        - heading "Pick a page to get started" [level=1] [ref=e1041]
+        - paragraph [ref=e1042]: Choose a page from the left, or create a new one.
+    - separator "Resize assistant" [ref=e1043]
+    - complementary "Assistant" [ref=e1045]:
+      - generic [ref=e1046]:
+        - generic [ref=e1047]:
+          - heading "Assistant" [level=2] [ref=e1048]
+          - generic [ref=e1049]: Ask · Whole workspace
+        - button "Hide assistant" [ref=e1050] [cursor=pointer]:
+          - img [ref=e1051]
+      - generic [ref=e1055]:
+        - img [ref=e1056]
+        - heading "Ask the assistant anything" [level=3] [ref=e1058]
+        - paragraph [ref=e1059]: Type below and press Enter. Ask about this page or the whole workspace — or use a suggestion to summarize, draft, or propose an edit you approve.
+      - generic "Suggested actions" [ref=e1060]:
+        - button "Draft a page" [ref=e1061] [cursor=pointer]
+      - region "Assistant prompt" [ref=e1062]:
+        - textbox "Prompt" [ref=e1063]:
+          - /placeholder: Ask anything…
+        - generic [ref=e1064]:
+          - generic "Whole workspace" [ref=e1065]
+          - generic [ref=e1066]: Enter to send · Shift+Enter for a newline

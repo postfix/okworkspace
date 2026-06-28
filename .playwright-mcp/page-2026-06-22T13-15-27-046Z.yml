@@ -1,0 +1,213 @@
+- generic [ref=e29]:
+  - banner [ref=e30]:
+    - button "OKF Workspace" [ref=e31] [cursor=pointer]
+    - generic [ref=e32]:
+      - generic "Storage healthy" [ref=e33]:
+        - generic [ref=e35]: Storage healthy
+      - button "Search workspace (⌘K)" [ref=e36] [cursor=pointer]:
+        - img [ref=e37]
+        - generic [ref=e40]: Search
+        - generic [ref=e41]: ⌘K
+      - button "Hide assistant" [pressed] [ref=e42] [cursor=pointer]:
+        - img [ref=e43]
+        - generic [ref=e46]: Assistant
+      - button "Administrator" [ref=e48] [cursor=pointer]:
+        - generic [ref=e49]: Administrator
+        - img [ref=e50]
+  - generic [ref=e52]:
+    - navigation "Workspace navigation" [ref=e53]:
+      - generic [ref=e54]:
+        - button "New page" [ref=e55] [cursor=pointer]:
+          - img [ref=e56]
+          - generic [ref=e59]: New page
+        - button "New folder" [ref=e60] [cursor=pointer]:
+          - img [ref=e61]
+          - generic [ref=e63]: New folder
+      - list "Pages" [ref=e65]:
+        - listitem [ref=e66]:
+          - generic [ref=e67]:
+            - button "Collapse dewdewd" [expanded] [ref=e68] [cursor=pointer]:
+              - img [ref=e69]
+            - img [ref=e71]
+            - generic [ref=e73]: dewdewd
+          - list [ref=e74]:
+            - listitem [ref=e75]:
+              - generic [ref=e76]:
+                - button "Collapse 1" [expanded] [ref=e77] [cursor=pointer]:
+                  - img [ref=e78]
+                - img [ref=e80]
+                - generic [ref=e82]: "1"
+              - list [ref=e83]:
+                - listitem [ref=e84]:
+                  - generic [ref=e85]:
+                    - button "Collapse 2" [expanded] [ref=e86] [cursor=pointer]:
+                      - img [ref=e87]
+                    - img [ref=e89]
+                    - generic [ref=e91]: "2"
+                - listitem [ref=e92]:
+                  - button "1" [ref=e93] [cursor=pointer]:
+                    - img [ref=e94]
+                    - generic [ref=e97]: "1"
+                - listitem [ref=e98]:
+                  - button "2" [ref=e99] [cursor=pointer]:
+                    - img [ref=e100]
+                    - generic [ref=e103]: "2"
+        - listitem [ref=e104]:
+          - generic [ref=e105]:
+            - button "Collapse my-new-work-space" [expanded] [ref=e106] [cursor=pointer]:
+              - img [ref=e107]
+            - img [ref=e109]
+            - generic [ref=e111]: my-new-work-space
+          - list [ref=e112]:
+            - listitem [ref=e113]:
+              - button "My new work space" [ref=e114] [cursor=pointer]:
+                - img [ref=e115]
+                - generic [ref=e118]: My new work space
+        - listitem [ref=e119]:
+          - generic [ref=e120]:
+            - button "Collapse my-workspace" [expanded] [ref=e121] [cursor=pointer]:
+              - img [ref=e122]
+            - img [ref=e124]
+            - generic [ref=e126]: my-workspace
+          - list [ref=e127]:
+            - listitem [ref=e128]:
+              - button "My workspace" [ref=e129] [cursor=pointer]:
+                - img [ref=e130]
+                - generic [ref=e133]: My workspace
+        - listitem [ref=e134]:
+          - generic [ref=e135]:
+            - button "Collapse mynew-workspace" [expanded] [ref=e136] [cursor=pointer]:
+              - img [ref=e137]
+            - img [ref=e139]
+            - generic [ref=e141]: mynew-workspace
+          - list [ref=e142]:
+            - listitem [ref=e143]:
+              - button "Mynew workspace" [ref=e144] [cursor=pointer]:
+                - img [ref=e145]
+                - generic [ref=e148]: Mynew workspace
+        - listitem [ref=e149]:
+          - generic [ref=e150]:
+            - button "Collapse mynewworkspace" [expanded] [ref=e151] [cursor=pointer]:
+              - img [ref=e152]
+            - img [ref=e154]
+            - generic [ref=e156]: mynewworkspace
+          - list [ref=e157]:
+            - listitem [ref=e158]:
+              - button "Mynewworkspace" [ref=e159] [cursor=pointer]:
+                - img [ref=e160]
+                - generic [ref=e163]: Mynewworkspace
+        - listitem [ref=e164]:
+          - generic [ref=e165]:
+            - button "Collapse runbooks" [expanded] [ref=e166] [cursor=pointer]:
+              - img [ref=e167]
+            - img [ref=e169]
+            - generic [ref=e171]: runbooks
+          - list [ref=e172]:
+            - listitem [ref=e173]:
+              - button "dewdwe" [ref=e174] [cursor=pointer]:
+                - img [ref=e175]
+                - generic [ref=e178]: dewdwe
+            - listitem [ref=e179]:
+              - button "new" [ref=e180] [cursor=pointer]:
+                - img [ref=e181]
+                - generic [ref=e184]: new
+        - listitem [ref=e185]:
+          - generic [ref=e186]:
+            - button "Collapse test" [expanded] [ref=e187] [cursor=pointer]:
+              - img [ref=e188]
+            - img [ref=e190]
+            - generic [ref=e192]: test
+          - list [ref=e193]:
+            - listitem [ref=e194]:
+              - button "test" [ref=e195] [cursor=pointer]:
+                - img [ref=e196]
+                - generic [ref=e199]: test
+        - listitem [ref=e200]:
+          - generic [ref=e201]:
+            - button "Collapse wedfwedwedwed" [expanded] [ref=e202] [cursor=pointer]:
+              - img [ref=e203]
+            - img [ref=e205]
+            - generic [ref=e207]: wedfwedwedwed
+          - list [ref=e208]:
+            - listitem [ref=e209]:
+              - button "wedfwedwedwed" [ref=e210] [cursor=pointer]:
+                - img [ref=e211]
+                - generic [ref=e214]: wedfwedwedwed
+        - listitem [ref=e215]:
+          - generic [ref=e216]:
+            - button "Collapse zphase7" [expanded] [ref=e217] [cursor=pointer]:
+              - img [ref=e218]
+            - img [ref=e220]
+            - generic [ref=e222]: zphase7
+        - listitem [ref=e223]:
+          - generic [ref=e224]:
+            - button "Collapse zphase7renamed" [expanded] [ref=e225] [cursor=pointer]:
+              - img [ref=e226]
+            - img [ref=e228]
+            - generic [ref=e230]: zphase7renamed
+          - list [ref=e231]:
+            - listitem [ref=e232]:
+              - button "zphase7" [ref=e233] [cursor=pointer]:
+                - img [ref=e234]
+                - generic [ref=e237]: zphase7
+        - listitem [ref=e238]:
+          - button "Deploy" [ref=e239] [cursor=pointer]:
+            - img [ref=e240]
+            - generic [ref=e243]: Deploy
+        - listitem [ref=e244]:
+          - button "Phase 6 Live Preview Check" [ref=e245] [cursor=pointer]:
+            - img [ref=e246]
+            - generic [ref=e249]: Phase 6 Live Preview Check
+      - generic [ref=e251]:
+        - generic [ref=e252]: Recent
+        - list [ref=e253]:
+          - listitem [ref=e254]:
+            - button "Deploy" [ref=e255] [cursor=pointer]:
+              - img [ref=e256]
+              - generic [ref=e259]: Deploy
+          - listitem [ref=e260]:
+            - button "Phase 6 Live Preview Check" [ref=e261] [cursor=pointer]:
+              - img [ref=e262]
+              - generic [ref=e265]: Phase 6 Live Preview Check
+          - listitem [ref=e266]:
+            - button "zphase7" [ref=e267] [cursor=pointer]:
+              - img [ref=e268]
+              - generic [ref=e271]: zphase7
+      - button "Trash" [ref=e273] [cursor=pointer]:
+        - img [ref=e274]
+        - generic [ref=e277]: Trash
+      - button "Admin" [ref=e279] [cursor=pointer]:
+        - img [ref=e280]
+        - generic [ref=e282]: Admin
+    - main [ref=e283]:
+      - generic [ref=e284]:
+        - heading "Pick a page to get started" [level=1] [ref=e285]
+        - paragraph [ref=e286]: Choose a page from the left, or create a new one.
+    - complementary "Assistant" [ref=e287]:
+      - generic [ref=e288]:
+        - generic [ref=e289]:
+          - heading "Assistant" [level=2] [ref=e290]
+          - generic [ref=e291]: Ask · Whole workspace
+        - button "Hide assistant" [ref=e292] [cursor=pointer]:
+          - img [ref=e293]
+      - generic [ref=e297]:
+        - img [ref=e298]
+        - heading "Ask the assistant anything" [level=3] [ref=e300]
+        - paragraph [ref=e301]: Choose a mode and ask about this page, your selection, an attachment, or the whole workspace.
+  - region "Assistant prompt" [ref=e302]:
+    - generic [ref=e303]:
+      - combobox "Assistant mode" [ref=e304]:
+        - option "Ask" [selected]
+        - option "Summarize (open a page)" [disabled]
+        - option "Rewrite (select text first)" [disabled]
+        - option "Draft"
+        - option "Propose a patch" [disabled]
+      - generic [ref=e305]:
+        - img [ref=e306]
+        - generic [ref=e308]: Whole workspace
+      - button "Search the whole workspace" [ref=e309] [cursor=pointer]: Whole workspace
+      - textbox "Prompt" [ref=e310]:
+        - /placeholder: Ask the assistant…
+      - button "Ask" [disabled] [ref=e311]:
+        - img [ref=e312]
+        - text: Ask

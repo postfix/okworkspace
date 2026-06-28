@@ -1,0 +1,10 @@
+[    2365ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:8098/api/v1/auth/me:0
+[19165964ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://localhost:8098/api/v1/pages/mynew-workspace/index.md/presence?conn=20ca982a-6bf8-4119-8d15-dce15999c82a:0
+[19168965ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8098/api/v1/pages/mynew-workspace/index.md/presence?conn=20ca982a-6bf8-4119-8d15-dce15999c82a:0
+[19171966ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8098/api/v1/pages/mynew-workspace/index.md/presence?conn=20ca982a-6bf8-4119-8d15-dce15999c82a:0
+[19174967ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8098/api/v1/pages/mynew-workspace/index.md/presence?conn=20ca982a-6bf8-4119-8d15-dce15999c82a:0
+[22707317ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://localhost:8098/api/v1/pages/mynew-workspace/index.md/presence?conn=20ca982a-6bf8-4119-8d15-dce15999c82a:0
+[22710319ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8098/api/v1/pages/mynew-workspace/index.md/presence?conn=20ca982a-6bf8-4119-8d15-dce15999c82a:0
+[22713319ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8098/api/v1/pages/mynew-workspace/index.md/presence?conn=20ca982a-6bf8-4119-8d15-dce15999c82a:0
+[22716320ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8098/api/v1/pages/mynew-workspace/index.md/presence?conn=20ca982a-6bf8-4119-8d15-dce15999c82a:0
+[69095897ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:8098/api/v1/auth/me:0

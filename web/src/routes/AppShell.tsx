@@ -677,6 +677,18 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                   <ChevronsDownUp size={16} aria-hidden="true" />
                 )}
               </button>
+              <button
+                type="button"
+                className={`navrail-tool${
+                  location.pathname === "/app/graph" ? " navrail-tool-active" : ""
+                }`}
+                onClick={() => navigate("/app/graph")}
+                aria-label="Graph"
+                title="Graph"
+                aria-current={location.pathname === "/app/graph" ? "page" : undefined}
+              >
+                <Network size={16} aria-hidden="true" />
+              </button>
             </div>
             <div className="navrail-filter">
               <Search size={15} aria-hidden="true" className="navrail-filter-icon" />
@@ -694,17 +706,6 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           {/* Scrolling body — the file tree (with Trash at its bottom) + recent. */}
           <div className="navrail-body">
             <LeftTree ref={treeRef} />
-            <button
-              type="button"
-              className={`navrow navrail-trash-row${
-                location.pathname === "/app/graph" ? " navrail-row-active" : ""
-              }`}
-              onClick={() => navigate("/app/graph")}
-              aria-current={location.pathname === "/app/graph" ? "page" : undefined}
-            >
-              <Network size={16} aria-hidden="true" className="tree-icon" />
-              <span className="tree-label">Graph</span>
-            </button>
             {/* Tag review — admin-only (TAG-06). The nav row, the route, and the
                 admin sweep section all render only for an admin (client
                 convenience); the server RequireRole(admin) is the real gate. */}

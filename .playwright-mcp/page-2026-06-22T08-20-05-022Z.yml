@@ -1,0 +1,75 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "OKF Workspace" [ref=e5] [cursor=pointer]
+    - generic [ref=e6]:
+      - button "Search workspace (⌘K)" [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+        - generic [ref=e11]: Search
+        - generic [ref=e12]: ⌘K
+      - button "Hide assistant" [pressed] [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+        - generic [ref=e17]: Assistant
+      - button "Administrator" [ref=e19] [cursor=pointer]:
+        - generic [ref=e20]: Administrator
+        - img [ref=e21]
+  - generic [ref=e23]:
+    - navigation "Workspace navigation" [ref=e24]:
+      - generic [ref=e25]:
+        - button "New page" [ref=e26] [cursor=pointer]:
+          - img [ref=e27]
+          - generic [ref=e30]: New page
+        - button "New folder" [ref=e31] [cursor=pointer]:
+          - img [ref=e32]
+          - generic [ref=e34]: New folder
+      - status [ref=e35]: Loading…
+      - generic [ref=e36]:
+        - generic [ref=e37]: Recent
+        - list [ref=e38]:
+          - listitem [ref=e39]:
+            - button "Deploy" [ref=e40] [cursor=pointer]:
+              - img [ref=e41]
+              - generic [ref=e44]: Deploy
+          - listitem [ref=e45]:
+            - button "zphase7" [ref=e46] [cursor=pointer]:
+              - img [ref=e47]
+              - generic [ref=e50]: zphase7
+          - listitem [ref=e51]:
+            - button "Phase 6 Live Preview Check" [ref=e52] [cursor=pointer]:
+              - img [ref=e53]
+              - generic [ref=e56]: Phase 6 Live Preview Check
+      - button "Trash" [ref=e58] [cursor=pointer]:
+        - img [ref=e59]
+        - generic [ref=e62]: Trash
+      - button "Admin" [ref=e64] [cursor=pointer]:
+        - img [ref=e65]
+        - generic [ref=e67]: Admin
+    - main [ref=e68]:
+      - paragraph [ref=e69]: Loading…
+    - complementary "Assistant" [ref=e70]:
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - heading "Assistant" [level=2] [ref=e73]
+          - generic [ref=e74]: Ask · This page
+        - button "Hide assistant" [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+      - generic [ref=e80]:
+        - img [ref=e81]
+        - heading "Ask the assistant anything" [level=3] [ref=e83]
+        - paragraph [ref=e84]: Choose a mode and ask about this page, your selection, an attachment, or the whole workspace.
+  - region "Assistant prompt" [ref=e85]:
+    - generic [ref=e86]:
+      - combobox "Assistant mode" [ref=e87]:
+        - option "Ask" [selected]
+        - option "Summarize"
+        - option "Rewrite (select text first)" [disabled]
+        - option "Draft"
+        - option "Propose a patch"
+      - generic [ref=e88]:
+        - img [ref=e89]
+        - generic [ref=e92]: This page
+      - button "Search the whole workspace" [ref=e93] [cursor=pointer]: Whole workspace
+      - textbox "Prompt" [ref=e94]:
+        - /placeholder: Ask the assistant…
+      - button "Ask" [disabled] [ref=e95]:
+        - img [ref=e96]
+        - text: Ask

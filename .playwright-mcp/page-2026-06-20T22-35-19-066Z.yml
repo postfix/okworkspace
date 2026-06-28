@@ -1,0 +1,108 @@
+- generic [ref=e14]:
+  - banner [ref=e15]:
+    - button "OKF Workspace" [ref=e16] [cursor=pointer]
+    - generic [ref=e17]:
+      - generic "Storage healthy" [ref=e18]:
+        - generic [ref=e20]: Storage healthy
+      - button "Administrator" [ref=e22] [cursor=pointer]:
+        - generic [ref=e23]: Administrator
+        - img [ref=e24]
+  - generic [ref=e26]:
+    - navigation "Workspace navigation" [ref=e27]:
+      - generic [ref=e28]:
+        - button "New page" [ref=e29] [cursor=pointer]:
+          - img [ref=e30]
+          - generic [ref=e33]: New page
+        - button "New folder" [ref=e34] [cursor=pointer]:
+          - img [ref=e35]
+          - generic [ref=e37]: New folder
+      - list "Pages" [ref=e39]:
+        - listitem [ref=e40]:
+          - generic [ref=e41]:
+            - button "Collapse architecture" [expanded] [ref=e42] [cursor=pointer]:
+              - img [ref=e43]
+            - img [ref=e45]
+            - generic [ref=e47]: architecture
+          - list [ref=e48]:
+            - listitem [ref=e49]:
+              - button "Architecture" [ref=e50] [cursor=pointer]:
+                - img [ref=e51]
+                - generic [ref=e54]: Architecture
+        - listitem [ref=e55]:
+          - generic [ref=e56]:
+            - button "Collapse decisions" [expanded] [ref=e57] [cursor=pointer]:
+              - img [ref=e58]
+            - img [ref=e60]
+            - generic [ref=e62]: decisions
+          - list [ref=e63]:
+            - listitem [ref=e64]:
+              - button "Decisions" [ref=e65] [cursor=pointer]:
+                - img [ref=e66]
+                - generic [ref=e69]: Decisions
+        - listitem [ref=e70]:
+          - generic [ref=e71]:
+            - button "Collapse docs" [expanded] [ref=e72] [cursor=pointer]:
+              - img [ref=e73]
+            - img [ref=e75]
+            - generic [ref=e77]: docs
+          - list [ref=e78]:
+            - listitem [ref=e79]:
+              - button "docs" [ref=e80] [cursor=pointer]:
+                - img [ref=e81]
+                - generic [ref=e84]: docs
+            - listitem [ref=e85]:
+              - button "Guide" [ref=e86] [cursor=pointer]:
+                - img [ref=e87]
+                - generic [ref=e90]: Guide
+            - listitem [ref=e91]:
+              - button "Setup" [ref=e92] [cursor=pointer]:
+                - img [ref=e93]
+                - generic [ref=e96]: Setup
+        - listitem [ref=e97]:
+          - generic [ref=e98]:
+            - button "Collapse runbooks" [expanded] [ref=e99] [cursor=pointer]:
+              - img [ref=e100]
+            - img [ref=e102]
+            - generic [ref=e104]: runbooks
+          - list [ref=e105]:
+            - listitem [ref=e106]:
+              - button "Deploy" [ref=e107] [cursor=pointer]:
+                - img [ref=e108]
+                - generic [ref=e111]: Deploy
+            - listitem [ref=e112]:
+              - button "runbooks" [ref=e113] [cursor=pointer]:
+                - img [ref=e114]
+                - generic [ref=e117]: runbooks
+        - listitem [ref=e118]:
+          - button "Note" [ref=e119] [cursor=pointer]:
+            - img [ref=e120]
+            - generic [ref=e123]: Note
+        - listitem [ref=e124]:
+          - button "Welcome to your workspace" [ref=e125] [cursor=pointer]:
+            - img [ref=e126]
+            - generic [ref=e129]: Welcome to your workspace
+      - generic [ref=e131]:
+        - generic [ref=e132]: Recent
+        - list [ref=e133]:
+          - listitem [ref=e134]:
+            - button "Guide" [ref=e135] [cursor=pointer]:
+              - img [ref=e136]
+              - generic [ref=e139]: Guide
+          - listitem [ref=e140]:
+            - button "Setup" [ref=e141] [cursor=pointer]:
+              - img [ref=e142]
+              - generic [ref=e145]: Setup
+          - listitem [ref=e146]:
+            - button "Deploy" [ref=e147] [cursor=pointer]:
+              - img [ref=e148]
+              - generic [ref=e151]: Deploy
+      - button "Trash" [ref=e153] [cursor=pointer]:
+        - img [ref=e154]
+        - generic [ref=e157]: Trash
+      - button "Admin" [ref=e159] [cursor=pointer]:
+        - img [ref=e160]
+        - generic [ref=e162]: Admin
+    - main [ref=e163]:
+      - generic [ref=e164]:
+        - heading "Pick a page to get started" [level=1] [ref=e165]
+        - paragraph [ref=e166]: Choose a page from the left, or create a new one.

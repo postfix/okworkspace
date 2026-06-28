@@ -1,0 +1,294 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "Hide file tree" [pressed] [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search workspace (⌘K)" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e14]: Search
+        - generic [ref=e15]: ⌘K
+    - generic [ref=e16]:
+      - generic "Storage healthy" [ref=e104]:
+        - generic [ref=e106]: Storage healthy
+      - button "Hide assistant" [pressed] [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e21]: Assistant
+      - button "Administrator" [ref=e23] [cursor=pointer]:
+        - generic [ref=e24]: Administrator
+        - img [ref=e25]
+  - generic [ref=e27]:
+    - navigation "Workspace navigation" [ref=e28]:
+      - generic [ref=e29]:
+        - button "New page" [ref=e30] [cursor=pointer]:
+          - img [ref=e31]
+        - button "New folder" [ref=e34] [cursor=pointer]:
+          - img [ref=e35]
+        - button "Collapse all folders" [ref=e37] [cursor=pointer]:
+          - img [ref=e38]
+      - generic [ref=e107]:
+        - generic [ref=e108]:
+          - img [ref=e109]
+          - textbox "Filter files" [ref=e112]:
+            - /placeholder: Filter files…
+        - list "Pages" [ref=e113]:
+          - listitem [ref=e114]:
+            - generic [ref=e115]:
+              - button "Collapse dewdewd" [expanded] [ref=e116] [cursor=pointer]:
+                - img [ref=e117]
+              - img [ref=e119]
+              - generic [ref=e121]: dewdewd
+            - list [ref=e122]:
+              - listitem [ref=e123]:
+                - generic [ref=e124]:
+                  - button "Collapse 1" [expanded] [ref=e125] [cursor=pointer]:
+                    - img [ref=e126]
+                  - img [ref=e128]
+                  - generic [ref=e130]: "1"
+                - list [ref=e131]:
+                  - listitem [ref=e132]:
+                    - generic [ref=e133]:
+                      - button "Collapse 2" [expanded] [ref=e134] [cursor=pointer]:
+                        - img [ref=e135]
+                      - img [ref=e137]
+                      - generic [ref=e139]: "2"
+                  - listitem [ref=e140]:
+                    - button "1" [ref=e141] [cursor=pointer]:
+                      - img [ref=e142]
+                      - generic [ref=e145]: "1"
+                  - listitem [ref=e146]:
+                    - button "2" [ref=e147] [cursor=pointer]:
+                      - img [ref=e148]
+                      - generic [ref=e151]: "2"
+          - listitem [ref=e152]:
+            - generic [ref=e153]:
+              - button "Collapse my-new-work-space" [expanded] [ref=e154] [cursor=pointer]:
+                - img [ref=e155]
+              - img [ref=e157]
+              - generic [ref=e159]: my-new-work-space
+            - list [ref=e160]:
+              - listitem [ref=e161]:
+                - button "My new work space" [ref=e162] [cursor=pointer]:
+                  - img [ref=e163]
+                  - generic [ref=e166]: My new work space
+              - listitem [ref=e167]:
+                - button "test3" [ref=e168] [cursor=pointer]:
+                  - img [ref=e169]
+                  - generic [ref=e172]: test3
+          - listitem [ref=e173]:
+            - generic [ref=e174]:
+              - button "Collapse my-workspace" [expanded] [ref=e175] [cursor=pointer]:
+                - img [ref=e176]
+              - img [ref=e178]
+              - generic [ref=e180]: my-workspace
+            - list [ref=e181]:
+              - listitem [ref=e182]:
+                - button "My workspace" [ref=e183] [cursor=pointer]:
+                  - img [ref=e184]
+                  - generic [ref=e187]: My workspace
+          - listitem [ref=e188]:
+            - generic [ref=e189]:
+              - button "Collapse mynew-workspace" [expanded] [ref=e190] [cursor=pointer]:
+                - img [ref=e191]
+              - img [ref=e193]
+              - generic [ref=e195]: mynew-workspace
+            - list [ref=e196]:
+              - listitem [ref=e197]:
+                - button "Mynew workspace" [ref=e198] [cursor=pointer]:
+                  - img [ref=e199]
+                  - generic [ref=e202]: Mynew workspace
+          - listitem [ref=e203]:
+            - generic [ref=e204]:
+              - button "Collapse mynewworkspace" [expanded] [ref=e205] [cursor=pointer]:
+                - img [ref=e206]
+              - img [ref=e208]
+              - generic [ref=e210]: mynewworkspace
+            - list [ref=e211]:
+              - listitem [ref=e212]:
+                - button "Mynewworkspace" [ref=e213] [cursor=pointer]:
+                  - img [ref=e214]
+                  - generic [ref=e217]: Mynewworkspace
+          - listitem [ref=e218]:
+            - generic [ref=e219]:
+              - button "Collapse runbooks" [expanded] [ref=e220] [cursor=pointer]:
+                - img [ref=e221]
+              - img [ref=e223]
+              - generic [ref=e225]: runbooks
+            - list [ref=e226]:
+              - listitem [ref=e227]:
+                - button "dewdwe" [ref=e228] [cursor=pointer]:
+                  - img [ref=e229]
+                  - generic [ref=e232]: dewdwe
+              - listitem [ref=e233]:
+                - button "new" [ref=e234] [cursor=pointer]:
+                  - img [ref=e235]
+                  - generic [ref=e238]: new
+          - listitem [ref=e239]:
+            - generic [ref=e240]:
+              - button "Collapse test" [expanded] [ref=e241] [cursor=pointer]:
+                - img [ref=e242]
+              - img [ref=e244]
+              - generic [ref=e246]: test
+            - list [ref=e247]:
+              - listitem [ref=e248]:
+                - button "test" [ref=e249] [cursor=pointer]:
+                  - img [ref=e250]
+                  - generic [ref=e253]: test
+          - listitem [ref=e254]:
+            - generic [ref=e255]:
+              - button "Collapse wedfwedwedwed" [expanded] [ref=e256] [cursor=pointer]:
+                - img [ref=e257]
+              - img [ref=e259]
+              - generic [ref=e261]: wedfwedwedwed
+            - list [ref=e262]:
+              - listitem [ref=e263]:
+                - button "wedfwedwedwed" [ref=e264] [cursor=pointer]:
+                  - img [ref=e265]
+                  - generic [ref=e268]: wedfwedwedwed
+          - listitem [ref=e269]:
+            - generic [ref=e270]:
+              - button "Collapse zphase7" [expanded] [ref=e271] [cursor=pointer]:
+                - img [ref=e272]
+              - img [ref=e274]
+              - generic [ref=e276]: zphase7
+          - listitem [ref=e277]:
+            - generic [ref=e278]:
+              - button "Collapse zphase7renamed" [expanded] [ref=e279] [cursor=pointer]:
+                - img [ref=e280]
+              - img [ref=e282]
+              - generic [ref=e284]: zphase7renamed
+            - list [ref=e285]:
+              - listitem [ref=e286]:
+                - button "zphase7" [ref=e287] [cursor=pointer]:
+                  - img [ref=e288]
+                  - generic [ref=e291]: zphase7
+          - listitem [ref=e292]:
+            - button "Deploy" [ref=e293] [cursor=pointer]:
+              - img [ref=e294]
+              - generic [ref=e297]: Deploy
+            - list [ref=e298]:
+              - listitem [ref=e299]:
+                - link "Black Hat Rust.pdf" [ref=e300] [cursor=pointer]:
+                  - /url: /api/v1/attachments/01KVTECYQT478HCPM1MFNKKGG2/download
+                  - img [ref=e301]
+                  - generic [ref=e304]: Black Hat Rust.pdf
+              - listitem [ref=e305]:
+                - link "okf-test-upload.txt" [ref=e306] [cursor=pointer]:
+                  - /url: /api/v1/attachments/01KVTDN6P5KEJT0KCEZ6T7580F/download
+                  - img [ref=e307]
+                  - generic [ref=e310]: okf-test-upload.txt
+          - listitem [ref=e311]:
+            - button "Phase 6 Live Preview Check" [ref=e312] [cursor=pointer]:
+              - img [ref=e313]
+              - generic [ref=e316]: Phase 6 Live Preview Check
+      - generic [ref=e42]:
+        - generic [ref=e43]: Recent
+        - list [ref=e44]:
+          - listitem [ref=e45]:
+            - button "Deploy" [ref=e46] [cursor=pointer]:
+              - img [ref=e47]
+              - generic [ref=e50]: Deploy
+          - listitem [ref=e51]:
+            - button "My new work space" [ref=e52] [cursor=pointer]:
+              - img [ref=e53]
+              - generic [ref=e56]: My new work space
+          - listitem [ref=e57]:
+            - button "test3" [ref=e58] [cursor=pointer]:
+              - img [ref=e59]
+              - generic [ref=e62]: test3
+      - button "Trash" [ref=e64] [cursor=pointer]:
+        - img [ref=e65]
+        - generic [ref=e68]: Trash
+      - button "Admin" [ref=e70] [cursor=pointer]:
+        - img [ref=e71]
+        - generic [ref=e73]: Admin
+    - separator "Resize sidebar" [ref=e74]
+    - main [ref=e76]:
+      - article [ref=e318]:
+        - generic [ref=e319]:
+          - heading "Deploy" [level=1] [ref=e320]
+          - generic [ref=e321]:
+            - button "Edit page" [ref=e322] [cursor=pointer]:
+              - img [ref=e323]
+            - button "Attachments" [ref=e326] [cursor=pointer]:
+              - img [ref=e327]
+            - button "Page actions" [ref=e331] [cursor=pointer]:
+              - img [ref=e332]
+        - textbox [ref=e339]:
+          - generic [ref=e340]: "## Hello"
+          - generic [ref=e342]: Deployment checklist
+          - generic [ref=e344]: "- build the binary"
+          - generic [ref=e345]: "- run the tests"
+          - generic [ref=e346]: "- deploy to the server"
+        - dialog "Attachments" [ref=e348]:
+          - heading "Attachments" [level=2] [ref=e349]
+          - region "Attachments" [ref=e351]:
+            - generic [ref=e354] [cursor=pointer]:
+              - button "Choose File" [ref=e355]
+              - img [ref=e356]
+              - generic [ref=e359]:
+                - generic [ref=e360]: Drop a file here or click to browse
+                - generic [ref=e361]: Up to 100 MB · pdf, docx, txt, png, jpg, svg
+            - generic [ref=e362]:
+              - generic [ref=e363]:
+                - img [ref=e366]
+                - generic [ref=e369]:
+                  - generic "Black Hat Rust.pdf" [ref=e370]
+                  - generic [ref=e371]: 4.1 MB · admin · Jun 23, 2026
+                  - generic [ref=e373]:
+                    - img [ref=e374]
+                    - text: Text extracted
+                - generic [ref=e376]:
+                  - link "Download" [ref=e377] [cursor=pointer]:
+                    - /url: /api/v1/attachments/01KVTECYQT478HCPM1MFNKKGG2/download
+                    - img [ref=e378]
+                    - generic [ref=e381]: Download
+                  - button "Ask the assistant about this file" [active] [ref=e382] [cursor=pointer]:
+                    - img [ref=e383]
+                  - button "Replace attachment" [ref=e385] [cursor=pointer]:
+                    - img [ref=e386]
+                  - button "Remove attachment" [ref=e389] [cursor=pointer]:
+                    - img [ref=e390]
+              - generic [ref=e393]:
+                - img [ref=e396]
+                - generic [ref=e399]:
+                  - generic "okf-test-upload.txt" [ref=e400]
+                  - generic [ref=e401]: 22 B · admin · Jun 23, 2026
+                  - generic [ref=e403]:
+                    - img [ref=e404]
+                    - text: Text extracted
+                - generic [ref=e406]:
+                  - link "Download" [ref=e407] [cursor=pointer]:
+                    - /url: /api/v1/attachments/01KVTDN6P5KEJT0KCEZ6T7580F/download
+                    - img [ref=e408]
+                    - generic [ref=e411]: Download
+                  - button "Ask the assistant about this file" [ref=e412] [cursor=pointer]:
+                    - img [ref=e413]
+                  - button "Replace attachment" [ref=e415] [cursor=pointer]:
+                    - img [ref=e416]
+                  - button "Remove attachment" [ref=e419] [cursor=pointer]:
+                    - img [ref=e420]
+    - separator "Resize assistant" [ref=e78]
+    - complementary "Assistant" [ref=e80]:
+      - generic [ref=e81]:
+        - generic [ref=e82]:
+          - heading "Assistant" [level=2] [ref=e83]
+          - generic [ref=e84]:
+            - text: Ask · Black Hat Rust.pdf
+            - button "Clear file context" [ref=e423] [cursor=pointer]:
+              - img [ref=e424]
+        - button "Hide assistant" [ref=e85] [cursor=pointer]:
+          - img [ref=e86]
+      - generic [ref=e90]:
+        - img [ref=e91]
+        - heading "Ask the assistant anything" [level=3] [ref=e93]
+        - paragraph [ref=e94]: Type below and press Enter. Ask about this page or the whole workspace — or use a suggestion to summarize, draft, or propose an edit you approve.
+      - generic "Suggested actions" [ref=e95]:
+        - button "Summarize Black Hat Rust.pdf" [ref=e427] [cursor=pointer]
+        - button "Draft a page" [ref=e97] [cursor=pointer]
+        - button "Propose an edit" [ref=e98] [cursor=pointer]
+      - region "Assistant prompt" [ref=e99]:
+        - textbox "Prompt" [ref=e100]:
+          - /placeholder: Ask anything…
+        - generic [ref=e101]:
+          - generic "Black Hat Rust.pdf" [ref=e428]
+          - generic [ref=e103]: Enter to send · Shift+Enter for a newline

@@ -1,0 +1,201 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "OKF Workspace" [ref=e5] [cursor=pointer]
+    - generic [ref=e6]:
+      - generic "Storage healthy" [ref=e163]:
+        - generic [ref=e165]: Storage healthy
+      - button "Administrator" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Administrator
+        - img [ref=e10]
+  - generic [ref=e12]:
+    - navigation "Workspace navigation" [ref=e13]:
+      - generic [ref=e14]:
+        - button "New page" [ref=e15] [cursor=pointer]:
+          - img [ref=e16]
+          - generic [ref=e19]: New page
+        - button "New folder" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e23]: New folder
+      - list "Pages" [ref=e25]:
+        - listitem [ref=e26]:
+          - generic [ref=e27]:
+            - button "Collapse architecture" [expanded] [ref=e28] [cursor=pointer]:
+              - img [ref=e29]
+            - img [ref=e31]
+            - generic [ref=e33]: architecture
+          - list [ref=e34]:
+            - listitem [ref=e35]:
+              - button "Architecture" [ref=e36] [cursor=pointer]:
+                - img [ref=e37]
+                - generic [ref=e40]: Architecture
+        - listitem [ref=e41]:
+          - generic [ref=e42]:
+            - button "Collapse decisions" [expanded] [ref=e43] [cursor=pointer]:
+              - img [ref=e44]
+            - img [ref=e46]
+            - generic [ref=e48]: decisions
+          - list [ref=e49]:
+            - listitem [ref=e50]:
+              - button "Decisions" [ref=e51] [cursor=pointer]:
+                - img [ref=e52]
+                - generic [ref=e55]: Decisions
+        - listitem [ref=e56]:
+          - generic [ref=e57]:
+            - button "Collapse docs" [expanded] [ref=e58] [cursor=pointer]:
+              - img [ref=e59]
+            - img [ref=e61]
+            - generic [ref=e63]: docs
+          - list [ref=e64]:
+            - listitem [ref=e65]:
+              - button "docs" [ref=e66] [cursor=pointer]:
+                - img [ref=e67]
+                - generic [ref=e70]: docs
+            - listitem [ref=e71]:
+              - button "Guide" [ref=e72] [cursor=pointer]:
+                - img [ref=e73]
+                - generic [ref=e76]: Guide
+            - listitem [ref=e77]:
+              - button "Setup" [ref=e78] [cursor=pointer]:
+                - img [ref=e79]
+                - generic [ref=e82]: Setup
+        - listitem [ref=e83]:
+          - generic [ref=e84]:
+            - button "Collapse runbooks" [expanded] [ref=e85] [cursor=pointer]:
+              - img [ref=e86]
+            - img [ref=e88]
+            - generic [ref=e90]: runbooks
+          - list [ref=e91]:
+            - listitem [ref=e92]:
+              - button "Deploy" [ref=e93] [cursor=pointer]:
+                - img [ref=e94]
+                - generic [ref=e97]: Deploy
+            - listitem [ref=e98]:
+              - button "runbooks" [ref=e99] [cursor=pointer]:
+                - img [ref=e100]
+                - generic [ref=e103]: runbooks
+        - listitem [ref=e104]:
+          - button "Note" [ref=e105] [cursor=pointer]:
+            - img [ref=e106]
+            - generic [ref=e109]: Note
+        - listitem [ref=e110]:
+          - button "Note" [ref=e111] [cursor=pointer]:
+            - img [ref=e112]
+            - generic [ref=e115]: Note
+        - listitem [ref=e116]:
+          - button "RevTest" [ref=e117] [cursor=pointer]:
+            - img [ref=e118]
+            - generic [ref=e121]: RevTest
+        - listitem [ref=e122]:
+          - button "Welcome to your workspace" [ref=e123] [cursor=pointer]:
+            - img [ref=e124]
+            - generic [ref=e127]: Welcome to your workspace
+      - generic [ref=e129]:
+        - generic [ref=e130]: Recent
+        - list [ref=e131]:
+          - listitem [ref=e132]:
+            - button "Guide" [ref=e133] [cursor=pointer]:
+              - img [ref=e134]
+              - generic [ref=e137]: Guide
+          - listitem [ref=e138]:
+            - button "Setup" [ref=e139] [cursor=pointer]:
+              - img [ref=e140]
+              - generic [ref=e143]: Setup
+          - listitem [ref=e144]:
+            - button "Deploy" [ref=e145] [cursor=pointer]:
+              - img [ref=e146]
+              - generic [ref=e149]: Deploy
+      - button "Trash" [ref=e151] [cursor=pointer]:
+        - img [ref=e152]
+        - generic [ref=e155]: Trash
+      - button "Admin" [ref=e157] [cursor=pointer]:
+        - img [ref=e158]
+        - generic [ref=e160]: Admin
+    - main [ref=e161]:
+      - generic [ref=e166]:
+        - generic [ref=e167]:
+          - generic [ref=e168]:
+            - generic [ref=e169]: Title
+            - textbox "Title" [ref=e170]: Note
+          - generic [ref=e171]:
+            - generic [ref=e172]: Description
+            - textbox "Description" [ref=e173]
+        - button "Link to page" [ref=e176] [cursor=pointer]:
+          - img [ref=e177]
+          - generic [ref=e180]: Link to page
+        - generic [ref=e182]:
+          - generic [ref=e183]:
+            - list [ref=e184]:
+              - listitem [ref=e185]:
+                - button "Add bold text (ctrl + b)" [ref=e186] [cursor=pointer]:
+                  - img [ref=e187]
+              - listitem [ref=e189]:
+                - button "Add italic text (ctrl + i)" [ref=e190] [cursor=pointer]:
+                  - img [ref=e191]
+              - listitem [ref=e193]:
+                - button "Add strikethrough text (ctrl + shift + x)" [ref=e194] [cursor=pointer]:
+                  - img [ref=e195]
+              - listitem [ref=e197]:
+                - button "Insert HR (ctrl + h)" [ref=e198] [cursor=pointer]:
+                  - img [ref=e199]
+              - listitem [ref=e201]:
+                - button "Insert title" [ref=e202] [cursor=pointer]:
+                  - img [ref=e203]
+              - listitem [ref=e205]
+              - listitem [ref=e206]:
+                - button "Add a link (ctrl + l)" [ref=e207] [cursor=pointer]:
+                  - img [ref=e208]
+              - listitem [ref=e210]:
+                - button "Insert a quote (ctrl + q)" [ref=e211] [cursor=pointer]:
+                  - img [ref=e212]
+              - listitem [ref=e214]:
+                - button "Insert code (ctrl + j)" [ref=e215] [cursor=pointer]:
+                  - img [ref=e216]
+              - listitem [ref=e218]:
+                - button "Insert Code Block (ctrl + shift + j)" [ref=e219] [cursor=pointer]:
+                  - img [ref=e220]
+              - listitem [ref=e222]:
+                - button "Insert comment (ctrl + /)" [ref=e223] [cursor=pointer]:
+                  - img [ref=e224]
+              - listitem [ref=e229]:
+                - button "Add image (ctrl + k)" [ref=e230] [cursor=pointer]:
+                  - img [ref=e231]
+              - listitem [ref=e233]:
+                - button "Add table" [ref=e234] [cursor=pointer]:
+                  - img [ref=e235]
+              - listitem [ref=e237]
+              - listitem [ref=e238]:
+                - button "Add unordered list (ctrl + shift + u)" [ref=e239] [cursor=pointer]:
+                  - img [ref=e240]
+              - listitem [ref=e242]:
+                - button "Add ordered list (ctrl + shift + o)" [ref=e243] [cursor=pointer]:
+                  - img [ref=e244]
+              - listitem [ref=e246]:
+                - button "Add checked list (ctrl + shift + c)" [ref=e247] [cursor=pointer]:
+                  - img [ref=e248]
+              - listitem [ref=e250]
+              - listitem [ref=e251]:
+                - button "Open help" [ref=e252] [cursor=pointer]:
+                  - img [ref=e253]
+            - list [ref=e255]:
+              - listitem [ref=e256]:
+                - button "Edit code (ctrl + 7)" [ref=e257] [cursor=pointer]:
+                  - img [ref=e258]
+              - listitem [ref=e261]:
+                - button "Live code (ctrl + 8)" [ref=e262] [cursor=pointer]:
+                  - img [ref=e263]
+              - listitem [ref=e266]:
+                - button "Preview code (ctrl + 9)" [ref=e267] [cursor=pointer]:
+                  - img [ref=e268]
+              - listitem [ref=e271]
+              - listitem [ref=e272]:
+                - button "Toggle fullscreen (ctrl + 0)" [ref=e273] [cursor=pointer]:
+                  - img [ref=e274]
+          - generic [ref=e276]:
+            - generic [ref=e278]:
+              - generic [ref=e279]:
+                - generic:
+                  - code: FIRST-A SECOND-B C1 C2 C3END
+              - textbox [active] [ref=e280]: FIRST-A SECOND-B C1 C2 C3END
+            - paragraph [ref=e283]: FIRST-A SECOND-B C1 C2 C3END
+          - img [ref=e285]
+        - button "Save page" [ref=e288] [cursor=pointer]

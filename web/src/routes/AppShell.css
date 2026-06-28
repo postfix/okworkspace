@@ -325,6 +325,11 @@
   color: var(--color-text);
 }
 
+.navrail-tool-active {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
 .navrail-admin {
   margin-top: var(--space-md);
   padding-top: var(--space-md);

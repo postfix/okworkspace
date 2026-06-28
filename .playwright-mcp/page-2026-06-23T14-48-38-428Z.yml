@@ -1,0 +1,72 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "Hide file tree" [pressed] [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search workspace (⌘K)" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e14]: Search
+        - generic [ref=e15]: ⌘K
+    - generic [ref=e16]:
+      - button "Hide assistant" [pressed] [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e21]: Assistant
+      - button "Administrator" [ref=e23] [cursor=pointer]:
+        - generic [ref=e24]: Administrator
+        - img [ref=e25]
+  - generic [ref=e27]:
+    - navigation "Workspace navigation" [ref=e28]:
+      - generic [ref=e29]:
+        - button "New page" [ref=e30] [cursor=pointer]:
+          - img [ref=e31]
+        - button "New folder" [ref=e34] [cursor=pointer]:
+          - img [ref=e35]
+        - button "Collapse all folders" [ref=e37] [cursor=pointer]:
+          - img [ref=e38]
+      - status [ref=e41]: Loading…
+      - generic [ref=e42]:
+        - generic [ref=e43]: Recent
+        - list [ref=e44]:
+          - listitem [ref=e45]:
+            - button "Deploy" [ref=e46] [cursor=pointer]:
+              - img [ref=e47]
+              - generic [ref=e50]: Deploy
+          - listitem [ref=e51]:
+            - button "My new work space" [ref=e52] [cursor=pointer]:
+              - img [ref=e53]
+              - generic [ref=e56]: My new work space
+          - listitem [ref=e57]:
+            - button "test3" [ref=e58] [cursor=pointer]:
+              - img [ref=e59]
+              - generic [ref=e62]: test3
+      - button "Trash" [ref=e64] [cursor=pointer]:
+        - img [ref=e65]
+        - generic [ref=e68]: Trash
+      - button "Admin" [ref=e70] [cursor=pointer]:
+        - img [ref=e71]
+        - generic [ref=e73]: Admin
+    - separator "Resize sidebar" [ref=e74]
+    - main [ref=e76]:
+      - paragraph [ref=e77]: Loading…
+    - separator "Resize assistant" [ref=e78]
+    - complementary "Assistant" [ref=e80]:
+      - generic [ref=e81]:
+        - generic [ref=e82]:
+          - heading "Assistant" [level=2] [ref=e83]
+          - generic [ref=e84]: Ask · This page
+        - button "Hide assistant" [ref=e85] [cursor=pointer]:
+          - img [ref=e86]
+      - generic [ref=e90]:
+        - img [ref=e91]
+        - heading "Ask the assistant anything" [level=3] [ref=e93]
+        - paragraph [ref=e94]: Type below and press Enter. Ask about this page or the whole workspace — or use a suggestion to summarize, draft, or propose an edit you approve.
+      - generic "Suggested actions" [ref=e95]:
+        - button "Summarize this page" [ref=e96] [cursor=pointer]
+        - button "Draft a page" [ref=e97] [cursor=pointer]
+        - button "Propose an edit" [ref=e98] [cursor=pointer]
+      - region "Assistant prompt" [ref=e99]:
+        - textbox "Prompt" [ref=e100]:
+          - /placeholder: Ask anything…
+        - generic [ref=e101]:
+          - generic "This page" [ref=e102]
+          - generic [ref=e103]: Enter to send · Shift+Enter for a newline

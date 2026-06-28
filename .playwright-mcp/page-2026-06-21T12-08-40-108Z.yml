@@ -1,0 +1,177 @@
+- generic [ref=e29]:
+  - banner [ref=e30]:
+    - button "OKF Workspace" [ref=e31] [cursor=pointer]
+    - generic [ref=e32]:
+      - generic "Storage healthy" [ref=e33]:
+        - generic [ref=e35]: Storage healthy
+      - button "Search workspace (⌘K)" [ref=e36] [cursor=pointer]:
+        - img [ref=e37]
+        - generic [ref=e40]: Search
+        - generic [ref=e41]: ⌘K
+      - button "Administrator" [ref=e43] [cursor=pointer]:
+        - generic [ref=e44]: Administrator
+        - img [ref=e45]
+  - generic [ref=e47]:
+    - navigation "Workspace navigation" [ref=e48]:
+      - generic [ref=e49]:
+        - button "New page" [ref=e50] [cursor=pointer]:
+          - img [ref=e51]
+          - generic [ref=e54]: New page
+        - button "New folder" [ref=e55] [cursor=pointer]:
+          - img [ref=e56]
+          - generic [ref=e58]: New folder
+      - list "Pages" [ref=e60]:
+        - listitem [ref=e61]:
+          - generic [ref=e62]:
+            - button "Collapse dewdewd" [expanded] [ref=e63] [cursor=pointer]:
+              - img [ref=e64]
+            - img [ref=e66]
+            - generic [ref=e68]: dewdewd
+          - list [ref=e69]:
+            - listitem [ref=e70]:
+              - generic [ref=e71]:
+                - button "Collapse 1" [expanded] [ref=e72] [cursor=pointer]:
+                  - img [ref=e73]
+                - img [ref=e75]
+                - generic [ref=e77]: "1"
+              - list [ref=e78]:
+                - listitem [ref=e79]:
+                  - generic [ref=e80]:
+                    - button "Collapse 2" [expanded] [ref=e81] [cursor=pointer]:
+                      - img [ref=e82]
+                    - img [ref=e84]
+                    - generic [ref=e86]: "2"
+                - listitem [ref=e87]:
+                  - button "1" [ref=e88] [cursor=pointer]:
+                    - img [ref=e89]
+                    - generic [ref=e92]: "1"
+                - listitem [ref=e93]:
+                  - button "2" [ref=e94] [cursor=pointer]:
+                    - img [ref=e95]
+                    - generic [ref=e98]: "2"
+        - listitem [ref=e99]:
+          - generic [ref=e100]:
+            - button "Collapse my-new-work-space" [expanded] [ref=e101] [cursor=pointer]:
+              - img [ref=e102]
+            - img [ref=e104]
+            - generic [ref=e106]: my-new-work-space
+          - list [ref=e107]:
+            - listitem [ref=e108]:
+              - button "My new work space" [ref=e109] [cursor=pointer]:
+                - img [ref=e110]
+                - generic [ref=e113]: My new work space
+        - listitem [ref=e114]:
+          - generic [ref=e115]:
+            - button "Collapse my-workspace" [expanded] [ref=e116] [cursor=pointer]:
+              - img [ref=e117]
+            - img [ref=e119]
+            - generic [ref=e121]: my-workspace
+          - list [ref=e122]:
+            - listitem [ref=e123]:
+              - button "My workspace" [ref=e124] [cursor=pointer]:
+                - img [ref=e125]
+                - generic [ref=e128]: My workspace
+        - listitem [ref=e129]:
+          - generic [ref=e130]:
+            - button "Collapse mynew-workspace" [expanded] [ref=e131] [cursor=pointer]:
+              - img [ref=e132]
+            - img [ref=e134]
+            - generic [ref=e136]: mynew-workspace
+          - list [ref=e137]:
+            - listitem [ref=e138]:
+              - button "Mynew workspace" [ref=e139] [cursor=pointer]:
+                - img [ref=e140]
+                - generic [ref=e143]: Mynew workspace
+        - listitem [ref=e144]:
+          - generic [ref=e145]:
+            - button "Collapse mynewworkspace" [expanded] [ref=e146] [cursor=pointer]:
+              - img [ref=e147]
+            - img [ref=e149]
+            - generic [ref=e151]: mynewworkspace
+          - list [ref=e152]:
+            - listitem [ref=e153]:
+              - button "Mynewworkspace" [ref=e154] [cursor=pointer]:
+                - img [ref=e155]
+                - generic [ref=e158]: Mynewworkspace
+        - listitem [ref=e159]:
+          - generic [ref=e160]:
+            - button "Collapse runbooks" [expanded] [ref=e161] [cursor=pointer]:
+              - img [ref=e162]
+            - img [ref=e164]
+            - generic [ref=e166]: runbooks
+          - list [ref=e167]:
+            - listitem [ref=e168]:
+              - button "dewdwe" [ref=e169] [cursor=pointer]:
+                - img [ref=e170]
+                - generic [ref=e173]: dewdwe
+            - listitem [ref=e174]:
+              - button "new" [ref=e175] [cursor=pointer]:
+                - img [ref=e176]
+                - generic [ref=e179]: new
+        - listitem [ref=e180]:
+          - generic [ref=e181]:
+            - button "Collapse test" [expanded] [ref=e182] [cursor=pointer]:
+              - img [ref=e183]
+            - img [ref=e185]
+            - generic [ref=e187]: test
+          - list [ref=e188]:
+            - listitem [ref=e189]:
+              - button "test" [ref=e190] [cursor=pointer]:
+                - img [ref=e191]
+                - generic [ref=e194]: test
+        - listitem [ref=e195]:
+          - generic [ref=e196]:
+            - button "Collapse wedfwedwedwed" [expanded] [ref=e197] [cursor=pointer]:
+              - img [ref=e198]
+            - img [ref=e200]
+            - generic [ref=e202]: wedfwedwedwed
+          - list [ref=e203]:
+            - listitem [ref=e204]:
+              - button "wedfwedwedwed" [ref=e205] [cursor=pointer]:
+                - img [ref=e206]
+                - generic [ref=e209]: wedfwedwedwed
+        - listitem [ref=e210]:
+          - button "Deploy" [ref=e211] [cursor=pointer]:
+            - img [ref=e212]
+            - generic [ref=e215]: Deploy
+        - listitem [ref=e247]:
+          - button "Phase 6 Live Preview Check" [ref=e248] [cursor=pointer]:
+            - img [ref=e249]
+            - generic [ref=e252]: Phase 6 Live Preview Check
+      - generic [ref=e217]:
+        - generic [ref=e218]: Recent
+        - list [ref=e253]:
+          - listitem [ref=e254]:
+            - button "Phase 6 Live Preview Check" [ref=e255] [cursor=pointer]:
+              - img [ref=e256]
+              - generic [ref=e259]: Phase 6 Live Preview Check
+      - button "Trash" [ref=e221] [cursor=pointer]:
+        - img [ref=e222]
+        - generic [ref=e225]: Trash
+      - button "Admin" [ref=e227] [cursor=pointer]:
+        - img [ref=e228]
+        - generic [ref=e230]: Admin
+    - main [ref=e231]:
+      - article [ref=e260]:
+        - generic [ref=e261]:
+          - heading "Phase 6 Live Preview Check" [level=1] [ref=e262]
+          - generic [ref=e263]:
+            - button "Edit page" [ref=e264] [cursor=pointer]:
+              - img [ref=e265]
+              - generic [ref=e268]: Edit page
+            - button "Page actions" [ref=e270] [cursor=pointer]:
+              - img [ref=e271]
+        - paragraph [ref=e275]: This page is empty. Select Edit to start writing.
+        - region "Attachments" [ref=e276]:
+          - generic [ref=e277]:
+            - heading "Attachments" [level=2] [ref=e278]
+            - button "Add files" [ref=e279] [cursor=pointer]
+          - generic [ref=e282] [cursor=pointer]:
+            - button "Choose File" [ref=e283]
+            - img [ref=e284]
+            - generic [ref=e287]:
+              - generic [ref=e288]: Drop a file here or click to browse
+              - generic [ref=e289]: Up to 100 MB · pdf, docx, txt, png, jpg, svg
+          - generic [ref=e290]:
+            - paragraph [ref=e291]: No attachments yet
+            - paragraph [ref=e292]: Drop a file above to attach it to this page.

@@ -1,0 +1,39 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "OKF Workspace" [ref=e5] [cursor=pointer]
+    - button "Administrator" [ref=e8] [cursor=pointer]:
+      - generic [ref=e9]: Administrator
+      - img [ref=e10]
+  - generic [ref=e12]:
+    - navigation "Workspace navigation" [ref=e13]:
+      - generic [ref=e14]:
+        - button "New page" [ref=e15] [cursor=pointer]:
+          - img [ref=e16]
+          - generic [ref=e19]: New page
+        - button "New folder" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e23]: New folder
+      - status [ref=e24]: Loading…
+      - generic [ref=e25]:
+        - generic [ref=e26]: Recent
+        - list [ref=e27]:
+          - listitem [ref=e28]:
+            - button "Setup" [ref=e29] [cursor=pointer]:
+              - img [ref=e30]
+              - generic [ref=e33]: Setup
+          - listitem [ref=e34]:
+            - button "Guide" [ref=e35] [cursor=pointer]:
+              - img [ref=e36]
+              - generic [ref=e39]: Guide
+          - listitem [ref=e40]:
+            - button "Deploy" [ref=e41] [cursor=pointer]:
+              - img [ref=e42]
+              - generic [ref=e45]: Deploy
+      - button "Trash" [ref=e47] [cursor=pointer]:
+        - img [ref=e48]
+        - generic [ref=e51]: Trash
+      - button "Admin" [ref=e53] [cursor=pointer]:
+        - img [ref=e54]
+        - generic [ref=e56]: Admin
+    - main [ref=e57]:
+      - paragraph [ref=e58]: Loading…

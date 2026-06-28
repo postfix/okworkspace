@@ -463,6 +463,22 @@ func (h *authHandlers) handleTagList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// handleTagVocabulary handles GET /tags/vocabulary — any-authed read returning
+// the sorted distinct tag list for autocomplete UIs.
+func (h *authHandlers) handleTagVocabulary(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if h.graph == nil {
+		writeError(w, http.StatusInternalServerError, "Graph store not available.")
+		return
+	}
+	vocab, err := h.graph.Vocabulary(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to read tag vocabulary.")
+		return
+	}
+	writeJSON(w, http.StatusOK, vocab)
+}
+
 func uniqueStrings(in []string) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(in))

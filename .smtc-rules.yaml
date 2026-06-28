@@ -1,0 +1,91 @@
+# .smtc-rules.yaml — architectural layer rules for OKF Workspace
+#
+# Consumed by SMTC `layer_check` / `boundary_crossings` (architecture capability).
+# Validate after code lands:  layer_check(root=".")  /  boundary_crossings(root=".")
+#
+# MODEL
+#   - `layers`  : named groups of packages. `patterns` are matched against the
+#                 module/file path relative to the repo root (e.g. internal/auth).
+#   - `rules`   : each entry is a FORBIDDEN crossing {from -> to} (deny semantics,
+#                 same model as SMTC's implicit web->persistence smell). A `from`
+#                 layer calling into a `to` layer is reported as a violation with a
+#                 witness call chain. Intra-layer and any crossing NOT listed is
+#                 allowed.
+#
+# LAYERS (top calls down only). Maps SPEC §16 backend modules:
+#   entrypoint   cmd/okf-workspace            composition root / wiring
+#   transport    server, web                  HTTP routing, middleware, SPA serving
+#   services     auth, users, okf,            domain / application logic
+#                attachments, search,
+#                agent, jobs
+#   storage      repo, gitstore               safe-path file I/O + git CLI shell-out
+#   foundation   config, audit                cross-cutting; no upward deps
+#
+# INVARIANTS ENFORCED
+#   1. No upward calls            (lower layer must never reach a higher layer).
+#   2. transport must not reach storage directly — HTTP handlers go THROUGH the
+#      service layer to touch files/git (keeps safe-path + git logic centralized;
+#      mirrors SMTC's implicit web->persistence default).
+#
+# Intentionally ALLOWED (do not add rules for these):
+#   - intra-service calls: agent->search/repo/okf, auth->users, jobs->search/gitstore
+#   - services->storage (okf->repo, jobs->gitstore), services->foundation (config/audit)
+#   - transport->services, transport->foundation, storage->foundation
+#
+# REVISIT WHEN CODE EXISTS
+#   - Confirm `patterns` matching (path-prefix vs glob) by running layer_check on
+#     the first real packages; tighten to `internal/<pkg>/` if prefixes over-match.
+#   - If repo ever needs to parse frontmatter it must call okf (services), which
+#     would be storage->services = upward violation. Keep that direction okf->repo.
+
+layers:
+  - name: entrypoint
+    patterns:
+      - cmd/okf-workspace
+  - name: transport
+    patterns:
+      - internal/server
+      - internal/web
+  - name: services
+    patterns:
+      - internal/auth
+      - internal/users
+      - internal/okf
+      - internal/attachments
+      - internal/search
+      - internal/agent
+      - internal/jobs
+  - name: storage
+    patterns:
+      - internal/repo
+      - internal/gitstore
+  - name: foundation
+    patterns:
+      - internal/config
+      - internal/audit
+
+rules:
+  # --- invariant 1: no upward calls ---
+  - from: transport
+    to: entrypoint
+  - from: services
+    to: entrypoint
+  - from: services
+    to: transport
+  - from: storage
+    to: entrypoint
+  - from: storage
+    to: transport
+  - from: storage
+    to: services
+  - from: foundation
+    to: entrypoint
+  - from: foundation
+    to: transport
+  - from: foundation
+    to: services
+  - from: foundation
+    to: storage
+  # --- invariant 2: transport must not skip services to reach storage ---
+  - from: transport
+    to: storage

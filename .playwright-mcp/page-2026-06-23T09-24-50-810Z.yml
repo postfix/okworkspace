@@ -1,0 +1,78 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "OKF Workspace" [ref=e5] [cursor=pointer]:
+      - img [ref=e7]
+      - text: OKF Workspace
+    - generic [ref=e9]:
+      - button "Search workspace (⌘K)" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e14]: Search
+        - generic [ref=e15]: ⌘K
+      - button "Hide assistant" [pressed] [ref=e16] [cursor=pointer]:
+        - img [ref=e17]
+        - generic [ref=e20]: Assistant
+      - button "Administrator" [ref=e22] [cursor=pointer]:
+        - generic [ref=e23]: Administrator
+        - img [ref=e24]
+  - generic [ref=e26]:
+    - navigation "Workspace navigation" [ref=e27]:
+      - generic [ref=e28]:
+        - button "New page" [ref=e29] [cursor=pointer]:
+          - img [ref=e30]
+          - generic [ref=e33]: New page
+        - button "New folder" [ref=e34] [cursor=pointer]:
+          - img [ref=e35]
+          - generic [ref=e37]: New folder
+      - status [ref=e38]: Loading…
+      - generic [ref=e39]:
+        - generic [ref=e40]: Recent
+        - list [ref=e41]:
+          - listitem [ref=e42]:
+            - button "Deploy" [ref=e43] [cursor=pointer]:
+              - img [ref=e44]
+              - generic [ref=e47]: Deploy
+          - listitem [ref=e48]:
+            - button "test" [ref=e49] [cursor=pointer]:
+              - img [ref=e50]
+              - generic [ref=e53]: test
+          - listitem [ref=e54]:
+            - button "1" [ref=e55] [cursor=pointer]:
+              - img [ref=e56]
+              - generic [ref=e59]: "1"
+          - listitem [ref=e60]:
+            - button "Phase 6 Live Preview Check" [ref=e61] [cursor=pointer]:
+              - img [ref=e62]
+              - generic [ref=e65]: Phase 6 Live Preview Check
+          - listitem [ref=e66]:
+            - button "zphase7" [ref=e67] [cursor=pointer]:
+              - img [ref=e68]
+              - generic [ref=e71]: zphase7
+      - button "Trash" [ref=e73] [cursor=pointer]:
+        - img [ref=e74]
+        - generic [ref=e77]: Trash
+      - button "Admin" [ref=e79] [cursor=pointer]:
+        - img [ref=e80]
+        - generic [ref=e82]: Admin
+    - main [ref=e83]:
+      - paragraph [ref=e84]: Loading…
+    - complementary "Assistant" [ref=e85]:
+      - generic [ref=e86]:
+        - generic [ref=e87]:
+          - heading "Assistant" [level=2] [ref=e88]
+          - generic [ref=e89]: Ask · This page
+        - button "Hide assistant" [ref=e90] [cursor=pointer]:
+          - img [ref=e91]
+      - generic [ref=e95]:
+        - img [ref=e96]
+        - heading "Ask the assistant anything" [level=3] [ref=e98]
+        - paragraph [ref=e99]: Type below and press Enter. Ask about this page or the whole workspace — or use a suggestion to summarize, draft, or propose an edit you approve.
+      - generic "Suggested actions" [ref=e100]:
+        - button "Summarize this page" [ref=e101] [cursor=pointer]
+        - button "Draft a page" [ref=e102] [cursor=pointer]
+        - button "Propose an edit" [ref=e103] [cursor=pointer]
+      - region "Assistant prompt" [ref=e104]:
+        - textbox "Prompt" [ref=e105]:
+          - /placeholder: Ask anything…
+        - generic [ref=e106]:
+          - generic "This page" [ref=e107]
+          - generic [ref=e108]: Enter to send · Shift+Enter for a newline

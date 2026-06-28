@@ -1,0 +1,81 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "Hide file tree" [pressed] [ref=e6] [cursor=pointer]:
+      - img [ref=e7]
+    - button "Search workspace (⌘K)" [ref=e10]:
+      - img [ref=e11]
+      - generic [ref=e14]: Search
+      - generic [ref=e15]: ⌘K
+    - generic [ref=e16]:
+      - button "Hide assistant" [pressed] [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e21]: Assistant
+      - button "Administrator" [ref=e23] [cursor=pointer]:
+        - generic [ref=e24]: Administrator
+        - img [ref=e25]
+  - generic [ref=e27]:
+    - navigation "Workspace navigation" [ref=e28]:
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - button "New page" [ref=e31] [cursor=pointer]:
+            - img [ref=e32]
+          - button "New folder" [ref=e35] [cursor=pointer]:
+            - img [ref=e36]
+          - button "Collapse all folders" [ref=e38] [cursor=pointer]:
+            - img [ref=e39]
+          - button "Graph" [ref=e42] [cursor=pointer]:
+            - img [ref=e43]
+        - generic [ref=e48]:
+          - img [ref=e49]
+          - textbox "Filter files" [ref=e52]:
+            - /placeholder: Filter files…
+      - generic [ref=e53]:
+        - status [ref=e54]: Loading…
+        - button "Tag review" [ref=e55] [cursor=pointer]:
+          - img [ref=e56]
+          - generic [ref=e59]: Tag review
+        - button "Trash" [ref=e60] [cursor=pointer]:
+          - img [ref=e61]
+          - generic [ref=e64]: Trash
+        - generic [ref=e65]:
+          - generic [ref=e66]: Recent
+          - list [ref=e67]:
+            - listitem [ref=e68]:
+              - button "Deploy" [ref=e69] [cursor=pointer]:
+                - img [ref=e70]
+                - generic [ref=e73]: Deploy
+            - listitem [ref=e74]:
+              - button "My new work space" [ref=e75] [cursor=pointer]:
+                - img [ref=e76]
+                - generic [ref=e79]: My new work space
+            - listitem [ref=e80]:
+              - button "test3" [ref=e81] [cursor=pointer]:
+                - img [ref=e82]
+                - generic [ref=e85]: test3
+      - button "Admin settings" [ref=e87] [cursor=pointer]:
+        - img [ref=e88]
+    - separator "Resize sidebar" [ref=e91]
+    - main [ref=e93]:
+      - paragraph [ref=e94]: Loading…
+    - separator "Resize assistant" [ref=e95]
+    - complementary "Assistant" [ref=e97]:
+      - generic [ref=e98]:
+        - generic [ref=e99]:
+          - heading "Assistant" [level=2] [ref=e100]
+          - generic [ref=e101]: Ask · This page
+        - button "Hide assistant" [ref=e102] [cursor=pointer]:
+          - img [ref=e103]
+      - generic [ref=e107]:
+        - img [ref=e108]
+        - heading "Ask the assistant anything" [level=3] [ref=e110]
+        - paragraph [ref=e111]: Type below and press Enter. Ask about this page or the whole workspace — or use a suggestion to summarize, draft, or propose an edit you approve.
+      - generic "Suggested actions" [ref=e112]:
+        - button "Summarize this page" [ref=e113] [cursor=pointer]
+        - button "Draft a page" [ref=e114] [cursor=pointer]
+        - button "Propose an edit" [ref=e115] [cursor=pointer]
+      - region "Assistant prompt" [ref=e116]:
+        - textbox "Prompt" [ref=e117]:
+          - /placeholder: Ask anything…
+        - generic [ref=e118]:
+          - generic "This page" [ref=e119]
+          - generic [ref=e120]: Enter to send · Shift+Enter for a newline

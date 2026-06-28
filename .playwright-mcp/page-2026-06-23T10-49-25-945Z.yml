@@ -1,0 +1,50 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "Hide file tree" [pressed] [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search workspace (⌘K)" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e14]: Search
+        - generic [ref=e15]: ⌘K
+    - generic [ref=e16]:
+      - button "Show assistant" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e20]: Assistant
+      - button "Administrator" [ref=e22] [cursor=pointer]:
+        - generic [ref=e23]: Administrator
+        - img [ref=e24]
+  - generic [ref=e26]:
+    - navigation "Workspace navigation" [ref=e27]:
+      - generic [ref=e28]:
+        - button "New page" [ref=e29] [cursor=pointer]:
+          - img [ref=e30]
+        - button "New folder" [ref=e33] [cursor=pointer]:
+          - img [ref=e34]
+        - button "Collapse all folders" [ref=e36] [cursor=pointer]:
+          - img [ref=e37]
+      - status [ref=e40]: Loading…
+      - generic [ref=e41]:
+        - generic [ref=e42]: Recent
+        - list [ref=e43]:
+          - listitem [ref=e44]:
+            - button "Deploy" [ref=e45] [cursor=pointer]:
+              - img [ref=e46]
+              - generic [ref=e49]: Deploy
+          - listitem [ref=e50]:
+            - button "My new work space" [ref=e51] [cursor=pointer]:
+              - img [ref=e52]
+              - generic [ref=e55]: My new work space
+          - listitem [ref=e56]:
+            - button "test3" [ref=e57] [cursor=pointer]:
+              - img [ref=e58]
+              - generic [ref=e61]: test3
+      - button "Trash" [ref=e63] [cursor=pointer]:
+        - img [ref=e64]
+        - generic [ref=e67]: Trash
+      - button "Admin" [ref=e69] [cursor=pointer]:
+        - img [ref=e70]
+        - generic [ref=e72]: Admin
+    - separator "Resize sidebar" [ref=e73]
+    - main [ref=e75]:
+      - paragraph [ref=e76]: Loading…

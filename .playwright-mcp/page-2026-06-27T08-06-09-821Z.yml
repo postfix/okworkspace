@@ -1,0 +1,10 @@
+- generic [ref=e4]:
+  - generic [ref=e5]: OKF Workspace
+  - paragraph [ref=e6]: Sign in to your workspace
+  - generic [ref=e7]:
+    - generic [ref=e8]: Username
+    - textbox "Username" [ref=e9]
+  - generic [ref=e10]:
+    - generic [ref=e11]: Password
+    - textbox "Password" [ref=e12]
+  - button "Sign in" [ref=e13] [cursor=pointer]

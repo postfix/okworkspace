@@ -1,0 +1,317 @@
+[
+  {
+    "scenario": "S1",
+    "user": "carol",
+    "label": "concurrent-save",
+    "status": 409,
+    "body": "{\"error\":\"This page was changed somewhere else since you opened it. Reload to see the latest version before saving again"
+  },
+  {
+    "scenario": "S1",
+    "user": "alice",
+    "label": "concurrent-save",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S1",
+    "user": "bob",
+    "label": "concurrent-save",
+    "status": 409,
+    "body": "{\"error\":\"This page was changed somewhere else since you opened it. Reload to see the latest version before saving again"
+  },
+  {
+    "scenario": "S2",
+    "user": "bob",
+    "label": "delete",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S2",
+    "user": "alice",
+    "label": "save",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S3",
+    "user": "alice",
+    "label": "save-old-path",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S3",
+    "user": "bob",
+    "label": "rename",
+    "status": 200,
+    "body": "{\"path\":\"stress/s3-renamed-3.md\"}\n"
+  },
+  {
+    "scenario": "S4",
+    "user": "bob",
+    "label": "rename",
+    "status": 404,
+    "body": "{\"error\":\"This page no longer exists. It may have been moved or deleted.\"}\n"
+  },
+  {
+    "scenario": "S4",
+    "user": "alice",
+    "label": "rename",
+    "status": 200,
+    "body": "{\"path\":\"stress/s4-alice-3.md\"}\n"
+  },
+  {
+    "scenario": "S5",
+    "user": "alice",
+    "label": "create",
+    "status": 201,
+    "body": "{\"path\":\"stress/s5-sametitle-4.md\"}\n"
+  },
+  {
+    "scenario": "S5",
+    "user": "bob",
+    "label": "create",
+    "status": 201,
+    "body": "{\"path\":\"stress/s5-sametitle-5.md\"}\n"
+  },
+  {
+    "scenario": "S6",
+    "user": "dave",
+    "label": "move-folder",
+    "status": 409,
+    "body": "{\"error\":\"A folder with that name already exists there. Pick a different name or destination.\"}\n"
+  },
+  {
+    "scenario": "S6",
+    "user": "carol",
+    "label": "save-inside",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S7",
+    "user": "alice",
+    "label": "copy",
+    "status": 201,
+    "body": "{\"path\":\"stress/s7-copy-of-source-3.md\"}\n"
+  },
+  {
+    "scenario": "S7",
+    "user": "bob",
+    "label": "delete-source",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S8",
+    "user": "admin",
+    "label": "op4",
+    "status": 400,
+    "body": "{\"error\":\"Choose a new title or a new folder, not both.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "alice",
+    "label": "op4",
+    "status": 400,
+    "body": "{\"error\":\"Choose a new title or a new folder, not both.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "dave",
+    "label": "op4",
+    "status": 400,
+    "body": "{\"error\":\"Choose a new title or a new folder, not both.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "bob",
+    "label": "op4",
+    "status": 400,
+    "body": "{\"error\":\"Choose a new title or a new folder, not both.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "alice",
+    "label": "op4",
+    "status": 400,
+    "body": "{\"error\":\"Choose a new title or a new folder, not both.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "dave",
+    "label": "op4",
+    "status": 400,
+    "body": "{\"error\":\"Choose a new title or a new folder, not both.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "alice",
+    "label": "op4",
+    "status": 400,
+    "body": "{\"error\":\"Choose a new title or a new folder, not both.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "bob",
+    "label": "op3",
+    "status": 201,
+    "body": "{\"path\":\"stress/bob-new-0-2.md\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "admin",
+    "label": "op0",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S8",
+    "user": "bob",
+    "label": "op0",
+    "status": 409,
+    "body": "{\"error\":\"This page was changed somewhere else since you opened it. Reload to see the latest version before saving again"
+  },
+  {
+    "scenario": "S8",
+    "user": "admin",
+    "label": "op0",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S8",
+    "user": "admin",
+    "label": "op0",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S8",
+    "user": "bob",
+    "label": "op0",
+    "status": 409,
+    "body": "{\"error\":\"This page was changed somewhere else since you opened it. Reload to see the latest version before saving again"
+  },
+  {
+    "scenario": "S8",
+    "user": "admin",
+    "label": "op0",
+    "status": 409,
+    "body": "{\"error\":\"This page was changed somewhere else since you opened it. Reload to see the latest version before saving again"
+  },
+  {
+    "scenario": "S8",
+    "user": "alice",
+    "label": "op0",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S8",
+    "user": "carol",
+    "label": "op0",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S8",
+    "user": "dave",
+    "label": "op0",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S8",
+    "user": "ed",
+    "label": "op2",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S8",
+    "user": "ed",
+    "label": "op0",
+    "status": 404,
+    "body": "{\"error\":\"This page no longer exists. It may have been moved or deleted.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "carol",
+    "label": "op1",
+    "status": 200,
+    "body": "{\"path\":\"stress/carol-r0-2.md\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "ed",
+    "label": "op2",
+    "status": 204,
+    "body": ""
+  },
+  {
+    "scenario": "S8",
+    "user": "carol",
+    "label": "op1",
+    "status": 200,
+    "body": "{\"path\":\"stress/carol-r1-2.md\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "ed",
+    "label": "op1",
+    "status": 200,
+    "body": "{\"path\":\"stress/ed-r2-2.md\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "alice",
+    "label": "op3",
+    "status": 201,
+    "body": "{\"path\":\"stress/alice-new-2.md\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "bob",
+    "label": "op3",
+    "status": 201,
+    "body": "{\"path\":\"stress/bob-new-3.md\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "carol",
+    "label": "op1",
+    "status": 404,
+    "body": "{\"error\":\"This page no longer exists. It may have been moved or deleted.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "dave",
+    "label": "op3",
+    "status": 201,
+    "body": "{\"path\":\"stress/dave-new-2.md\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "ed",
+    "label": "op1",
+    "status": 404,
+    "body": "{\"error\":\"This page no longer exists. It may have been moved or deleted.\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "dave",
+    "label": "op3",
+    "status": 201,
+    "body": "{\"path\":\"stress/dave-new-4.md\"}\n"
+  },
+  {
+    "scenario": "S8",
+    "user": "carol",
+    "label": "op3",
+    "status": 201,
+    "body": "{\"path\":\"stress/carol-new-4.md\"}\n"
+  }
+]

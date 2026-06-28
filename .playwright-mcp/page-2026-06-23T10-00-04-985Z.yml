@@ -1,0 +1,46 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - button "Show file tree" [active] [ref=e314] [cursor=pointer]:
+      - img [ref=e315]
+    - generic [ref=e10]:
+      - generic "Storage healthy" [ref=e11]:
+        - generic [ref=e13]: Storage healthy
+      - button "Search workspace (⌘K)" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+        - generic [ref=e18]: Search
+        - generic [ref=e19]: ⌘K
+      - button "Show assistant" [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+        - generic [ref=e23]: Assistant
+      - button "Administrator" [ref=e25] [cursor=pointer]:
+        - generic [ref=e26]: Administrator
+        - img [ref=e27]
+  - main [ref=e270]:
+    - article [ref=e271]:
+      - generic [ref=e272]:
+        - heading "Deploy" [level=1] [ref=e273]
+        - generic [ref=e274]:
+          - button "Edit page" [ref=e275] [cursor=pointer]:
+            - img [ref=e276]
+            - generic [ref=e279]: Edit page
+          - button "Page actions" [ref=e281] [cursor=pointer]:
+            - img [ref=e282]
+      - textbox [ref=e289]:
+        - generic [ref=e290]: "## Hello"
+        - generic [ref=e292]: Deployment checklist
+        - generic [ref=e294]: "- build the binary"
+        - generic [ref=e295]: "- run the tests"
+        - generic [ref=e296]: "- deploy to the server"
+      - region "Attachments" [ref=e297]:
+        - generic [ref=e298]:
+          - heading "Attachments" [level=2] [ref=e299]
+          - button "Add files" [ref=e300] [cursor=pointer]
+        - generic [ref=e303] [cursor=pointer]:
+          - button "Choose File" [ref=e304]
+          - img [ref=e305]
+          - generic [ref=e308]:
+            - generic [ref=e309]: Drop a file here or click to browse
+            - generic [ref=e310]: Up to 100 MB · pdf, docx, txt, png, jpg, svg
+        - generic [ref=e311]:
+          - paragraph [ref=e312]: No attachments yet
+          - paragraph [ref=e313]: Drop a file above to attach it to this page.

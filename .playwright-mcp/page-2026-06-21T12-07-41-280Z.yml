@@ -1,0 +1,14 @@
+- generic [ref=e15]:
+  - heading "Set a new password" [level=1] [ref=e16]
+  - status [ref=e17]: You're using a temporary password. Choose a new one to continue.
+  - generic [ref=e18]:
+    - generic [ref=e19]: Temporary password
+    - textbox "Temporary password" [ref=e20]
+  - generic [ref=e21]:
+    - generic [ref=e22]: New password
+    - textbox "New password" [ref=e23]
+    - generic [ref=e24]: At least 12 characters.
+  - generic [ref=e25]:
+    - generic [ref=e26]: Confirm new password
+    - textbox "Confirm new password" [ref=e27]
+  - button "Update password" [ref=e28] [cursor=pointer]

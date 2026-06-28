@@ -74,10 +74,15 @@
   --color-text-2: #c7cedb;
   --color-faint: #626b7d;
 
-  /* Graph canvas (Phase 10). Orphan-node fill (GRAPH-02): the existing muted
-     page-node color (--color-text-muted #8d96a8) at ~45% alpha — an on-palette
-     alpha variant, not a new hue. Tag nodes reuse --color-faint + shape. */
-  --graph-node-orphan: rgba(141, 150, 168, 0.45);
+  /* Graph canvas (Phase 10). Page nodes render as solid teal dots with a subtle
+     outer glow ring; orphans use the same hue at low alpha + outline so they
+     read as distinct without diverging from the palette. Tag nodes reuse
+     --color-faint + diamond shape. Edges are type-colored: tag=green,
+     backlink=blue, link=subtle border. */
+  --graph-node-color: #4cc9a0;
+  --graph-node-glow: rgba(76, 201, 160, 0.18);
+  --graph-edge-tag: #22c55e;
+  --graph-edge-backlink: #60a5fa;
 
   /* Page/tree/editor/prose surfaces */
   --tree-indent: 16px;
