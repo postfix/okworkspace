@@ -2,263 +2,126 @@
 
 ## Overview
 
-OKF Workspace is built dependency-first: a safe foundation (single binary, auth, path resolver, Git repo, single-writer commit service) comes before any file operation; the core wiki loop (OKF pages, navigation, hidden Git history) is built on that foundation with a byte-stable Markdown round-trip as its exit gate; attachments and their text-extraction pipeline follow, gating both search and the agent; full-text search indexes pages plus extracted attachment text; an approval-gated Eino agent reads, summarizes, rewrites, and proposes diffs that humans approve before applying; and soft-lock collaboration hardens the save path with presence and conflict resolution; finally the editor and file tree are reshaped into an Obsidian-style experience. The v1.0 milestone layers a knowledge graph and LLM auto-tagging on top of these shipped v0.9.9 seams: a derived link/tag adjacency store (rebuildable from files, never source of truth) powers backlinks, a global + local force-directed graph UI, and an LLM tag-suggestion chain routed through the existing propose→approve→apply→commit safety model. Each phase delivers an end-to-end user capability and reuses the cross-cutting spines (safe-path resolver, single-writer Git service, async job worker) established early.
+OKF Workspace is built dependency-first: from auth and the single-writer commit spine through OKF pages, search, Eino agent, collaboration, knowledge graph, and LLM tagging. v1.3 adds workspace-wide tag management — rename, merge, and delete tags across all pages with preview→approve safety.
 
 ## Milestones
 
-- ✅ **v0.9.9 MVP** — Phases 0–7 (shipped 2026-06-23) — full self-hosted OKF wiki: auth/RBAC, pages+hidden Git, attachments+extraction, search, approval-gated Eino agent, soft-lock collaboration, Obsidian-style live-preview editor + file tree. See [`milestones/v0.9.9-ROADMAP.md`](milestones/v0.9.9-ROADMAP.md).
-- ✅ **v1.0 Knowledge Graph & LLM Auto-Tagging** — Phases 8–12 (shipped 2026-06-24) — derived link/tag store + backlinks, Obsidian-style global/local graph UI with edge-type toggles, and approval-gated per-page + bulk LLM tag suggestion. See [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md).
-- ✅ **v1.1 Hardening & Polish** — Phases 13–17 (shipped 2026-06-27) — visual UAT, documentation, UX improvement, security hardening, and graph filter sidebar.
-- ✅ **v1.2 Graph Schema Extension** — Phase 18 (shipped 2026-06-28) — extended backend GraphNode with aliases, tags, exists, and attachment types; all 3 inert Phase 17 filter toggles now functional.
+- ✅ **v0.9.9 MVP** — Phases 0–7 (shipped 2026-06-23) — full self-hosted OKF wiki
+- ✅ **v1.0 Knowledge Graph & LLM Auto-Tagging** — Phases 8–12 (shipped 2026-06-24)
+- ✅ **v1.1 Hardening & Polish** — Phases 13–17 (shipped 2026-06-27)
+- ✅ **v1.2 Graph Schema Extension** — Phase 18 (shipped 2026-06-28)
 
 ## Phases
 
-<details>
-<summary>✅ v0.9.9 MVP (Phases 0–7, 36 plans) — SHIPPED 2026-06-23</summary>
+### v1.3 Tag Management UX
 
-- [x] **Phase 0: Skeleton, Auth & Foundations** (4 plans) — single binary serves the React shell behind a login; RBAC, sessions, safe-path resolver, Git repo init, single-writer commit spine, audit log
-- [x] **Phase 1: OKF Pages, Navigation & Hidden Git** (5 plans) — create/edit/organize/version pages with automatic hidden Git history, trash + restore, byte-stable Markdown round-trip
-- [x] **Phase 2: Attachments & Text Extraction** (4 plans) — upload/preview/download/replace/orphan-delete original-fidelity attachments with PDF/DOCX/TXT extraction
-- [x] **Phase 3: Search** (4 plans) — find pages, headings, and attachments across titles, body, tags, filenames, and extracted text (Bleve, incremental index)
-- [x] **Phase 4: Eino Agent** (7 plans) — approval-gated AI help over pages, selections, attachments, and the workspace; real-diff DiffReviewDialog trust gate
-- [x] **Phase 5: Collaboration** (4 plans) — presence, soft locks, force-edit, and conflict resolution so concurrent edits never silently lose work
-- [x] **Phase 6: Live-Preview Editor (Obsidian-style)** (4 plans) — inline-rendering Markdown editor with source toggle, byte-stable round-trip preserved
-- [x] **Phase 7: Obsidian-style File Tree** (4 plans) — folder operations directly in the tree (right-click menus, drag-and-drop, folder rename/move/delete)
-
-Full phase detail, success criteria, and plan breakdown archived in [`milestones/v0.9.9-ROADMAP.md`](milestones/v0.9.9-ROADMAP.md).
-
-</details>
-
-<details>
-<summary>✅ v1.0 Knowledge Graph & LLM Auto-Tagging (Phases 8–12, 14 plans) — SHIPPED 2026-06-24</summary>
-
-- [x] **Phase 8: Derived Link/Tag Store & Maintenance** (3 plans) — rebuildable link/backlink/tag adjacency kept fresh on every page mutation, with an admin rebuild backstop (LINK-01, LINK-03)
-- [x] **Phase 9: Graph Endpoints & Backlinks Panel** (2 plans) — HTTP graph endpoints (typed edges incl. shared-tag) and a page-view "Referenced by" backlinks panel (LINK-02)
-- [x] **Phase 10: Graph UI** (3 plans) — Obsidian-style global graph view + per-page local panel with edge-type toggles, degree sizing, orphans, and hover-highlight (GRAPH-01..05)
-- [x] **Phase 11: Per-Page LLM Tag Suggestion** (3 plans) — byte-stable `okf.SetTags` primitive + on-demand suggest→approve tagging through the single-writer commit path (TAG-01..04)
-- [x] **Phase 12: Bulk Sweep & Batch Review Queue** (3 plans) — admin bulk untagged-pages sweep that enqueues suggestion jobs into a review queue, approved per page through the same byte-stable apply path (TAG-05, TAG-06)
-
-Full phase detail, success criteria, and plan breakdown archived in [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md). Close gates: audit passed (14/14 requirements), integration `integration_ok`, security review passed.
-
-</details>
-
-<details>
-<summary>✅ v1.1 Hardening & Polish (Phases 13–17) — SHIPPED 2026-06-27</summary>
-
-- [x] **Phase 13: Visual UAT** (1 plan) — manual browser testing of Phase 10 graph UI (zoom, pan, hover-highlight, edge toggles, global + local views) (UAT-01)
-- [x] **Phase 14: Documentation** (2 plans) — contributor architecture docs for graph/tag subsystems, user-facing README update (DOC-01, DOC-02)
-- [x] **Phase 15: UX Improvement** (1 plan) — bulk-approve eventual-consistency UX improvement with progress indication, non-blocking polling (UX-01)
-- [x] **Phase 16: Security Hardening** (3 plans) — admin sweep fan-out cap, tag charset input validation, govulncheck resolution (SEC-01, SEC-02, SEC-03)
-- [x] **Phase 17: Graph Filter Sidebar** (2 plans) — live graph filtering with node search, visibility toggles, groups, display sliders, and reset (GF-01)
-
-Phase 13 (UAT) caught visual issues early. Phase 14 (docs) ran in parallel. Phase 17 was discovered during UAT — built on Phase 10 graph UI with live filtering. Phases 15–16 followed.
-
-</details>
-
-## Progress
-
-**Execution Order:**
-- Phases 13 and 14 can run in parallel
-- Phase 15 depends on Phase 13 (visual issues caught before UX work)
-- Phase 16 can start after Phase 13
-
-| Phase | Milestone | Plans | Status | Completed |
-| ----- | --------- | ----- | ------ | --------- |
-| 0. Skeleton, Auth & Foundations | v0.9.9 | 4/4 | Complete | 2026-06-18 |
-| 1. OKF Pages, Navigation & Hidden Git | v0.9.9 | 5/5 | Complete | 2026-06-19 |
-| 2. Attachments & Text Extraction | v0.9.9 | 4/4 | Complete | 2026-06-20 |
-| 3. Search | v0.9.9 | 4/4 | Complete | 2026-06-20 |
-| 4. Eino Agent | v0.9.9 | 7/7 | Complete | 2026-06-21 |
-| 5. Collaboration | v0.9.9 | 4/4 | Complete | 2026-06-21 |
-| 6. Live-Preview Editor | v0.9.9 | 4/4 | Complete | 2026-06-22 |
-| 7. Obsidian-style File Tree | v0.9.9 | 4/4 | Complete | 2026-06-22 |
-| 8. Derived Link/Tag Store | v1.0 | 3/3 | Complete | 2026-06-23 |
-| 9. Graph Endpoints & Backlinks | v1.0 | 2/2 | Complete | 2026-06-24 |
-| 10. Graph UI | v1.0 | 3/3 | Complete | 2026-06-24 |
-| 11. Per-Page LLM Tag Suggestion | v1.0 | 3/3 | Complete | 2026-06-24 |
-| 12. Bulk Sweep & Batch Review | v1.0 | 3/3 | Complete | 2026-06-24 |
-| **13. Visual UAT** | **v1.1** | **1/1** | **Complete** | 2026-06-27 |
-| **14. Documentation** | **v1.1** | **2/2** | **Complete** | 2026-06-27 |
-| **15. UX Improvement** | **v1.1** | **1/1** | **Complete** | 2026-06-27 |
-| **16. Security Hardening** | **v1.1** | **3/3** | **Complete** | 2026-06-27 |
-| **17. Graph Filter Sidebar** | **v1.1** | **2/2** | **Complete** | 2026-06-27 |
+- [ ] **Phase 19: Tag Management Backend** — TM-01, TM-02, TM-03, TM-05 — tag rename/merge/delete endpoints riding `SetTagsFrontmatter` + batched single-writer commits; preview→approve flow; incremental graph store update after bulk tag mutations.
+- [ ] **Phase 20: Tag Admin UI** — TM-04 — admin panel surface for tag management with tag list, rename/merge/delete dialogs, preview, approve flow, error handling.
 
 ---
 
-## Phase 13: Visual UAT
+## Phase 19: Tag Management Backend
 
-**Goal:** Verify that Phase 10 graph UI renders correctly with zoom, pan, hover-highlight, and edge toggles functioning as designed.
+**Goal:** Build admin-only tag rename, merge, and delete endpoints that ride the existing byte-stable `SetTagsFrontmatter` + single-writer `EnqueueCommit` path. Each operation follows the preview→approve safety contract. Derived graph store stays consistent after bulk mutations.
 
-**Requirements:** UAT-01
+**Requirements:** TM-01, TM-02, TM-03, TM-05
 
-**Context:** Phase 10 wiring was verified in v1.0, but visual/manual testing was deferred. This phase performs the human verification that automated tests cannot cover.
+### Context
 
-**Success Criteria:**
-1. Global graph `/app/graph` renders all pages as nodes with correct degree sizing
-2. Orphan pages visually distinguished (no edges, isolated)
-3. Zoom (scroll wheel / pinch) works smoothly without clipping issues
-4. Pan (drag canvas) works without losing nodes off-screen
-5. Hover on node highlights its connected edges and neighbors
-6. Click on node navigates to that page
-7. Edge-type toggle chips (Links, Backlinks, Shared Tags) filter edges correctly
-8. Shared Tags toggle OFF by default; toggling ON shows tag edges with capping
-9. Local graph dock (page-view) collapses by default; expanding fetches `/graph/local`
-10. 1/2/3-hop depth control updates local graph correctly
-11. Graph renders on both desktop and mobile viewports
+v1.0 delivered per-page LLM tag suggestion and admin bulk sweep. Tags live in YAML frontmatter and in a derived SQLite `page_tags` graph store. There is no way to rename, merge, or delete a tag workspace-wide — changing a tag name requires editing every page manually.
 
-**Key Files:**
-- `web/src/components/GraphCanvas.tsx`
-- `web/src/routes/PageView.tsx` (local graph dock)
-- `internal/server/handlers_graph.go`
-- `internal/graph/query.go`
+This phase adds three admin endpoints that operate on tags across all pages in one batched commit, using the same `SetTagsFrontmatter` byte-stable builder and the same single-writer commit path that Phase 11 and Phase 12 already rely on.
 
-**Dependencies:** None (v1.0 codebase is stable)
+### Success Criteria
 
----
+1. `POST /api/v1/admin/tags/rename` — preview + approve tag rename across all pages
+2. `POST /api/v1/admin/tags/merge` — preview + approve tag merge (source → target)
+3. `POST /api/v1/admin/tags/delete` — preview + approve tag removal from all pages
+4. All three endpoints follow the preview→approve pattern (two-step: fetch affected pages, then commit)
+5. Single batched commit for all affected pages (N pages → 1 git commit)
+6. Tag name normalization: trim, lowercase, reject empty
+7. Case-only rename (e.g. "Ops" → "ops") is a no-op
+8. Per-page stale revision (409) doesn't sink the batch; response reports per-page status
+9. Tag charset validation on input (same as Phase 16 SEC-02)
+10. Admin-only RBAC (editor/reader → 403)
+11. Audit log entries for all three operations
+12. Graph store incrementally updated after each operation (TM-05)
+13. Graph store rebuild from disk reproduces identical adjacency after mutations
+14. `go test ./internal/graph/... -race` clean after tag mutations
 
-## Phase 14: Documentation
+### Key Design Decisions
 
-**Goal:** Create contributor-facing architecture documentation for v1.0 graph and tag subsystems.
+- **Reuse `SetTagsFrontmatter`** — The byte-stable YAML frontmatter builder from Phase 11. Only the `tags:` region changes. No new write implementation.
+- **Reuse batched `EnqueueCommit` with `[]fileWrite` payload** — The Phase 12 pattern. N pages → 1 commit.
+- **Preview endpoint returns the set of changes without applying** — Consistent with Phase 12 approve flow.
+- **Tag normalization on input** — Trim + lowercase before lookup. Prevents "Ops" and "ops" from being different tags.
+- **Conflict: rename to existing tag = merge** — If renaming "deploy" to "ops" and some pages already have "ops", the operation is effectively a merge: "deploy" pages get "ops", "ops" pages keep "ops".
+- **Graph store: incremental update** — After the batched commit lands, update `page_tags` in the same request handler (not an async job). The rebuild path is the invariant; incremental update is a performance optimization.
 
-**Requirements:** DOC-01, DOC-02
+### Key Files
 
-**Context:** Security review was run at v1.0 close, but `docs/` was deferred. Contributors need architecture docs to understand the graph/tag subsystems.
+- `internal/server/handlers_tags.go` — New tag management endpoints
+- `internal/okf/emit.go` — `SetTagsFrontmatter` (existing, reuse)
+- `internal/gitstore/commit.go` — Batched `EnqueueCommit` (existing, reuse)
+- `internal/graph/rebuild.go` — Graph rebuild (existing, verify consistency)
+- `internal/graph/query.go` — Graph store incremental update after tag mutation
+- `internal/graph/extract.go` — `pageTags` extractor (existing, reuse for verification)
 
-**Success Criteria:**
-1. `docs/README.md` — project overview, how to contribute
-2. `docs/architecture/overview.md` — system architecture diagram and data flow
-3. `docs/architecture/graph-subsystem.md` — graph store, rebuild, query layer
-4. `docs/architecture/tag-subsystem.md` — tag suggestion, bulk sweep, apply path
-5. `docs/api/` — public API surfaces (endpoint contracts)
-6. Root `README.md` updated with v1.0 features
-7. All docs cross-link to relevant code files
+### Dependencies
 
-**Key Files:**
-- `internal/graph/*.go` (graph subsystem)
-- `internal/tagsweep/*.go` (tag subsystem)
-- `internal/agent/suggesttags.go` (LLM tagging)
-- `internal/server/handlers_graph.go`
-- `internal/server/handlers_tagsweep.go`
-
-**Dependencies:** None (documentation work is independent)
+- Phase 11 (Per-Page LLM Tag Suggestion) — `SetTagsFrontmatter` byte-stable builder
+- Phase 12 (Bulk Sweep) — batched commit pattern
+- Phase 16 (Security Hardening) — tag charset validation (SEC-02)
 
 ---
 
-## Phase 15: UX Improvement
+## Phase 20: Tag Admin UI
 
-**Goal:** Improve the bulk-approve user experience when the commit hasn't physically landed yet, reducing confusion about whether the operation succeeded.
+**Goal:** Admin-only tag management surface in the existing admin panel with tag list, rename/merge/delete dialogs, preview, approve flow, and error handling.
 
-**Requirements:** UX-01
+**Requirements:** TM-04
 
-**Context:** Bulk-approve reports success before the commit lands. The job is durable and re-drains on restart, but the UX is confusing. Users may think the operation failed or succeeded when it's still pending.
+### Context
 
-**Success Criteria:**
-1. Bulk-approve shows progress indication (polling state or job queue view)
-2. User sees "applying..." state while commit is in-flight
-3. Success state shown only after commit lands (or clear "queued" state if async)
-4. Stale revision (409) per-page failures don't sink the batch; user sees which pages succeeded/failed
-5. Optional: "View pending jobs" admin panel shows queue status
+Phase 19 provides the backend endpoints. This phase builds the React UI that exposes them to admins. The existing admin panel (`/app/admin`) already hosts user management and tag sweep controls — tag management is a natural third section.
 
-**Design Decision Required:** Choose one:
-- Option A: Poll until commit lands (simplest, blocks UI)
-- Option B: Show "queued" state with progress indicator (non-blocking)
-- Option C: Dedicated admin panel for job queue visibility (more work)
+### Success Criteria
 
-**Key Files:**
-- `internal/server/handlers_tagsweep.go` (bulk-approve endpoint)
-- `internal/tagsweep/job.go` (job execution)
-- `web/src/routes/Admin.tsx` (admin panel)
-- `web/src/api/client.ts` (API client)
+1. "Tag Management" section in `/app/admin` with tag list (name + page count)
+2. Tag list is searchable/filterable
+3. "Rename" action per tag → dialog with new name input + preview of affected pages
+4. "Merge" action per tag → dialog with target tag picker + preview of affected pages
+5. "Delete" action per tag → confirmation dialog showing affected page count
+6. Preview shows paginated affected-page list with current tags
+7. Approve button with loading/progress state (mirrors Phase 15 UX improvement)
+8. Success/error feedback after operation completes
+9. Error states: network failure toast, per-page 409 listing, server validation error
+10. Tag list refreshes after successful operation
+11. Admin-only: non-admin users don't see the Tag Management section
+12. `npx tsc --noEmit` clean, `npx vitest run` green
 
-**Dependencies:** Phase 13 (visual issues caught early)
+### Key Design Decisions
 
----
+- **Inline in existing admin panel** — Not a separate route. Consistent with user management and tag sweep sections.
+- **Optimistic UI with server confirmation** — Show pending state during preview fetch and during approve. On success, refresh tag list. On failure, show error.
+- **Per-page 409 display** — If some pages fail with stale revision, list them explicitly. Don't silently swallow failures.
+- **No tag picker in delete** — Delete operates on a single tag. The dialog shows page count and asks for confirmation.
 
-## Phase 16: Security Hardening
+### Key Files
 
-**Goal:** Add defense-in-depth protections for admin sweep, tag input, and vulnerability scanning.
+- `web/src/routes/Admin.tsx` — Add Tag Management section
+- `web/src/components/admin/TagManagement.tsx` — New component
+- `web/src/api/client.ts` — New API client methods for tag endpoints
+- `web/src/components/admin/TagRenameDialog.tsx` — Rename dialog with preview
+- `web/src/components/admin/TagMergeDialog.tsx` — Merge dialog with preview
+- `web/src/components/admin/TagDeleteDialog.tsx` — Delete confirmation dialog
 
-**Requirements:** SEC-01, SEC-02, SEC-03
+### Dependencies
 
-**Context:** Three informational security notes from v1.0 close:
-1. Admin sweep fan-out is unbounded (admin-only, low risk, but could exhaust resources)
-2. Tag charset permits HTML metachars (all sinks encode correctly, but defense-in-depth)
-3. `govulncheck` is inconclusive due to Go 1.26/x-tools toolchain panic
-
-**Success Criteria:**
-
-**SEC-01: Admin Sweep Fan-Out Cap**
-1. Config setting for max concurrent jobs per sweep (default: 10)
-2. Sweep enqueues jobs in batches up to cap; remaining queued until slots free
-3. Admin UI shows progress (N/M pages processed)
-4. Config documented in `config.yaml` example
-
-**SEC-02: Tag Charset Input Validation**
-1. `okf.SetTags` validates tag strings against allowed charset (alphanumeric, dash, underscore, space)
-2. Invalid tags rejected with 400 Bad Request
-3. Existing sink encoding unchanged
-4. Test cases for XSS attempts via tag names
-
-**SEC-03: `govulncheck` Resolution**
-1. Root cause identified (Go 1.26 bug, x-tools issue, or configuration)
-2. Resolution path chosen (upgrade Go, upgrade x-tools, wait for fix, alternative scanner)
-3. `govulncheck ./...` runs cleanly or has documented exceptions
-4. CI workflow updated if scanning approach changes
-
-**Key Files:**
-- `internal/tagsweep/job.go` (SEC-01)
-- `internal/okf/emit.go` (SEC-02 - `SetTagsFrontmatter`)
-- `go.mod`, CI workflow (SEC-03)
-
-**Dependencies:** Phase 13 (visual issues caught early)
+- Phase 19 (Tag Management Backend) — all three endpoints must exist
+- Phase 15 (UX Improvement) — progress/polling pattern
 
 ---
-
-## Phase 17: Graph Filter Sidebar
-
-**Goal:** Add filtering and display controls flat into the existing graph panel — same flat area as Links/Backlinks/Shared Tags edge-type toggles. No collapsing, no separate sections, no sidebar. Everything lives together in one panel.
-
-**Requirements:** GF-01
-
-**Context:** Discovered during Phase 13 UAT — the graph renders correctly but lacks filtering. Controls should sit alongside the existing edge-type chips in the same flat panel, not in a separate or collapsible section.
-
-**Success Criteria:**
-1. Search input lives in the same panel as Links/Backlinks/Shared Tags, filters graph nodes live by name/path/tags
-2. Four additional toggle chips alongside existing edge-type toggles:
-   - Tags: ON (show tag nodes)
-   - Attachments: OFF (hide attachment nodes)
-   - Existing files only: OFF
-   - Orphans: ON
-3. "New group" button in the same panel for creating named, colored graph groups
-4. Display controls in the same panel:
-   - Arrows toggle (OFF) — link direction arrowheads
-   - Text fade threshold slider (0–1, default 0.5)
-   - Node size slider (0–1, default 0.2)
-   - Link thickness slider (0–1, default 0.2)
-5. Live updates: every control change immediately updates the graph
-6. Reset button restores all defaults
-7. Settings persisted per workspace (localStorage)
-8. Filtering pipeline is deterministic: node filter → edge filter → orphan filter → display settings
-
-**Key Files:**
-- `web/src/components/graph/GraphCanvas.tsx` — Canvas wrapper (display settings apply here)
-- `web/src/components/graph/GraphView.tsx` — Global graph route (sidebar mounts here)
-- `web/src/stores/graphEdges.ts` — Edge toggle state (extend or add filter store)
-- `web/src/hooks/useGraph.ts` — Graph data fetching (filtering pipeline)
-- `internal/graph/query.go` — Graph query layer (may need search/filter params)
-
-**Dependencies:** Phase 10 (Graph UI) — builds on existing GraphCanvas, useGraph, and graphEdges store. Phase 13 (UAT) — baseline verified working before adding features.
-
----
-
-<details>
-<summary>✅ v1.2 Graph Schema Extension (Phase 18) — SHIPPED 2026-06-28</summary>
-
-- [x] **Phase 18: Graph Schema Extension** (1 plan) — extended backend GraphNode struct with aliases, tags, exists, and attachment types to activate the 3 inert Phase 17 filter toggles (GF-02)
-
-Phase 18 closed the accepted tech debt from Phase 17. Pure backend data plumbing — no new UI.
-
-</details>
 
 ## Progress
 
@@ -283,44 +146,12 @@ Phase 18 closed the accepted tech debt from Phase 17. Pure backend data plumbing
 | 16. Security Hardening | v1.1 | 3/3 | Complete | 2026-06-27 |
 | 17. Graph Filter Sidebar | v1.1 | 2/2 | Complete | 2026-06-27 |
 | 18. Graph Schema Extension | v1.2 | 1/1 | Complete | 2026-06-28 |
+| **19. Tag Management Backend** | **v1.3** | **0** | **Planned** | — |
+| **20. Tag Admin UI** | **v1.3** | **0** | **Planned** | — |
 
 ---
 
-## Phase 18: Graph Schema Extension
+## Execution Order
 
-**Goal:** Extend the backend `GraphNode` struct and graph store to populate `aliases`, `tags`, `exists`, and `type: "attachment"` fields — activating the 3 inert Phase 17 filter toggles (Attachments, Existing files only, search by aliases/tags).
-
-**Requirements:** GF-02
-
-**Context:** Phase 17 built the full filtering pipeline, but 3 toggles are dead code because the backend `GraphNode` only carries `id`, `label`, and `type: "page" | "tag"`. The TypeScript code uses type assertions to access `aliases`, `tags`, `exists`, and `type: "attachment"` — none of which exist at runtime. This phase makes them real.
-
-**Success Criteria:**
-1. `GraphNode` struct extended with `Aliases []string`, `Tags []string`, `Exists bool`
-2. `GraphNode.Type` extended to `"page" | "tag" | "attachment"`
-3. Graph store populates `Aliases` and `Tags` from page YAML frontmatter
-4. Graph store populates `Exists: true` for existing pages, `false` for unresolved links
-5. Graph store creates attachment nodes for uploaded files with `type: "attachment"`
-6. TypeScript `GraphNode` type updated in `client.ts` (no more type assertions)
-7. `matchesSearch` matches against real `aliases` and `tags` arrays
-8. `filterNodes` checks real `type` and `exists` values
-9. All 3 previously-inert toggles become functional
-10. `go test ./internal/graph/...` and `npx tsc --noEmit` clean
-
-**Key Files:**
-- `internal/graph/model.go` — GraphNode struct definition
-- `internal/graph/store.go` — graph store (rebuild, incremental upsert/delete)
-- `web/src/api/client.ts` — TypeScript GraphNode type
-- `web/src/lib/graph/filter.ts` — matchesSearch, filterNodes (remove type assertions)
-
-**Dependencies:** Phase 17 (Graph Filter Sidebar) — activates the already-built UI.
-
----
-
-## Out of Scope
-
-The following were considered and explicitly deferred:
-
-- **GraphCanvas bundle lazy-load** — Performance polish, deferred to backlog
-- **Graph performance/clustering at scale** — Future optimization when page count warrants
-- **Tag rename/merge across workspace** — New feature, separate milestone
-- **Real-time collaboration (CRDT)** — Out of MVP scope
+- Phase 19 (Backend) must complete before Phase 20 (UI)
+- Phase 19 can be decomposed into sub-plans: TM-01 (rename) → TM-02 (merge) → TM-03 (delete) → TM-05 (graph store)
