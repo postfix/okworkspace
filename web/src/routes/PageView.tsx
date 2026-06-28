@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Paperclip, Pencil } from "lucide-react";
+import { TagManageLink } from "../components/admin/TagManagement";
 
 import Dialog from "../components/Dialog";
 
@@ -115,6 +116,7 @@ export default function PageView() {
             onHistory={() => setHistoryOpen(true)}
             onDelete={() => setDeleteOpen(true)}
           />
+          <TagManageLink />
         </div>
       </header>
       {body.trim() === "" ? (
