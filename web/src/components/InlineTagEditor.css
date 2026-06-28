@@ -49,8 +49,8 @@
 
 .inline-tags-input-area {
   position: relative;
-  flex: 1;
-  min-width: 80px;
+  min-width: 100px;
+  max-width: 200px;
 }
 
 .inline-tags-input {

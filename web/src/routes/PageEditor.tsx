@@ -27,7 +27,6 @@ import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
 import InlineTagEditor from "../components/InlineTagEditor";
-import { TagManageLink } from "../components/admin/TagManagement";
 import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
 
@@ -652,7 +651,6 @@ export default function PageEditor() {
             setSaveState("idle");
           }}
         />
-        <TagManageLink />
       </div>
 
       <div className="pageeditor-toolbar">
