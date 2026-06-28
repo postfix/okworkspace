@@ -7,7 +7,6 @@ import {
   getSweepStatus,
   listTagSuggestions,
   suggestTags,
-  type SweepProgress,
   type SweepStatusPayload,
   type TagSuggestion,
   type TagSuggestionEntry,

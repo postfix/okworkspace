@@ -52,8 +52,8 @@ export function matchesSearch(node: GraphNode, query: string): boolean {
   return (
     node.label?.toLowerCase().includes(q) ||
     node.id?.toLowerCase().includes(q) ||
-    node.aliases?.some((a) => a.toLowerCase().includes(q)) ||
-    node.tags?.some((t) => t.toLowerCase().includes(q))
+    (node.aliases?.some((a) => a.toLowerCase().includes(q)) ?? false) ||
+    (node.tags?.some((t) => t.toLowerCase().includes(q)) ?? false)
   );
 }
 
