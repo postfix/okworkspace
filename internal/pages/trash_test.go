@@ -3,6 +3,8 @@ package pages
 import (
 	"context"
 	"database/sql"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -419,6 +421,46 @@ func TestDeleteFolder(t *testing.T) {
 		t.Fatalf("per-page restore path = %q, want %q", restored, aPath)
 	}
 	waitForFile(t, r, aPath)
+}
+
+// TestDeleteFolder_EmptyDir: deleting a STRAY EMPTY directory (no index.md, no
+// descendant pages — e.g. a folder whose pages were all moved/deleted) removes the
+// bare directory and succeeds, instead of the old ErrPageNotFound that left the
+// folder undeletable from the tree forever. A genuinely absent folder still 404s.
+func TestDeleteFolder_EmptyDir(t *testing.T) {
+	svc, r, _ := newServiceFixture(t, false)
+	ctx := context.Background()
+
+	emptyDir := filepath.Join(r.Root(), "stray", "empty")
+	if err := os.MkdirAll(emptyDir, 0o755); err != nil {
+		t.Fatalf("mkdir empty folder: %v", err)
+	}
+
+	if err := svc.DeleteFolder(ctx, "stray/empty", "alice"); err != nil {
+		t.Fatalf("DeleteFolder(empty dir) = %v, want nil", err)
+	}
+	if _, err := os.Stat(emptyDir); !os.IsNotExist(err) {
+		t.Fatalf("empty folder dir still present after delete (stat err = %v)", err)
+	}
+
+	// A genuinely absent folder still returns ErrPageNotFound (nothing to remove).
+	if err := svc.DeleteFolder(ctx, "ghost/gone", "alice"); err != ErrPageNotFound {
+		t.Fatalf("DeleteFolder(absent) = %v, want ErrPageNotFound", err)
+	}
+
+	// SECURITY: a traversal dir must NOT delete anything outside the repo root. Plant
+	// a sentinel as a sibling of the root and attempt to delete it via "..".
+	sentinel := filepath.Join(filepath.Dir(r.Root()), "sentinel-outside-root")
+	if err := os.MkdirAll(sentinel, 0o755); err != nil {
+		t.Fatalf("mkdir sentinel: %v", err)
+	}
+	defer os.Remove(sentinel)
+	if err := svc.DeleteFolder(ctx, "../sentinel-outside-root", "alice"); err != ErrPageNotFound {
+		t.Fatalf("DeleteFolder(traversal) = %v, want ErrPageNotFound", err)
+	}
+	if _, err := os.Stat(sentinel); err != nil {
+		t.Fatalf("traversal delete removed an out-of-root dir (sentinel stat err = %v)", err)
+	}
 }
 
 // TestRestoreGroup: after a folder delete, RestoreGroup restores the whole set —

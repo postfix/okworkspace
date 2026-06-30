@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -159,8 +161,10 @@ func (s *Service) deleteWithGroup(ctx context.Context, pagePath, user, groupID s
 // under the shared group id. Per the RESOLVED atomicity decision (CONTEXT/RESEARCH
 // Pitfall 3) the loop is per-page — each page keeps its own restorable trash row and
 // its own commit, NOT one mega-commit — so partial progress is accepted and
-// recoverable by the group id (mirrors ReconcileTrash WR-01). Returns
-// ErrPageNotFound when the folder has no pages.
+// recoverable by the group id (mirrors ReconcileTrash WR-01). A folder with no
+// descendant pages but a real (empty) directory on disk is removed directly (there
+// is nothing to trash); ErrPageNotFound is returned only when the folder is truly
+// absent.
 func (s *Service) DeleteFolder(ctx context.Context, dir, user string) error {
 	// Serialize against all namespace mutations (see lockMutation): the descendant
 	// scan + grouped trash write must be atomic against a concurrent rename/move/
@@ -168,12 +172,62 @@ func (s *Service) DeleteFolder(ctx context.Context, dir, user string) error {
 	defer s.lockMutation()()
 
 	dir = strings.Trim(strings.TrimSpace(dir), "/")
+	if dir == "" {
+		// Never operate on the repo root.
+		return ErrPageNotFound
+	}
 	pages, err := s.descendantPages(dir)
 	if err != nil {
 		return err
 	}
 	if len(pages) == 0 {
-		return ErrPageNotFound
+		// No descendant pages. Either the folder genuinely doesn't exist, or it is a
+		// STRAY EMPTY DIRECTORY — a folder whose pages were all moved/deleted (or one
+		// that never got an index.md), leaving a bare directory git never tracked. The
+		// tree still lists it (it walks the filesystem), so the user can try to delete
+		// it; there is nothing to trash, but the empty dir must still be removed or the
+		// delete fails forever (the original bug). Remove it directly when it exists;
+		// otherwise it is truly gone (404). os.Remove only succeeds on an EMPTY dir, so
+		// a folder still holding non-page files (e.g. stray attachments) surfaces an
+		// error instead of being silently nuked. No git commit: an empty dir was never
+		// tracked, so removing it changes no git state — the next tree walk drops it.
+		//
+		// SECURITY (defense-in-depth for a DESTRUCTIVE op): this is the only place that
+		// os.Removes a path derived from the caller-supplied `dir`. The HTTP handler
+		// already rejects ".." via cleanPathString, but this service method MUST
+		// self-guard (it is reusable and the op deletes from disk). Reject traversal
+		// segments, then resolve symlinks on BOTH the root and the target and require
+		// the resolved target to live strictly inside the resolved root — so no `..`,
+		// absolute path, or symlink can escape the repo and delete an arbitrary dir.
+		for _, seg := range strings.Split(dir, "/") {
+			if seg == ".." || seg == "." {
+				return ErrPageNotFound
+			}
+		}
+		root, err := filepath.EvalSymlinks(s.repo.Root())
+		if err != nil {
+			return fmt.Errorf("pages: resolve repo root: %w", err)
+		}
+		abs := filepath.Join(root, filepath.FromSlash(dir))
+		resolved, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			// Missing path or a dangling symlink → treat as truly gone, never remove.
+			return ErrPageNotFound
+		}
+		rel, err := filepath.Rel(root, resolved)
+		if err != nil || rel == "." || rel == ".." ||
+			strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			// Resolved to the root itself or outside it — refuse.
+			return ErrPageNotFound
+		}
+		info, statErr := os.Stat(resolved)
+		if statErr != nil || !info.IsDir() {
+			return ErrPageNotFound
+		}
+		if err := os.Remove(resolved); err != nil {
+			return fmt.Errorf("pages: remove empty folder %q: %w", dir, err)
+		}
+		return nil
 	}
 
 	groupID, err := newDeleteGroupID()
