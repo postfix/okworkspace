@@ -1,0 +1,95 @@
+/*
+ * DescriptionGenerate — the per-page description trust surface (ED-01b).
+ * Token-only; no new token, no new dependency. It reuses the base modal shell
+ * (.dialog-backdrop / .dialog / .dialog-title / .dialog-footer) from Dialog.css
+ * and the agent stale-banner classes (.diff-stale*) from DiffReviewDialog.css,
+ * imported here so the styles ship even though DescriptionGenerate renders its own
+ * markup (it cannot delegate to Dialog because of the Apply-not-auto-focused
+ * inversion). Mirrors TagSuggest.css.
+ */
+@import "./Dialog.css";
+@import "./DiffReviewDialog.css";
+
+.descgen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* The trigger reuses the ghost-button chip language: a ghost button that warms to
+   accent-soft on hover/active. Min-height meets the hit target. */
+.descgen-trigger {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--hit-min-height);
+  font-size: var(--font-size-label);
+}
+
+.descgen-trigger:hover:not(:disabled) {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+/* The review surface is a compact dialog (narrower than the diff modal). */
+.descgen-dialog {
+  max-width: 480px;
+  max-height: calc(100vh - var(--space-xl) * 2);
+}
+
+.descgen-subline {
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* The editable review surface: a plain-text textarea carrying the generated draft.
+   Plain text only — the value is never rendered as HTML. */
+.descgen-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 3lh;
+  padding: var(--space-sm) var(--space-md);
+  font: inherit;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.descgen-textarea:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+  border-color: var(--color-accent-border);
+}
+
+/* Quiet muted state line (suggest/apply error) — identical to .tagsuggest-status:
+   a single muted Label line, hidden-Git-safe. */
+.descgen-status {
+  margin: 0;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+}
+
+/* The footer is space-between so Cancel (left) and Apply (right) are positionally
+   separated — never two same-weight adjacent buttons (mirrors .diff-footer). */
+.descgen-footer {
+  justify-content: space-between;
+}
+
+.descgen-apply {
+  gap: var(--space-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .descgen-trigger .spinner {
+    animation: none;
+  }
+}
