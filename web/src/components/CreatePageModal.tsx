@@ -43,7 +43,11 @@ export default function CreatePageModal({
         const page = await getPage(templatePath);
         const now = new Date();
         return createPage(folder, t, {
-          frontmatter: substitutePlaceholders(page.frontmatter, { title: t, now }),
+          // {{title}} is substituted in the BODY only; the server's okf merge
+          // owns the frontmatter title (and yaml-quotes it), so injecting a raw
+          // title into frontmatter would corrupt valid templates (e.g. a colon
+          // in the title). {{date}}/{{time}} are substituted in both.
+          frontmatter: substitutePlaceholders(page.frontmatter, { now }),
           body: substitutePlaceholders(page.body, { title: t, now }),
         });
       }

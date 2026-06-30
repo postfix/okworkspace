@@ -69,14 +69,17 @@ describe("CreatePageModal template picker (ED-06a)", () => {
       { name: "Meeting", path: "Templates/Meeting.md" },
     ]);
     vi.mocked(client.getPage).mockResolvedValue({
-      frontmatter: "type: Meeting",
+      // Frontmatter carries {{date}} and a {{title}} in a value position — the
+      // latter must be LEFT LITERAL (server owns the title), the former filled.
+      frontmatter: "type: Meeting\ncreated: {{date}}\nalias: {{title}}",
       body: "# {{title}}\n\nNotes.",
       revision: "abc",
     });
     renderModal();
 
     const select = await screen.findByLabelText("Template");
-    await userEvent.type(screen.getByLabelText("Page title"), "Sprint Review");
+    // A colon-bearing title — the canonical case that broke before the fix.
+    await userEvent.type(screen.getByLabelText("Page title"), "Meeting: Kickoff");
     await userEvent.selectOptions(select, "Templates/Meeting.md");
     await userEvent.click(screen.getByRole("button", { name: "Create page" }));
 
@@ -86,12 +89,17 @@ describe("CreatePageModal template picker (ED-06a)", () => {
     await waitFor(() => expect(client.createPage).toHaveBeenCalledTimes(1));
     const call = vi.mocked(client.createPage).mock.calls[0];
     expect(call[0]).toBe("runbooks");
-    expect(call[1]).toBe("Sprint Review");
+    expect(call[1]).toBe("Meeting: Kickoff");
     const seed = call[2] as { frontmatter: string; body: string };
-    // {{title}} substituted with the entered title; the rest passed through.
-    expect(seed.body).toContain("# Sprint Review");
+    // BODY: {{title}} substituted with the (colon-bearing) entered title.
+    expect(seed.body).toContain("# Meeting: Kickoff");
     expect(seed.body).not.toContain("{{title}}");
-    expect(seed.frontmatter).toBe("type: Meeting");
+    // FRONTMATTER: {{date}} filled, but {{title}} LEFT LITERAL (never a raw title
+    // injected into a YAML value position — the server owns the title).
+    expect(seed.frontmatter).toContain("type: Meeting");
+    expect(seed.frontmatter).toContain("alias: {{title}}");
+    expect(seed.frontmatter).not.toContain("Meeting: Kickoff");
+    expect(seed.frontmatter).toMatch(/created: \d{4}-\d{2}-\d{2}/);
   });
 
   it("no templates → only Blank (no select rendered)", async () => {

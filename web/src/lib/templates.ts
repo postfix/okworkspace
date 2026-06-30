@@ -32,15 +32,27 @@ function formatTime(now: Date): string {
   return `${get("hour")}:${get("minute")}`;
 }
 
-// substitutePlaceholders replaces {{title}}/{{date}}/{{time}} in text with the
-// given title and the user-local date/time derived from now. Every occurrence is
-// replaced (replaceAll); any other {{…}} is left untouched. Pure, no eval.
+// substitutePlaceholders replaces {{date}}/{{time}} (user-local) and — only when
+// a title is supplied — {{title}} in text. Every occurrence is replaced
+// (replaceAll); any other {{…}} is left untouched. Pure, no eval.
+//
+// title is OPTIONAL on purpose: it is substituted into the page BODY (opaque
+// Markdown, where a raw title is always safe) but NOT into the frontmatter. The
+// canonical frontmatter `title:` is owned by the SERVER's okf merge (SetField,
+// which yaml-quotes it correctly), so injecting a raw title into a YAML value
+// position would corrupt valid templates — a common title like "Meeting: Kickoff"
+// would turn `title: {{title}}` into invalid YAML. Callers substitute title in
+// the body and omit it for the frontmatter; {{date}}/{{time}} are YAML-safe
+// scalars and substituted in both.
 export function substitutePlaceholders(
   text: string,
-  vars: { title: string; now: Date },
+  vars: { title?: string; now: Date },
 ): string {
-  return text
-    .replaceAll("{{title}}", vars.title)
+  let out = text;
+  if (vars.title !== undefined) {
+    out = out.replaceAll("{{title}}", vars.title);
+  }
+  return out
     .replaceAll("{{date}}", formatDate(vars.now))
     .replaceAll("{{time}}", formatTime(vars.now));
 }

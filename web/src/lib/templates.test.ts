@@ -73,4 +73,24 @@ describe("substitutePlaceholders (ED-06a / D-03)", () => {
     });
     expect(out).toBe("${alert(1)} <script>");
   });
+
+  // Frontmatter call (title omitted): {{title}} is LEFT LITERAL so a raw title
+  // is never injected into a YAML value position (the server owns the frontmatter
+  // title). {{date}}/{{time}} are still substituted.
+  it("omitting title leaves {{title}} literal but still fills date/time", () => {
+    const out = substitutePlaceholders("title: {{title}}\ncreated: {{date}}", {
+      now,
+    });
+    expect(out).toBe(`title: {{title}}\ncreated: ${expectedDate}`);
+  });
+
+  // A colon-bearing title in the BODY is safe (opaque Markdown), proving the fix:
+  // the title goes in the body, not the frontmatter.
+  it("substitutes a colon-bearing title into the body verbatim", () => {
+    const out = substitutePlaceholders("# {{title}}", {
+      title: "Meeting: Kickoff",
+      now,
+    });
+    expect(out).toBe("# Meeting: Kickoff");
+  });
 });
