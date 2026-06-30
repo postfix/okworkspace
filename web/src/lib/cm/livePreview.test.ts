@@ -21,7 +21,7 @@ import type { DecorationSet } from "@codemirror/view";
 import { markdownExtension } from "./markdown";
 import { cleanRender, livePreview, livePreviewExtension } from "./livePreview";
 import { HashtagWidget } from "./widgets";
-import { parseInlineTags } from "./hashtag";
+import { inlineTagsFromBody } from "./hashtag";
 import { EditorView as CMEditorView } from "@codemirror/view";
 import type { WidgetType } from "@codemirror/view";
 
@@ -502,10 +502,10 @@ describe("Hashtag badges — adversarial boundary corpus (Phase 21)", () => {
     expect(labels("a\n#deploy")).toEqual(["deploy"]);
   });
   it("preserves CASE in the badge label (render is not lower-cased): '#0xFF' → '0xFF'", () => {
-    // The render slices the doc verbatim (case kept); parseInlineTags lower-cases for
+    // The render slices the doc verbatim (case kept); inlineTagsFromBody lower-cases for
     // the materialized set. Same SPAN, different normalization — by design, not a drift.
     expect(labels("#0xFF")).toEqual(["0xFF"]);
-    expect(parseInlineTags("#0xFF")).toEqual(["0xff"]);
+    expect(inlineTagsFromBody("#0xFF")).toEqual(["0xff"]);
   });
   it("badges the slash/dash/underscore body forms: #/a #-1 #_ #a//b #a/ #a/b/c", () => {
     expect(labels("#/a")).toEqual(["/a"]);
@@ -530,7 +530,8 @@ describe("Hashtag badges — adversarial boundary corpus (Phase 21)", () => {
   });
   it("does NOT badge inside an INDENTED code block (leading tab): '\\t#deploy'", () => {
     // A leading tab makes the line an indented code block → no inline parse → no badge.
-    // (parseInlineTags DOES extract here — the documented code-region scope gap.)
+    // inlineTagsFromBody runs the SAME parse, so it AGREES (no extract) — the Phase-21
+    // code-region scope gap is closed (asserted in hashtag.test.ts).
     expect(labels("\t#deploy")).toEqual([]);
   });
   it("does NOT badge after punctuation other than whitespace: '(#tag' ',#tag' '\"#tag'", () => {
@@ -620,18 +621,16 @@ describe("Hashtag badges — adversarial boundary corpus (Phase 21)", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ED-02a — KNOWN render⇄scanner divergence (Phase 21; surfaced by the adversarial
-// gate, dispositioned by the engineer). The render path treats a block-section start
-// as a `#` boundary (via `cx.offset`), so `>#deploy` (no space after the blockquote
-// marker) BADGES; the pure `parseInlineTags` scanner has no block structure, sees the
-// literal `>` before `#`, and extracts nothing. This is one of the two render-only
-// behaviors hashtag.ts documents as OUT of `parseInlineTags`' scope (the other is
-// code-region exclusion) — both reconciled in Phase 22 (ED-02b), where the scanner is
-// first actually used for materialization. parseInlineTags is UNUSED in Phase-21
-// render, so this divergence has no Phase-21 effect. Pinned (not asserted-equal) so
-// the gap stays visible and Phase 22 cannot regress it silently.
+// ED-02b — render⇄materialize AGREEMENT (Phase 22 CLOSED the Phase-21 gap). The
+// Phase-21 pure `parseInlineTags` string scanner diverged from the render on two
+// render-only behaviors: (1) it had no block structure, so `>#deploy` (no space after
+// the blockquote marker) was rejected by the raw `>` boundary even though the render
+// badges it; and (2) it extracted `#tag` from inside code. Phase 22 retired that
+// scanner: `inlineTagsFromBody` runs the SAME Lezer extension set as the render, so it
+// agrees by construction. These tests flip the old "DRIFT" pins into agreement assertions
+// — the materialized set now equals the rendered badge set, the whole point of ED-02b.
 // ─────────────────────────────────────────────────────────────────────────────
-describe("Hashtag render⇄scanner divergence (Phase 21 known gap → Phase 22)", () => {
+describe("Hashtag render⇄materialize agreement (Phase 22 — Phase-21 gap closed)", () => {
   const renderedTags = (doc: string): string[] =>
     decorationsFor(doc, undefined, { clean: true })
       .filter((d) => d.widget instanceof HashtagWidget)
@@ -640,17 +639,18 @@ describe("Hashtag render⇄scanner divergence (Phase 21 known gap → Phase 22)"
   it("the RENDER badges '>#deploy' (blockquote-content start is a valid boundary)", () => {
     expect(renderedTags(">#deploy")).toEqual(["deploy"]);
   });
-  it("parseInlineTags('>#deploy') extracts NOTHING ('>' is non-whitespace in the raw string)", () => {
-    expect(parseInlineTags(">#deploy")).toEqual([]);
+  it("inlineTagsFromBody('>#deploy') now AGREES with the render → ['deploy']", () => {
+    // The structural Lezer parse sees '>' as a blockquote marker and '#deploy' as
+    // section-start content — a valid boundary, exactly as the render does.
+    expect(inlineTagsFromBody(">#deploy")).toEqual(["deploy"]);
   });
-  it("the divergence is exactly the block-marker-abutting case (documented, Phase-22-owned)", () => {
-    // The render and the scanner DISAGREE here — by design for Phase 21. This pins the
-    // SHAPE of the known gap (render=[deploy], scan=[]) so Phase 22's reconciliation
-    // has a concrete failing target to close, and a regression elsewhere is caught.
+  it("render and materialize agree on the block-marker-abutting case (gap closed)", () => {
+    // Both badge AND materialize '>#deploy' (case-folded), and both handle the
+    // space-after-marker form identically. The render keeps display case; materialize
+    // lower-cases — same membership, by design (D-04).
     expect(renderedTags(">#deploy")).toEqual(["deploy"]);
-    expect(parseInlineTags(">#deploy")).toEqual([]);
-    // With a space after the marker, BOTH agree (the normal blockquote-tag case).
+    expect(inlineTagsFromBody(">#deploy")).toEqual(["deploy"]);
     expect(renderedTags("> #deploy")).toEqual(["deploy"]);
-    expect(parseInlineTags("> #deploy")).toEqual(["deploy"]);
+    expect(inlineTagsFromBody("> #deploy")).toEqual(["deploy"]);
   });
 });

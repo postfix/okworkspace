@@ -1,28 +1,23 @@
-// hashtag — the ED-02a inline `#tag` grammar, as a @lezer/markdown extension plus a
-// pure string scanner that shares the exact same rules.
+// hashtag — the ED-02a/ED-02b inline `#tag` grammar, as a @lezer/markdown extension,
+// plus a standalone Lezer parser that materializes body `#tags` into frontmatter.
 //
-// TWO consumers, ONE grammar (CONTEXT D-01/D-02):
+// TWO consumers, ONE grammar AND ONE parser (CONTEXT D-01/D-01b):
 //   • `hashtagExtension` — a MarkdownConfig that registers a `Hashtag` inline node so
 //     the Lezer tree the livePreview ViewPlugin already walks gains `Hashtag` nodes;
 //     livePreview.ts replaces each with a badge widget (decoration-only, byte-stable).
-//   • `parseInlineTags` — a pure (no-CM) scanner over a raw string, returning the
-//     de-duped, lower-cased tag names. Phase 22 reuses it to materialize body `#tags`
-//     into frontmatter; defining it HERE, beside the parser, keeps the two in lock-
-//     step on the BODY/BOUNDARY ALPHABET (both route through `scanBody` + the same
-//     whitespace start rule).
+//   • `inlineTagsFromBody` — runs the SAME extension set (`tagParserExtensions`) over a
+//     raw body string via a standalone `parser.configure(...)`, collecting `Hashtag`
+//     node text (lower-cased, de-duped). Phase 22 (ED-02b) uses it to reconcile body
+//     `#tags` into the canonical frontmatter `tags:` on save.
 //
-// SCOPE — the two consumers share the alphabet but NOT two render-only exclusions
-// (both reconciled in Phase 22, ED-02b; `parseInlineTags` is UNUSED in Phase 21's
-// render path, so neither gap has any Phase-21 runtime effect):
-//   1. CODE REGIONS — the render never offers a `#` inside InlineCode/FencedCode to
-//      the parser (structural, via the Lezer tree); the raw-string scanner has no
-//      block structure to consult, so it WILL extract a `#tag` from inside code.
-//   2. BLOCK-SECTION BOUNDARY — the render's start boundary is `cx.offset`, the
-//      block's inline-content start, so a `#` directly after a block marker (e.g.
-//      `>#tag` in a blockquote) is a valid boundary and badges; the raw-string
-//      scanner sees the literal `>` (non-whitespace) before `#` and rejects it.
-//   Both divergences are pinned by tests (livePreview.test.ts "DRIFT" + hashtag.test
-//   "KNOWN scope gap") so Phase 22 inherits a precise, visible contract.
+// Because BOTH consumers run the IDENTICAL Lezer extension set, materialization is
+// code-region/heading/escape-aware BY CONSTRUCTION — it can never disagree with what
+// the editor badges. This CLOSES the Phase-21 `parseInlineTags` "render⇄scanner
+// divergence" (21-VERIFICATION.md): a `#` inside fenced/inline code, an ATX heading
+// marker, an all-digit run, or an escape is excluded the same way in both, and a `#`
+// directly after a block marker (`>#tag`) is a valid boundary in both. The Phase-21
+// pure string scanner `parseInlineTags` — which had no block structure and so diverged
+// on code regions and block-marker boundaries — is RETIRED, superseded by this parse.
 //
 // GRAMMAR (CONTEXT D-02 — the negative corpus is the authority):
 //   • Start boundary: a `#` only begins a tag when the preceding char is start-of-
@@ -38,6 +33,7 @@
 //     a block HeaderMark (not inline content) — so `` `#x` ``, fenced `#x`, and
 //     `# Title` are excluded by construction. Every one is still corpus-pinned in
 //     livePreview.test.ts (defense against a grammar/precedence regression).
+import { parser, Table, Strikethrough, TaskList, Autolink } from "@lezer/markdown";
 import type { MarkdownConfig, InlineContext } from "@lezer/markdown";
 
 const HASH = 35; // '#'
@@ -116,27 +112,39 @@ export const hashtagExtension: MarkdownConfig = {
   parseInline: [{ name: "Hashtag", parse: parseHashtag, before: "Link" }],
 };
 
-// parseInlineTags scans a raw string with the SAME boundary/body rules as the Lezer
-// parser and returns the de-duped, lower-cased tag names ('#Deploy' → 'deploy').
-// Reused by Phase 22 for client-side frontmatter materialization.
-//
-// SCOPE NOTE (Phase 21): this string scan shares the body alphabet + whitespace
-// start rule with the render, but diverges from it on the two render-only behaviors
-// documented in the file header: (1) it does NOT skip fenced/inline-code regions,
-// and (2) it does NOT treat a block-marker-abutting `#` (e.g. `>#tag`) as a section
-// start. Acceptable because the function is UNUSED in the render path here; Phase 22
-// (ED-02b) reconciles its scope when it wires materialization.
-export function parseInlineTags(text: string): string[] {
+// tagParserExtensions is the SINGLE source of truth for the Markdown extension set:
+// the four GFM extensions plus the Hashtag inline node. BOTH the CM6 render
+// (markdown.ts composes it into `markdownExtension`) and `inlineTagsFromBody` consume
+// THIS exact array, so the render and the materialized tag set can never fork (D-01b).
+// hashtag.ts imports the GFM bits straight from "@lezer/markdown" (never from
+// markdown.ts) so there is no import cycle.
+export const tagParserExtensions = [
+  Table,
+  Strikethrough,
+  TaskList,
+  Autolink,
+  hashtagExtension,
+];
+
+// tagParser is a standalone CommonMark parser configured with tagParserExtensions. It
+// parses a whole body string WITH full block structure, so a `#` inside fenced or
+// inline code, an ATX heading marker, or after a non-boundary char is excluded
+// structurally — identical to the render path (which walks the same node set).
+const tagParser = parser.configure(tagParserExtensions);
+
+// inlineTagsFromBody parses a raw body and returns the de-duped, lower-cased `Hashtag`
+// tag names ('#Deploy' → 'deploy'). It is the code-region-aware materialization the
+// Phase-22 save reconcile uses; sharing `tagParser` with the render is what guarantees
+// agreement (CONTEXT D-01). De-dupe is case-insensitive (lower-cased before the Set
+// add); first-seen order is insignificant — the reconcile re-orders deterministically.
+export function inlineTagsFromBody(body: string): string[] {
+  const tree = tagParser.parse(body);
   const out = new Set<string>();
-  const charAt = (i: number) => text.charCodeAt(i);
-  for (let i = 0; i < text.length; i++) {
-    if (charAt(i) !== HASH) continue;
-    const before = i > 0 ? charAt(i - 1) : -1;
-    if (before !== -1 && !isWs(before)) continue;
-    const end = scanBody(charAt, i + 1, text.length);
-    if (end < 0) continue;
-    out.add(text.slice(i + 1, end).toLowerCase());
-    i = end - 1; // skip past the consumed tag body (the for-loop's i++ lands on `end`)
-  }
+  const cur = tree.cursor();
+  do {
+    if (cur.name === "Hashtag") {
+      out.add(body.slice(cur.from + 1, cur.to).toLowerCase());
+    }
+  } while (cur.next());
   return [...out];
 }
