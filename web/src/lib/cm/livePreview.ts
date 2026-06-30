@@ -474,41 +474,83 @@ const tableField = StateField.define<DecorationSet>({
   ],
 });
 
-// buildCodeBlockDecorations: the BLOCK fenced-code widgets, READ MODE ONLY. Like the
-// table grid these are block / line-break-spanning replace decorations, so they must
-// come from a StateField (CM6 forbids block decorations from a ViewPlugin). Each
-// FencedCode is replaced — fences, info string and all — by a clean CodeBlockWidget
-// <pre>. Gated on the cleanRender facet: in edit mode the facet is false and this
-// returns no decorations, so the editing surface keeps its raw fences untouched.
+// buildCodeBlockDecorations: the BLOCK fenced-code widgets. Like the table grid these are
+// block / line-break-spanning replace decorations, so they must come from a StateField
+// (CM6 forbids block decorations from a ViewPlugin). Two behaviors share this builder:
+//
+//   • ```mermaid (ED-05a / D-02) — renders in READ mode AND the LIVE editor (Obsidian
+//     parity), via a MermaidWidget block replace, EXCEPT when the selection intersects
+//     the block: there we emit NOTHING so the raw ```mermaid source is revealed for
+//     editing (active-line reveal, mirroring buildTableDecorations). Because eq() keys on
+//     (code, theme), leaving the block reuses the already-rendered SVG (no re-render), and
+//     no render runs while the cursor is inside → live mode is not per-keystroke.
+//
+//   • every other fence (Phase-25, UNCHANGED) — a clean CodeBlockWidget <pre> in READ
+//     mode ONLY (gated on cleanRender). Edit mode emits no widget for it, so a ```go block
+//     keeps its raw fences + the ViewPlugin's cm-code-block styling exactly as before.
 function buildCodeBlockDecorations(state: EditorState): DecorationSet {
-  if (!state.facet(cleanRender)) return Decoration.none;
+  const clean = state.facet(cleanRender);
+  // Active-line set drives the mermaid reveal. Read mode (clean) keeps it empty — the read
+  // surface has no editing caret, so a mermaid block always renders. Mirrors the table builder.
+  const activeLines = new Set<number>();
+  if (!clean) {
+    for (const r of state.selection.ranges) {
+      const fromLine = state.doc.lineAt(r.from).number;
+      const toLine = state.doc.lineAt(r.to).number;
+      for (let ln = fromLine; ln <= toLine; ln++) activeLines.add(ln);
+    }
+  }
+  const rangeActive = (from: number, to: number) => {
+    const first = state.doc.lineAt(from).number;
+    const last = state.doc.lineAt(to).number;
+    for (let ln = first; ln <= last; ln++) {
+      if (activeLines.has(ln)) return true;
+    }
+    return false;
+  };
+
   const deco: Range<Decoration>[] = [];
   syntaxTree(state).iterate({
     enter: (node) => {
       if (node.name !== "FencedCode") return;
       const { code, lang } = parseFenced(state.doc, node.node);
-      // ED-05a: a ```mermaid fence renders as a DIAGRAM (MermaidWidget), every other
-      // fence stays the Phase-25 CodeBlockWidget (unchanged). Both are block replaces.
-      const widget =
-        lang === "mermaid"
-          ? new MermaidWidget(code)
-          : new CodeBlockWidget(code, lang);
-      deco.push(
-        Decoration.replace({ widget, block: true }).range(node.from, node.to),
-      );
+      if (lang === "mermaid") {
+        // Render in read mode (clean → activeLines empty → always) OR in edit mode when the
+        // selection is OUTSIDE the block. When the selection intersects → emit nothing
+        // (reveal the raw source). The dropped widget's destroy() discards any in-flight render.
+        if (!rangeActive(node.from, node.to)) {
+          deco.push(
+            Decoration.replace({
+              widget: new MermaidWidget(code),
+              block: true,
+            }).range(node.from, node.to),
+          );
+        }
+      } else if (clean) {
+        // Non-mermaid fence: Phase-25 read-mode <pre> widget only (edit mode unchanged).
+        deco.push(
+          Decoration.replace({
+            widget: new CodeBlockWidget(code, lang),
+            block: true,
+          }).range(node.from, node.to),
+        );
+      }
       return false; // never descend into the fence/info/code children
     },
   });
   return Decoration.set(deco, true);
 }
 
-// codeBlockField holds the read-mode fenced-code widgets. It recomputes only when the
-// document changes (read mode has no editing selection that matters); the facet is
-// constant for a given surface, so no selection dependency is needed.
+// codeBlockField holds the fenced-code widgets. It recomputes on doc changes AND on
+// selection changes: the latter is load-bearing for ED-05a's active-line reveal — moving
+// the cursor in/out of a ```mermaid block toggles raw-source⇄diagram (the read-mode <pre>
+// widgets don't depend on selection, but recomputing on it is cheap and harmless). Mirrors
+// tableField. atomicRanges over the field means a rendered diagram deletes/navigates as a
+// unit (intended block-widget atomicity); a revealed block contributes no atomic range.
 const codeBlockField = StateField.define<DecorationSet>({
   create: (state) => buildCodeBlockDecorations(state),
   update(value, tr) {
-    if (tr.docChanged) return buildCodeBlockDecorations(tr.state);
+    if (tr.docChanged || tr.selection) return buildCodeBlockDecorations(tr.state);
     return value;
   },
   provide: (f) => [

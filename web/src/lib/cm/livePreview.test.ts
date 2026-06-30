@@ -682,3 +682,86 @@ describe("Hashtag render⇄materialize agreement (Phase 22 — Phase-21 gap clos
     expect(inlineTagsFromBody("> #deploy")).toEqual(["deploy"]);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ED-05a — mermaid LIVE-mode rendering + active-line reveal (Phase 26, D-02). The
+// load-bearing new complexity vs Phase-25's read-only CodeBlockWidget: a ```mermaid
+// block renders as a diagram in the LIVE editor too, EXCEPT when the cursor is inside it
+// (then the raw source is revealed for editing). Non-mermaid fences keep their read-only
+// behavior. Driven through the same decorationsFor harness (no real mermaid render — the
+// wrapper is mocked at the top of this file; we assert on the emitted decoration set).
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Mermaid live-mode reveal (ED-05a / D-02)", () => {
+  const DOC = "para\n\n```mermaid\ngraph TD; A-->B;\n```\n\nafter\n";
+  const fenceFrom = DOC.indexOf("```mermaid");
+  const fenceTo = DOC.lastIndexOf("```") + 3;
+  const insideBlock = DOC.indexOf("graph TD") + 2; // a position on the diagram body line
+
+  it("(a) EDIT mode, selection OUTSIDE the block → a MermaidWidget is emitted (live render)", () => {
+    // Cursor on the first paragraph (off the mermaid block).
+    const decos = decorationsFor(DOC, 1);
+    const widget = widgetDecoAt(decos, fenceFrom, fenceTo);
+    expect(widget).not.toBeNull();
+    expect(widget!.constructor.name).toBe("MermaidWidget");
+  });
+
+  it("(b) EDIT mode, selection INSIDE the block → NO widget (raw ```mermaid source revealed)", () => {
+    const decos = decorationsFor(DOC, insideBlock);
+    expect(widgetDecoAt(decos, fenceFrom, fenceTo)).toBeNull();
+  });
+
+  it("(c) moving the selection back out → the MermaidWidget reappears", () => {
+    // Out (para) → widget; in (body) → none; out again (the trailing 'after') → widget.
+    const out1 = decorationsFor(DOC, 1);
+    expect(widgetDecoAt(out1, fenceFrom, fenceTo)).not.toBeNull();
+    const inside = decorationsFor(DOC, insideBlock);
+    expect(widgetDecoAt(inside, fenceFrom, fenceTo)).toBeNull();
+    const out2 = decorationsFor(DOC, DOC.indexOf("after") + 1);
+    expect(widgetDecoAt(out2, fenceFrom, fenceTo)).not.toBeNull();
+  });
+
+  it("(d) a ```go fence in EDIT mode still emits NO widget (Phase-25 behavior unchanged)", () => {
+    const goDoc = "para\n\n```go\nfmt.Println(1)\n```\n";
+    const goFrom = goDoc.indexOf("```go");
+    // Selection off the go block — in edit mode a non-mermaid fence renders raw (no widget),
+    // and crucially still does so (the mermaid branch did not start rendering ```go).
+    const decos = decorationsFor(goDoc, 1);
+    expect(decos.some((d) => d.widget != null && d.from === goFrom)).toBe(false);
+    // The edit-mode cm-code-block styling mark is still present (unchanged).
+    expect(hasMark(decos, "cm-code-block")).toBe(true);
+  });
+
+  it("(e) READ mode always emits the MermaidWidget, even with the selection in the block", () => {
+    // clean render keeps activeLines empty → no reveal → the diagram always shows.
+    const decos = decorationsFor(DOC, insideBlock, { clean: true });
+    const widget = widgetDecoAt(decos, fenceFrom, fenceTo);
+    expect(widget).not.toBeNull();
+    expect(widget!.constructor.name).toBe("MermaidWidget");
+  });
+
+  it("a rendered mermaid block is atomic (deletes/navigates as a unit) in EDIT mode", () => {
+    const parent = document.createElement("div");
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: DOC,
+        selection: { anchor: 1 }, // off the block → widget rendered
+        extensions: [markdownExtension, livePreviewExtension],
+      }),
+    });
+    views.push(view);
+    // The codeBlockField exposes the mermaid widget's range as atomic (like the table).
+    let atomicCount = 0;
+    for (const src of view.state.facet(CMEditorView.atomicRanges)) {
+      const set = typeof src === "function" ? src(view) : src;
+      const iter = set.iter();
+      while (iter.value) {
+        if (iter.from === fenceFrom) atomicCount++;
+        iter.next();
+      }
+    }
+    expect(atomicCount).toBeGreaterThanOrEqual(1);
+    // And the document is byte-verbatim (decorations are view-only).
+    expect(view.state.doc.toString()).toBe(DOC);
+  });
+});
