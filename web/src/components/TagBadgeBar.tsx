@@ -11,6 +11,7 @@
 // frontmatter removal via `onRemoveTag`. The bar reflects the LIVE body, so typing
 // `#x` shows an un-removable badge immediately, before save. Read-only otherwise — the
 // text-input + autocomplete surface is gone (tags are authored as `#tag` in the body).
+import { useMemo } from "react";
 import { X } from "lucide-react";
 import { readTags } from "../lib/tag-frontmatter";
 import { inlineTagsFromBody } from "../lib/cm/hashtag";
@@ -23,7 +24,10 @@ interface Props {
 }
 
 export default function TagBadgeBar({ body, frontmatter, onRemoveTag }: Props) {
-  const inlineSet = new Set(inlineTagsFromBody(body)); // already lower-cased + de-duped
+  // inlineTagsFromBody runs a full (non-incremental) Lezer parse of the whole body;
+  // memoize on `body` so it does not re-parse on every unrelated re-render (the editor
+  // re-renders per keystroke). Already lower-cased + de-duped.
+  const inlineSet = useMemo(() => new Set(inlineTagsFromBody(body)), [body]);
   const fm = readTags(frontmatter);
 
   // Build the effective list: frontmatter tags in their order, then inline-only tags
