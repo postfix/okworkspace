@@ -7,8 +7,22 @@
 //     livePreview.ts replaces each with a badge widget (decoration-only, byte-stable).
 //   • `parseInlineTags` — a pure (no-CM) scanner over a raw string, returning the
 //     de-duped, lower-cased tag names. Phase 22 reuses it to materialize body `#tags`
-//     into frontmatter; defining it HERE, beside the parser, guarantees the rendered
-//     badges and the materialized set can never diverge.
+//     into frontmatter; defining it HERE, beside the parser, keeps the two in lock-
+//     step on the BODY/BOUNDARY ALPHABET (both route through `scanBody` + the same
+//     whitespace start rule).
+//
+// SCOPE — the two consumers share the alphabet but NOT two render-only exclusions
+// (both reconciled in Phase 22, ED-02b; `parseInlineTags` is UNUSED in Phase 21's
+// render path, so neither gap has any Phase-21 runtime effect):
+//   1. CODE REGIONS — the render never offers a `#` inside InlineCode/FencedCode to
+//      the parser (structural, via the Lezer tree); the raw-string scanner has no
+//      block structure to consult, so it WILL extract a `#tag` from inside code.
+//   2. BLOCK-SECTION BOUNDARY — the render's start boundary is `cx.offset`, the
+//      block's inline-content start, so a `#` directly after a block marker (e.g.
+//      `>#tag` in a blockquote) is a valid boundary and badges; the raw-string
+//      scanner sees the literal `>` (non-whitespace) before `#` and rejects it.
+//   Both divergences are pinned by tests (livePreview.test.ts "DRIFT" + hashtag.test
+//   "KNOWN scope gap") so Phase 22 inherits a precise, visible contract.
 //
 // GRAMMAR (CONTEXT D-02 — the negative corpus is the authority):
 //   • Start boundary: a `#` only begins a tag when the preceding char is start-of-
@@ -53,7 +67,10 @@ const isNonDigit = (c: number): boolean =>
 // `#`), reading code units via `charAt(i)` over the half-open range [start, end).
 // Returns the exclusive end of the tag body, or -1 when the candidate is not a tag
 // (just `#`, or no non-digit). A trailing `/` is trimmed before the checks. Shared by
-// both the Lezer parser and the pure string scanner so they cannot drift.
+// both the Lezer parser and the pure string scanner so the BODY ALPHABET (char
+// classes + trailing-slash trim + the ≥1-non-digit rule) can never drift between
+// them. (The START BOUNDARY and code-region exclusion are NOT in scanBody — see the
+// file header for where the two consumers legitimately differ.)
 function scanBody(
   charAt: (i: number) => number,
   start: number,
@@ -103,10 +120,12 @@ export const hashtagExtension: MarkdownConfig = {
 // parser and returns the de-duped, lower-cased tag names ('#Deploy' → 'deploy').
 // Reused by Phase 22 for client-side frontmatter materialization.
 //
-// SCOPE NOTE (Phase 21): this string scan does NOT skip fenced/inline-code regions
-// (it has no block structure to consult) — acceptable because the function is UNUSED
-// in the render path here (render excludes code structurally via the Lezer tree).
-// Phase 22 (ED-02b) reconciles its scope when it wires materialization.
+// SCOPE NOTE (Phase 21): this string scan shares the body alphabet + whitespace
+// start rule with the render, but diverges from it on the two render-only behaviors
+// documented in the file header: (1) it does NOT skip fenced/inline-code regions,
+// and (2) it does NOT treat a block-marker-abutting `#` (e.g. `>#tag`) as a section
+// start. Acceptable because the function is UNUSED in the render path here; Phase 22
+// (ED-02b) reconciles its scope when it wires materialization.
 export function parseInlineTags(text: string): string[] {
   const out = new Set<string>();
   const charAt = (i: number) => text.charCodeAt(i);

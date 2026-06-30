@@ -19,8 +19,9 @@ import { EditorView } from "@codemirror/view";
 import type { DecorationSet } from "@codemirror/view";
 
 import { markdownExtension } from "./markdown";
-import { cleanRender, livePreviewExtension } from "./livePreview";
+import { cleanRender, livePreview, livePreviewExtension } from "./livePreview";
 import { HashtagWidget } from "./widgets";
+import { parseInlineTags } from "./hashtag";
 import { EditorView as CMEditorView } from "@codemirror/view";
 import type { WidgetType } from "@codemirror/view";
 
@@ -444,5 +445,212 @@ describe("livePreview clean render (read mode)", () => {
     expect(dom.textContent).toBe("fmt.Println(1)");
     // No backtick fences leaked into the rendered text.
     expect(dom.textContent).not.toContain("`");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ED-02a — Phase-21 ADVERSARIAL render corpus (folded in from the adversarial-tester
+// gate). The single correctness landmine is *which `#` becomes a badge*, and the
+// harder question: does the RENDER (Lezer `Hashtag` node) agree with the pure
+// `parseInlineTags` scanner that Phase 22 will reuse? Every case here was RUN through
+// the real plugin; the structural cases (blockquote/list/heading/code/link) exercise
+// the boundary that hand-written examples miss. `badgeList` finds a badge by LABEL
+// (not by first-'#') so a structural prefix doesn't confuse the span.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Hashtag badges — adversarial boundary corpus (Phase 21)", () => {
+  // The HashtagWidget badges the plugin produced for `doc`, with their spans.
+  const badgeList = (
+    doc: string,
+    opts?: { clean?: boolean; selectionAt?: number },
+  ): { label: string; from: number; to: number }[] =>
+    decorationsFor(
+      doc,
+      opts?.selectionAt,
+      opts?.clean ? { clean: true } : undefined,
+    )
+      .filter((d) => d.widget instanceof HashtagWidget)
+      .map((d) => ({
+        label: (d.widget as HashtagWidget).tag,
+        from: d.from,
+        to: d.to,
+      }));
+  const labels = (doc: string, opts?: { clean?: boolean }): string[] =>
+    badgeList(doc, { clean: opts?.clean ?? true }).map((b) => b.label);
+
+  // POSITIVE — a badge IS produced (clean render). These cover the structural
+  // boundaries (blockquote/list/heading-content) and the body/slash/case alphabet.
+  it("badges a tag at the start of blockquote CONTENT (with a space): '> #deploy'", () => {
+    expect(labels("> #deploy")).toEqual(["deploy"]);
+  });
+  it("badges a tag inside a list item: '- #deploy' and '* #deploy'", () => {
+    expect(labels("- #deploy")).toEqual(["deploy"]);
+    expect(labels("* #deploy")).toEqual(["deploy"]);
+  });
+  it("badges a tag AFTER an ATX heading marker on the same line: '## #deploy'", () => {
+    // The leading '##' is a block HeaderMark; the inline content '#deploy' is a tag.
+    const found = badgeList("## #deploy", { clean: true });
+    expect(found.length).toBe(1);
+    expect(found[0].label).toBe("deploy");
+    // The badge replaces exactly the '#deploy' span (index 3), not the heading '#'s.
+    expect(found[0].from).toBe("## #deploy".indexOf("#deploy"));
+    expect(found[0].to).toBe(found[0].from + "#deploy".length);
+  });
+  it("badges after a MID-LINE tab: 'a\\t#deploy'", () => {
+    expect(labels("a\t#deploy")).toEqual(["deploy"]);
+  });
+  it("badges after a soft line break (newline boundary): 'a\\n#deploy'", () => {
+    expect(labels("a\n#deploy")).toEqual(["deploy"]);
+  });
+  it("preserves CASE in the badge label (render is not lower-cased): '#0xFF' → '0xFF'", () => {
+    // The render slices the doc verbatim (case kept); parseInlineTags lower-cases for
+    // the materialized set. Same SPAN, different normalization — by design, not a drift.
+    expect(labels("#0xFF")).toEqual(["0xFF"]);
+    expect(parseInlineTags("#0xFF")).toEqual(["0xff"]);
+  });
+  it("badges the slash/dash/underscore body forms: #/a #-1 #_ #a//b #a/ #a/b/c", () => {
+    expect(labels("#/a")).toEqual(["/a"]);
+    expect(labels("#-1")).toEqual(["-1"]);
+    expect(labels("#_")).toEqual(["_"]);
+    expect(labels("#a//b")).toEqual(["a//b"]);
+    expect(labels("#a/")).toEqual(["a"]); // trailing slash trimmed
+    expect(labels("#a/b/c")).toEqual(["a/b/c"]);
+  });
+  it("a non-ASCII letter terminates the ASCII-only body: '#café' → '#caf'", () => {
+    expect(labels("#café")).toEqual(["caf"]);
+  });
+
+  // NEGATIVE — NO badge. Structural exclusions (code/heading-marker/link) come from
+  // the Lezer tree; the boundary rule rejects the punctuation/unicode-preceded forms.
+  it("does NOT badge inside link TEXT (the '[' precedes the '#'): '[#tag](u)'", () => {
+    expect(labels("[#tag](http://x.test/)")).toEqual([]);
+  });
+  it("does NOT badge directly after an inline-code span (backtick precedes): '`x`#tag'", () => {
+    expect(labels("`x`#tag")).toEqual([]);
+    expect(labels("a `x`#tag")).toEqual([]);
+  });
+  it("does NOT badge inside an INDENTED code block (leading tab): '\\t#deploy'", () => {
+    // A leading tab makes the line an indented code block → no inline parse → no badge.
+    // (parseInlineTags DOES extract here — the documented code-region scope gap.)
+    expect(labels("\t#deploy")).toEqual([]);
+  });
+  it("does NOT badge after punctuation other than whitespace: '(#tag' ',#tag' '\"#tag'", () => {
+    expect(labels("(#tag)")).toEqual([]);
+    expect(labels(",#tag")).toEqual([]);
+    expect(labels('"#tag')).toEqual([]);
+  });
+  it("does NOT badge after an em-dash (U+2014 is not whitespace): 'a —#tag'", () => {
+    expect(labels("a —#tag")).toEqual([]);
+  });
+  it("does NOT badge when a non-ASCII char precedes '#': 'é#tag' / '😀#tag'", () => {
+    expect(labels("é#tag")).toEqual([]);
+    expect(labels("😀#tag")).toEqual([]);
+  });
+  it("does NOT badge '###tag' (no body char follows the first '#') or '1.#tag'", () => {
+    expect(labels("###tag")).toEqual([]);
+    expect(labels("1.#tag")).toEqual([]);
+  });
+
+  // SPAN VALIDITY across multi-byte content (surrogate pairs are 2 code units).
+  it("keeps a valid code-unit span for a tag AFTER a surrogate-pair char + space", () => {
+    const doc = "😀 #deploy"; // 😀 = 2 code units, then ' ', then '#deploy'
+    const found = badgeList(doc, { clean: true });
+    expect(found.length).toBe(1);
+    expect(found[0].label).toBe("deploy");
+    const hashPos = doc.indexOf("#"); // code-unit index === 3
+    expect(found[0].from).toBe(hashPos);
+    expect(found[0].to).toBe(hashPos + "#deploy".length);
+    // The slice the widget used is exactly the tag — the span did not split the pair.
+    expect(doc.slice(found[0].from + 1, found[0].to)).toBe("deploy");
+  });
+
+  // SECURITY/CONTRACT — the badge widget must be NON-atomic (never trap the cursor).
+  it("the badge widget is NON-atomic: rendered badges contribute ZERO atomicRanges", () => {
+    const doc = "#a #b #c"; // three badges in clean render
+    const parent = document.createElement("div");
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc,
+        extensions: [
+          markdownExtension,
+          livePreviewExtension,
+          cleanRender.of(true),
+        ],
+      }),
+    });
+    views.push(view);
+    // Sanity: the three badges really were produced.
+    expect(labels(doc).length).toBe(3);
+    // ...yet the inline ViewPlugin exposes NO atomic ranges (Pitfall 1 — unlike the
+    // image/table widgets, a hashtag is short inline text and stays non-atomic).
+    const plugin = view.plugin(livePreview)!;
+    let atomicCount = 0;
+    const iter = plugin.atomicRanges.iter();
+    while (iter.value) {
+      atomicCount++;
+      iter.next();
+    }
+    expect(atomicCount).toBe(0);
+  });
+
+  // BYTE-STABILITY under churn — a tag-dense doc with every structural shape must be
+  // byte-verbatim after the plugin builds decorations, in BOTH edit and clean mode.
+  it("byte-stable: a tag-dense doc is unchanged in edit AND clean mode (zero transactions)", () => {
+    const doc = "#a #b/c #deploy\n> #d\n- #e\n## #f\n`x` #g #h/i/\n";
+    for (const clean of [false, true]) {
+      const parent = document.createElement("div");
+      const view = new EditorView({
+        parent,
+        state: EditorState.create({
+          doc,
+          extensions: [
+            markdownExtension,
+            livePreviewExtension,
+            ...(clean ? [cleanRender.of(true)] : []),
+          ],
+        }),
+      });
+      views.push(view);
+      // No document transaction was ever issued → bytes verbatim, every literal kept.
+      expect(view.state.doc.toString()).toBe(doc);
+      expect(view.state.doc.toString()).toContain("#deploy");
+      expect(view.state.doc.toString()).toContain("#h/i/");
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ED-02a — KNOWN render⇄scanner divergence (Phase 21; surfaced by the adversarial
+// gate, dispositioned by the engineer). The render path treats a block-section start
+// as a `#` boundary (via `cx.offset`), so `>#deploy` (no space after the blockquote
+// marker) BADGES; the pure `parseInlineTags` scanner has no block structure, sees the
+// literal `>` before `#`, and extracts nothing. This is one of the two render-only
+// behaviors hashtag.ts documents as OUT of `parseInlineTags`' scope (the other is
+// code-region exclusion) — both reconciled in Phase 22 (ED-02b), where the scanner is
+// first actually used for materialization. parseInlineTags is UNUSED in Phase-21
+// render, so this divergence has no Phase-21 effect. Pinned (not asserted-equal) so
+// the gap stays visible and Phase 22 cannot regress it silently.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Hashtag render⇄scanner divergence (Phase 21 known gap → Phase 22)", () => {
+  const renderedTags = (doc: string): string[] =>
+    decorationsFor(doc, undefined, { clean: true })
+      .filter((d) => d.widget instanceof HashtagWidget)
+      .map((d) => (d.widget as HashtagWidget).tag);
+
+  it("the RENDER badges '>#deploy' (blockquote-content start is a valid boundary)", () => {
+    expect(renderedTags(">#deploy")).toEqual(["deploy"]);
+  });
+  it("parseInlineTags('>#deploy') extracts NOTHING ('>' is non-whitespace in the raw string)", () => {
+    expect(parseInlineTags(">#deploy")).toEqual([]);
+  });
+  it("the divergence is exactly the block-marker-abutting case (documented, Phase-22-owned)", () => {
+    // The render and the scanner DISAGREE here — by design for Phase 21. This pins the
+    // SHAPE of the known gap (render=[deploy], scan=[]) so Phase 22's reconciliation
+    // has a concrete failing target to close, and a regression elsewhere is caught.
+    expect(renderedTags(">#deploy")).toEqual(["deploy"]);
+    expect(parseInlineTags(">#deploy")).toEqual([]);
+    // With a space after the marker, BOTH agree (the normal blockquote-tag case).
+    expect(renderedTags("> #deploy")).toEqual(["deploy"]);
+    expect(parseInlineTags("> #deploy")).toEqual(["deploy"]);
   });
 });
