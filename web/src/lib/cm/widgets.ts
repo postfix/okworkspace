@@ -21,7 +21,10 @@
 // markup. The tests assert on element structure (tagName/children/textContent),
 // never on HTML strings, to lock this in.
 import { WidgetType } from "@codemirror/view";
+import { LanguageDescription } from "@codemirror/language";
+import { highlightCode } from "@lezer/highlight";
 import { sanitizeImageSrc } from "./sanitizeSrc";
+import { codeHighlightStyle, codeLanguages } from "./highlight";
 
 // ImageWidget renders an inline image. Constructed with the parsed src/alt and the
 // RAW `![alt](src)` markdown so the blocked-src path can fall back to plain text.
@@ -95,10 +98,27 @@ export class BulletWidget extends WidgetType {
 // CodeBlockWidget replaces a whole fenced code block with a clean <pre><code> in the
 // READ surface only — the ``` fences and the info string disappear, leaving just the
 // code on the code background (the language is exposed as a data-lang label via CSS).
-// Like every widget here the DOM is built with createElement + textContent ONLY (no
-// innerHTML), so untrusted code bytes can never become live markup (T-06-08). There
-// is no syntax highlighting (kept deliberately simple); the raw text is preserved.
+//
+// SYNTAX HIGHLIGHTING (ED-04a): toDOM renders the plain <code> FIRST (synchronous,
+// textContent — today's behavior), THEN, if `lang` matches a curated codeLanguage,
+// loads that grammar's lazy chunk and re-emits token <span>s via highlightCode using the
+// ONE shared codeHighlightStyle (identical to the live editor). The plain→highlighted
+// swap is color-only (zero layout shift) + a CSS fade (D-08).
+//
+// SECURITY (T-06-08, extended): EVERY node — plain code AND every token span — is built
+// with createElement + textContent ONLY. highlightCode hands us (text, classes) per run;
+// `text` always goes through textContent / createTextNode, NEVER innerHTML, so untrusted
+// code bytes (even markup-looking ones) can never become live markup. Tests assert on
+// element structure (tagName/className/textContent), never on HTML strings.
+//
+// TEARDOWN SAFETY (D-04): the grammar load is async, but the widget may be destroyed or
+// its DOM replaced (eq mismatch) before it resolves. The re-highlight is guarded by a
+// per-instance `destroyed` flag AND a `codeEl.isConnected` liveness check, so it never
+// writes into a stale/detached node. Unknown/absent lang OR `mermaid` (not in the curated
+// set → no match) skip the load and stay plain — no error, no throw.
 export class CodeBlockWidget extends WidgetType {
+  private destroyed = false;
+
   constructor(
     readonly code: string,
     readonly lang: string,
@@ -115,9 +135,69 @@ export class CodeBlockWidget extends WidgetType {
     pre.className = "cm-md-codeblock";
     if (this.lang) pre.setAttribute("data-lang", this.lang);
     const code = document.createElement("code");
+    // Plain render FIRST — synchronous, textContent-only (the safe baseline that ships
+    // even if the grammar never loads).
     code.textContent = this.code;
     pre.appendChild(code);
+    // Then kick off the async re-highlight (fire-and-forget; failures leave plain text).
+    void this.highlight(pre, code);
     return pre;
+  }
+
+  // highlight resolves `lang` to a curated grammar, loads its lazy chunk, and replaces the
+  // <code> children with token spans. Returns early (stays plain) for an unknown/absent
+  // lang or `mermaid`. The load is guarded on both sides of the await: a rejected import
+  // is swallowed (.catch) and a resolved import is dropped if the widget was torn down or
+  // detached meanwhile.
+  private async highlight(pre: HTMLElement, codeEl: HTMLElement): Promise<void> {
+    if (!this.lang) return;
+    const desc = LanguageDescription.matchLanguageName(codeLanguages, this.lang);
+    // No curated grammar for this info string (covers `mermaid`, unknown langs) → plain.
+    if (!desc || !desc.load) return;
+
+    let support;
+    try {
+      support = await desc.load();
+    } catch {
+      // Chunk failed to load → leave the plain render untouched (no throw).
+      return;
+    }
+    // Teardown guard: the widget may have been destroyed or its DOM detached/replaced
+    // while the chunk was loading. Never write into a stale node.
+    if (this.destroyed || !codeEl.isConnected) return;
+
+    const tree = support.language.parser.parse(this.code);
+    // Re-emit: clear the plain text, then build one text node / token span per run.
+    while (codeEl.firstChild) codeEl.removeChild(codeEl.firstChild);
+    highlightCode(
+      this.code,
+      tree,
+      codeHighlightStyle,
+      (text, classes) => {
+        if (classes) {
+          const span = document.createElement("span");
+          span.className = classes;
+          // textContent ONLY — never innerHTML (T-06-08).
+          span.textContent = text;
+          codeEl.appendChild(span);
+        } else {
+          // Unstyled run → an inert text node (still no innerHTML).
+          codeEl.appendChild(document.createTextNode(text));
+        }
+      },
+      () => {
+        // putBreak fires per newline.
+        codeEl.appendChild(document.createTextNode("\n"));
+      },
+    );
+    // Toggle the fade-in class (color-only transition; zero layout shift).
+    pre.classList.add("cm-md-codeblock--highlighted");
+  }
+
+  // CM6 calls destroy when the widget's DOM is removed/replaced — flip the flag so a
+  // still-in-flight grammar load won't write into the dead node.
+  destroy(): void {
+    this.destroyed = true;
   }
 
   ignoreEvent(): boolean {

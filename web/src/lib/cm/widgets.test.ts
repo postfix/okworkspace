@@ -11,8 +11,8 @@
 // The security cases are explicit: a `javascript:`/executable-`data:`/protocol-
 // relative image src must yield the RAW-text fallback <span>, NOT an <img> (which
 // would load/execute the blocked URL).
-import { describe, it, expect } from "vitest";
-import { HashtagWidget, ImageWidget, TableWidget } from "./widgets";
+import { describe, it, expect, vi } from "vitest";
+import { CodeBlockWidget, HashtagWidget, ImageWidget, TableWidget } from "./widgets";
 import type { TableData } from "./widgets";
 
 describe("ImageWidget (EDIT-01 inline image + EDIT-04 src gate)", () => {
@@ -175,5 +175,139 @@ describe("HashtagWidget (ED-02a badge — no-innerHTML invariant)", () => {
 
   it("ignoreEvent() returns false so a click can place the cursor (reveal-to-source)", () => {
     expect(new HashtagWidget("deploy").ignoreEvent()).toBe(false);
+  });
+});
+
+describe("CodeBlockWidget (ED-04a async syntax highlight — no-innerHTML + teardown-safe)", () => {
+  // toDOM kicks off a real lazy grammar load; the re-highlight only writes when the
+  // <code> is connected. So tests that exercise the async path attach the <pre> to
+  // document.body and poll with vi.waitFor.
+  function mount(code: string, lang: string): { pre: HTMLElement; w: CodeBlockWidget } {
+    const w = new CodeBlockWidget(code, lang);
+    const pre = w.toDOM();
+    return { pre, w };
+  }
+
+  it("renders plain <pre><code> with textContent === code SYNCHRONOUSLY (no spans yet)", () => {
+    const { pre } = mount("func main() {}", "go");
+    expect(pre.tagName).toBe("PRE");
+    expect(pre.className).toBe("cm-md-codeblock");
+    expect(pre.getAttribute("data-lang")).toBe("go");
+    const code = pre.querySelector("code")!;
+    // Synchronous render is the plain baseline — one text node, no token spans.
+    expect(code.textContent).toBe("func main() {}");
+    expect(code.querySelectorAll("span").length).toBe(0);
+  });
+
+  it("re-highlights into tok-* <span>s once the grammar resolves (element structure, never innerHTML)", async () => {
+    const code = "func main() { return }";
+    const { pre } = mount(code, "go");
+    document.body.appendChild(pre); // connected → re-highlight is allowed to write
+    try {
+      const codeEl = pre.querySelector("code")!;
+      await vi.waitFor(() => {
+        expect(codeEl.querySelectorAll("span.tok-keyword").length).toBeGreaterThan(0);
+      });
+      // Built via createElement + textContent: every child is a SPAN or a TEXT node,
+      // never parsed markup. (Asserting node types is the T-06-08 guard.)
+      for (const node of Array.from(codeEl.childNodes)) {
+        expect([1, 3]).toContain(node.nodeType); // ELEMENT or TEXT only
+        if (node.nodeType === 1) {
+          expect((node as HTMLElement).tagName).toBe("SPAN");
+          // a token span has no element children — its content is one inert text node
+          expect((node as HTMLElement).children.length).toBe(0);
+        }
+      }
+      // The concatenation of all token text round-trips the exact source bytes.
+      expect(codeEl.textContent).toBe(code);
+      // `go` is a keyword in the source → at least one tok-keyword span exists.
+      expect(codeEl.querySelector("span.tok-keyword")).not.toBeNull();
+      expect(pre.classList.contains("cm-md-codeblock--highlighted")).toBe(true);
+    } finally {
+      pre.remove();
+    }
+  });
+
+  it("markup-looking code never becomes live DOM (textContent-only)", async () => {
+    // Code that LOOKS like HTML must surface as text, never as parsed elements.
+    const code = 'const x = "<script>alert(1)</script>";';
+    const { pre } = mount(code, "javascript");
+    document.body.appendChild(pre);
+    try {
+      const codeEl = pre.querySelector("code")!;
+      await vi.waitFor(() => {
+        expect(codeEl.querySelectorAll("span").length).toBeGreaterThan(0);
+      });
+      // No <script> element was ever created from the code bytes.
+      expect(codeEl.querySelector("script")).toBeNull();
+      // The literal text round-trips intact.
+      expect(codeEl.textContent).toBe(code);
+    } finally {
+      pre.remove();
+    }
+  });
+
+  it("an UNKNOWN language stays plain (no spans, no throw)", async () => {
+    const { pre } = mount("some text", "totally-not-a-language");
+    document.body.appendChild(pre);
+    try {
+      const codeEl = pre.querySelector("code")!;
+      // Give any (non-existent) async path a chance — it must never add spans.
+      await new Promise((r) => setTimeout(r, 30));
+      expect(codeEl.querySelectorAll("span").length).toBe(0);
+      expect(codeEl.textContent).toBe("some text");
+      expect(pre.classList.contains("cm-md-codeblock--highlighted")).toBe(false);
+    } finally {
+      pre.remove();
+    }
+  });
+
+  it("a ```mermaid fence is NOT highlighted (left plain — Phase 26)", async () => {
+    const { pre } = mount("graph TD; A-->B;", "mermaid");
+    document.body.appendChild(pre);
+    try {
+      const codeEl = pre.querySelector("code")!;
+      await new Promise((r) => setTimeout(r, 30));
+      expect(codeEl.querySelectorAll("span").length).toBe(0);
+      expect(codeEl.textContent).toBe("graph TD; A-->B;");
+    } finally {
+      pre.remove();
+    }
+  });
+
+  it("teardown-safe: destroy() before the grammar resolves → no write, no throw", async () => {
+    const code = "func main() {}";
+    const { pre, w } = mount(code, "go");
+    document.body.appendChild(pre);
+    try {
+      const codeEl = pre.querySelector("code")!;
+      // Tear down IMMEDIATELY — before the async grammar import can resolve.
+      w.destroy();
+      // Wait well past when the load would have resolved.
+      await new Promise((r) => setTimeout(r, 60));
+      // The guard must have skipped the write: still plain text, no spans.
+      expect(codeEl.querySelectorAll("span").length).toBe(0);
+      expect(codeEl.textContent).toBe(code);
+    } finally {
+      pre.remove();
+    }
+  });
+
+  it("teardown-safe: a detached <code> (isConnected false) is never written into", async () => {
+    const code = "def f(): pass";
+    const { pre } = mount(code, "python");
+    // Never attached to document → codeEl.isConnected stays false through the load.
+    const codeEl = pre.querySelector("code")!;
+    await new Promise((r) => setTimeout(r, 60));
+    expect(codeEl.querySelectorAll("span").length).toBe(0);
+    expect(codeEl.textContent).toBe(code);
+  });
+
+  it("eq() compares code + lang (constructor unchanged)", () => {
+    const a = new CodeBlockWidget("x", "go");
+    const b = new CodeBlockWidget("x", "go");
+    const c = new CodeBlockWidget("x", "rust");
+    expect(a.eq(b)).toBe(true);
+    expect(a.eq(c)).toBe(false);
   });
 });
