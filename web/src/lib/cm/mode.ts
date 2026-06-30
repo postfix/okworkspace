@@ -11,10 +11,12 @@
 import { Compartment } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
+import { syntaxHighlighting } from "@codemirror/language";
 
 import { markdownExtension } from "./markdown";
 import { livePreviewExtension } from "./livePreview";
 import { theme, sourceTheme } from "./theme";
+import { codeHighlightStyle } from "./highlight";
 import { useEditorMode } from "../../stores/editorMode";
 
 // modeCompartment holds the mode-specific extension set; reconfiguring it is the
@@ -29,6 +31,11 @@ export const liveExtensions: Extension[] = [
   markdownExtension,
   livePreviewExtension,
   theme,
+  // ED-04a: color nested fenced-code tokens via the ONE shared HighlightStyle. Because
+  // codeHighlightStyle is scoped to CODE tags only (highlight.ts), this colors only the
+  // nested ```lang token spans — the existing .cm-heading/.cm-strong/.cm-em decorations
+  // (theme.ts) are untouched. Live only; Source mode stays raw mono (UI-SPEC).
+  syntaxHighlighting(codeHighlightStyle),
 ];
 
 // sourceExtensions: raw Markdown, monospace document-wide, no live-preview

@@ -9,6 +9,7 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { commonmarkLanguage } from "@codemirror/lang-markdown";
 import { tagParserExtensions } from "./hashtag";
+import { codeLanguages } from "./highlight";
 
 // markdownExtension is the configured CM6 language extension. liveExtensions /
 // sourceExtensions (mode.ts) and the LivePreviewEditor both compose this so the
@@ -22,7 +23,15 @@ import { tagParserExtensions } from "./hashtag";
 // purely additive client-side parser (no server-side counterpart, so no client/server
 // drift; the server's Goldmark never sees a `#tag`, and rendering is decoration-only so
 // the stored bytes are unchanged either way).
+// codeLanguages (ED-04a) is PURELY ADDITIVE: it only tells the parser which nested
+// fenced-code grammars to lazy-load for syntax highlighting. `base` + `extensions` are
+// UNCHANGED, so which Markdown constructs are parsed (the GFM-only contract: Table,
+// Strikethrough, TaskList, Autolink + the Hashtag inline node) is identical — the
+// editor⇄server-Goldmark⇄read-view parity the comment above guards is preserved. Each
+// codeLanguage's grammar is code-split (dynamic import in highlight.ts), so the editor
+// re-parses + re-highlights a ```go block automatically once lang-go's chunk arrives.
 export const markdownExtension = markdown({
   base: commonmarkLanguage,
   extensions: tagParserExtensions,
+  codeLanguages,
 });
