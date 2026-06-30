@@ -41,6 +41,7 @@ vi.mock("../components/LivePreviewEditor", () => ({
 }));
 
 import * as client from "../api/client";
+import { readTags } from "../lib/tag-frontmatter";
 import PageEditor from "./PageEditor";
 
 function renderEditor(path: string) {
@@ -277,5 +278,76 @@ describe("PageEditor", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // ED-02b — body #tags are materialized into the canonical frontmatter `tags:` on
+  // save, as a DIFF (add AND remove), reusing the shared Lezer parse. The save path
+  // is the only sink; search/graph keep reading frontmatter unchanged.
+  const fmOfLastSave = (): string =>
+    vi.mocked(client.savePage).mock.calls.at(-1)![1].frontmatter;
+
+  it("materializes a body #deploy into frontmatter tags on save (ED-02b add)", async () => {
+    vi.mocked(client.getPage).mockResolvedValue({
+      frontmatter: "title: Notes\n",
+      body: "start",
+      revision: "rev-1",
+    });
+    vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+    renderEditor("notes.md");
+    const body = await screen.findByLabelText("body");
+    fireEvent.change(body, { target: { value: "start #deploy" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save page" }));
+
+    await waitFor(() => expect(client.savePage).toHaveBeenCalled());
+    expect(readTags(fmOfLastSave())).toContain("deploy");
+  });
+
+  it("removes a deleted #deploy AND keeps an LLM-only tag (ED-02b remove + persist)", async () => {
+    // Frontmatter carries an `llm` tag that was never written inline — it must survive
+    // both the add and the remove (it is in readTags, never in removedInline).
+    vi.mocked(client.getPage).mockResolvedValue({
+      frontmatter: "title: Notes\ntags:\n  - llm\n",
+      body: "start",
+      revision: "rev-1",
+    });
+    vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+    renderEditor("notes.md");
+    const body = await screen.findByLabelText("body");
+
+    // Add #deploy → saved tags contain BOTH llm and deploy.
+    fireEvent.change(body, { target: { value: "start #deploy" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save page" }));
+    await waitFor(() =>
+      expect(readTags(fmOfLastSave())).toEqual(
+        expect.arrayContaining(["llm", "deploy"]),
+      ),
+    );
+
+    // Delete #deploy → saved tags lose deploy but keep llm.
+    fireEvent.change(body, { target: { value: "start" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save page" }));
+    await waitFor(() => expect(readTags(fmOfLastSave())).not.toContain("deploy"));
+    expect(readTags(fmOfLastSave())).toContain("llm");
+  });
+
+  it("a save with NO tag change sends byte-identical frontmatter (no 409 thrash)", async () => {
+    // Body #deploy already matches frontmatter tags: [deploy] → reconcile is a no-op,
+    // so setTags is never called and the exact frontmatter bytes are sent (D-03).
+    const seededFm = "title: Notes\ntags:\n  - deploy\n";
+    vi.mocked(client.getPage).mockResolvedValue({
+      frontmatter: seededFm,
+      body: "has #deploy",
+      revision: "rev-1",
+    });
+    vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+    renderEditor("notes.md");
+    await screen.findByLabelText("body");
+    fireEvent.click(screen.getByRole("button", { name: "Save page" }));
+
+    await waitFor(() => expect(client.savePage).toHaveBeenCalled());
+    expect(fmOfLastSave()).toBe(seededFm); // byte-identical — no churn
   });
 });

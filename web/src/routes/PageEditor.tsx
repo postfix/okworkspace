@@ -15,6 +15,7 @@ import {
 } from "../api/client";
 import { readField, setField } from "../lib/frontmatter";
 import { readTags, setTags } from "../lib/tag-frontmatter";
+import { reconcileFrontmatterTags } from "../lib/tag-reconcile";
 import { getConnId } from "../lib/connId";
 import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
 import DiffReviewDialog, {
@@ -226,7 +227,30 @@ export default function PageEditor() {
         ) {
           mustSave = false;
           const sentBody = bodyRef.current;
-          const sentFrontmatter = frontmatterRef.current;
+          // ED-02b — reconcile body #tags into the canonical frontmatter `tags:` as a
+          // DIFF, BEFORE the PUT. removedInline = inline(lastSavedBody) − inline(sentBody);
+          // tags = (priorFrontmatterTags − removedInline) ∪ inline(sentBody). At this
+          // point lastSavedBody.current is still the PRIOR saved body (it is advanced
+          // only AFTER a successful PUT, below), so the diff window is exactly "what
+          // changed since the server's copy" — additions from the current body, removals
+          // from tags the user deleted, and an LLM-only tag (never inline) survives.
+          // reconcileFrontmatterTags rewrites ONLY when the tag SET changed (D-03), so an
+          // unchanged save sends byte-identical frontmatter and never 409-thrashes autosave.
+          let sentFrontmatter = frontmatterRef.current;
+          const rec = reconcileFrontmatterTags({
+            lastSavedBody: lastSavedBody.current,
+            currentBody: sentBody,
+            frontmatter: sentFrontmatter,
+          });
+          sentFrontmatter = rec.frontmatter;
+          if (rec.changed) {
+            // Reflect the materialized tags in editor state + ref so the badge bar
+            // updates immediately and the next loop iteration's frontmatterRef ===
+            // lastSavedFrontmatter check (which stores THIS reconciled value on success,
+            // below) holds — so a reconciled save does not re-fire endlessly.
+            setFrontmatter(sentFrontmatter);
+            frontmatterRef.current = sentFrontmatter;
+          }
           setSaveState("saving");
           try {
             await savePage(path, {
