@@ -13,6 +13,10 @@ vi.mock("../api/client", () => ({
   me: vi.fn(),
   movePage: vi.fn(),
   createPage: vi.fn(),
+  // CreatePageModal (opened by the tree's "New page here") lists templates and
+  // reads a chosen template (ED-06a); list them so the factory is complete.
+  listTemplates: vi.fn().mockResolvedValue([]),
+  getPage: vi.fn(),
   createFolder: vi.fn(),
   renamePage: vi.fn(),
   deletePage: vi.fn(),

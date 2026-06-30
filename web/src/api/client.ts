@@ -322,13 +322,38 @@ export async function getPage(path: string): Promise<Page> {
   return (await res.json()) as Page;
 }
 
+// TemplateInfo is one entry of the templates list (ED-06a): a display name
+// (filename without ".md") and the repo-relative path under Templates/.
+export interface TemplateInfo {
+  name: string;
+  path: string;
+}
+
+// listTemplates fetches the flat Templates/*.md page templates (a GET — no CSRF).
+// Returns [] when there is no Templates/ folder so the picker shows only "Blank".
+export async function listTemplates(): Promise<TemplateInfo[]> {
+  const res = await fetch("/api/v1/templates", { credentials: "same-origin" });
+  if (!res.ok) {
+    throw new Error("Couldn't load templates.");
+  }
+  const data = (await res.json()) as { templates?: TemplateInfo[] };
+  return data.templates ?? [];
+}
+
 // createPage creates a page from a title in the selected folder (D-12). The
 // backend slugs the filename; we get back the new page's path to navigate to.
+// An optional seed (ED-06a) carries already-substituted template frontmatter +
+// body; the server re-parses + repairs it into one valid frontmatter block. With
+// no seed it is the unchanged title-only blank create.
 export async function createPage(
   folder: string,
   title: string,
+  seed?: { frontmatter: string; body: string },
 ): Promise<{ path: string }> {
-  return mutate<{ path: string }>("/api/v1/pages", { folder, title });
+  const body = seed
+    ? { folder, title, frontmatter: seed.frontmatter, body: seed.body }
+    : { folder, title };
+  return mutate<{ path: string }>("/api/v1/pages", body);
 }
 
 // savePage writes a new version of a page. base_revision carries the optimistic-
