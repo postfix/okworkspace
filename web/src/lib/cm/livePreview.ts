@@ -54,7 +54,7 @@ import type { Extension, Range } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 
-import { BulletWidget, CodeBlockWidget, ImageWidget, TableWidget } from "./widgets";
+import { BulletWidget, CodeBlockWidget, HashtagWidget, ImageWidget, TableWidget } from "./widgets";
 import type { TableData } from "./widgets";
 
 // cleanRender — the READ-mode switch. When a surface provides `cleanRender.of(true)`
@@ -277,6 +277,24 @@ function buildDecorations(view: EditorView): BuildResult {
                 attributes: href ? { "data-href": href } : undefined,
               }).range(node.from, node.to),
             );
+            break;
+          }
+          case "Hashtag": {
+            // ED-02a: replace a body `#tag` with a badge widget — UNLESS the
+            // selection is on its line (active-line reveal shows the raw `#tag` for
+            // editing, and in source mode which has no livePreviewExtension). Read
+            // mode keeps activeLines empty so the badge always shows. The tag label
+            // is the doc slice AFTER the leading '#'. The widget range is NOT pushed
+            // into widgetRanges: a hashtag is short inline text, kept NON-atomic so
+            // the cursor is never trapped (Pitfall 1) — unlike the image/table widgets.
+            if (!isActive(node.from)) {
+              const tag = view.state.doc.sliceString(node.from + 1, node.to);
+              deco.push(
+                Decoration.replace({
+                  widget: new HashtagWidget(tag),
+                }).range(node.from, node.to),
+              );
+            }
             break;
           }
           case "Image": {

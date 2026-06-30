@@ -20,6 +20,7 @@ import type { DecorationSet } from "@codemirror/view";
 
 import { markdownExtension } from "./markdown";
 import { cleanRender, livePreviewExtension } from "./livePreview";
+import { HashtagWidget } from "./widgets";
 import { EditorView as CMEditorView } from "@codemirror/view";
 import type { WidgetType } from "@codemirror/view";
 
@@ -271,6 +272,91 @@ describe("livePreview decorations (EDIT-01)", () => {
     // Cursor on a table line → the widget is dropped (reveal-to-source).
     const onTable = decorationsFor(doc, tableFrom + 2);
     expect(widgetDecoAt(onTable, tableFrom, tableTo)).toBeNull();
+  });
+});
+
+// ED-02a — the inline `#tag` badge corpus. The single correctness landmine is
+// *which `#` is a tag*, so the NEGATIVE cases are as load-bearing as the positive
+// (CONTEXT D-02). Every case is pinned through the SAME decorationsFor harness: a
+// Hashtag badge is a replace decoration whose `widget instanceof HashtagWidget`.
+describe("Hashtag badges (ED-02a)", () => {
+  // All HashtagWidget decorations the plugin produced for `doc` (clean = read mode).
+  const badges = (doc: string, selectionAt?: number, clean = false): FlatDeco[] =>
+    decorationsFor(doc, selectionAt, clean ? { clean: true } : undefined).filter(
+      (d) => d.widget instanceof HashtagWidget,
+    );
+
+  // POSITIVE corpus — a badge IS produced (clean render, so no active-line reveal).
+  // [doc, expected label without the leading '#'].
+  const positive: [string, string][] = [
+    ["#deploy", "deploy"],
+    ["#abc", "abc"],
+    ["#fff", "fff"], // #-hex-like: a tag, NOT special-cased (Obsidian parity)
+    ["#a/b", "a/b"], // nested
+  ];
+  for (const [doc, label] of positive) {
+    it(`badges ${JSON.stringify(doc)} → #${label}`, () => {
+      const found = badges(doc, undefined, true);
+      expect(found.length).toBe(1);
+      expect((found[0].widget as HashtagWidget).tag).toBe(label);
+      // The decoration replaces exactly the `#tag` span, '#' included.
+      expect(found[0].from).toBe(doc.indexOf("#"));
+      expect(found[0].to).toBe(doc.indexOf("#") + ("#" + label).length);
+    });
+  }
+
+  // NEGATIVE corpus — NO Hashtag badge is produced. Code/heading exclusions are
+  // structural (the Lezer tree never yields a Hashtag node there); the boundary/
+  // digit rules reject the rest. Pinned to catch a grammar/precedence regression.
+  const negative: [string, string][] = [
+    ["`#code`", "inline code"],
+    ["```\n#x\n```\n", "fenced code"],
+    ["# Heading", "ATX heading marker"],
+    ["see /#frag", "URL fragment after '/'"],
+    ["#1984", "all-digit run"],
+    ["\\#esc", "escaped hash"],
+    ["foo#bar", "mid-word"],
+  ];
+  for (const [doc, why] of negative) {
+    it(`does NOT badge ${JSON.stringify(doc)} (${why})`, () => {
+      expect(badges(doc, undefined, true).length).toBe(0);
+    });
+  }
+
+  it("edit mode: badge shows off the tag line, reveals to raw on the active line", () => {
+    const doc = "para line\n\n#deploy here\n";
+    const tagFrom = doc.indexOf("#deploy");
+    // Cursor on the first paragraph (off the tag line) → badge present.
+    const off = badges(doc, 1);
+    expect(off.length).toBe(1);
+    expect((off[0].widget as HashtagWidget).tag).toBe("deploy");
+    // Cursor on the tag line → badge dropped, raw `#deploy` revealed for editing.
+    const on = badges(doc, tagFrom + 2);
+    expect(on.length).toBe(0);
+  });
+
+  it("read (clean) mode always badges, even with the selection on the tag line", () => {
+    const doc = "#deploy here\n";
+    // Selection on the tag line, but clean render keeps activeLines empty → badge.
+    expect(badges(doc, 2, true).length).toBe(1);
+  });
+
+  it("byte-stable: building decorations never mutates the doc (literal #deploy kept)", () => {
+    const doc = "see #deploy in the body\n";
+    const parent = document.createElement("div");
+    const view = new EditorView({
+      parent,
+      // clean render forces a badge to be built; the doc must still be verbatim.
+      state: EditorState.create({
+        doc,
+        extensions: [markdownExtension, livePreviewExtension, cleanRender.of(true)],
+      }),
+    });
+    views.push(view);
+    // The plugin built a HashtagWidget in its constructor — yet zero transactions
+    // were issued, so the document bytes are unchanged and still hold `#deploy`.
+    expect(view.state.doc.toString()).toBe(doc);
+    expect(view.state.doc.toString()).toContain("#deploy");
   });
 });
 

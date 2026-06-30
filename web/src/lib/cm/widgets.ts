@@ -125,6 +125,40 @@ export class CodeBlockWidget extends WidgetType {
   }
 }
 
+// HashtagWidget renders a body `#tag` as a small inline badge (ED-02a). It mirrors
+// the BulletWidget shape — a one-element <span> built with createElement + textContent
+// ONLY. `tag` is the label WITHOUT the leading '#' (e.g. "deploy"); toDOM prepends a
+// LITERAL '#' so the badge reads "#deploy" (Obsidian-parity). The tag bytes are
+// untrusted page content, so they go through textContent and can never become live
+// markup (the no-innerHTML security invariant; widgets.test.ts asserts a single text
+// child). The widget is emitted as a NON-atomic inline replace (livePreview.ts) — a
+// hashtag is short inline text, so it must not trap the cursor (Pitfall 1).
+export class HashtagWidget extends WidgetType {
+  constructor(readonly tag: string) {
+    super();
+  }
+
+  // Identical labels reuse the same DOM (CM6 skips a re-render).
+  eq(other: HashtagWidget): boolean {
+    return other.tag === this.tag;
+  }
+
+  toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cm-hashtag";
+    // The '#' is a literal prefix; only `this.tag` is dynamic and it flows through
+    // textContent (never innerHTML) — one inert text node, no markup parsing.
+    span.textContent = "#" + this.tag;
+    return span;
+  }
+
+  // Let a click reach the widget so it can place the cursor → the active-line reveal
+  // swaps the badge back to the raw `#tag` for editing.
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 // A parsed GFM table: the header cell texts and the body rows (each a list of cell
 // texts). Built by the caller from the Lezer Table subtree and handed in verbatim.
 export interface TableData {

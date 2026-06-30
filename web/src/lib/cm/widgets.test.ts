@@ -12,7 +12,7 @@
 // relative image src must yield the RAW-text fallback <span>, NOT an <img> (which
 // would load/execute the blocked URL).
 import { describe, it, expect } from "vitest";
-import { ImageWidget, TableWidget } from "./widgets";
+import { HashtagWidget, ImageWidget, TableWidget } from "./widgets";
 import type { TableData } from "./widgets";
 
 describe("ImageWidget (EDIT-01 inline image + EDIT-04 src gate)", () => {
@@ -144,5 +144,36 @@ describe("TableWidget (EDIT-01 GFM table grid)", () => {
     const c = new TableWidget({ header: ["A", "B"], rows: [["1", "X"]] });
     expect(a.eq(b)).toBe(true);
     expect(a.eq(c)).toBe(false);
+  });
+});
+
+describe("HashtagWidget (ED-02a badge — no-innerHTML invariant)", () => {
+  it("renders a <span class=cm-hashtag> displaying '#' + tag", () => {
+    const dom = new HashtagWidget("deploy").toDOM();
+    expect(dom.tagName).toBe("SPAN");
+    expect(dom.className).toBe("cm-hashtag");
+    // Obsidian-parity: the badge shows the leading '#' (a literal) + the label.
+    expect(dom.textContent).toBe("#deploy");
+  });
+
+  it("builds DOM via createElement + textContent ONLY (no innerHTML) — markup stays inert", () => {
+    // A tag carrying angle brackets must surface as a single inert text node, never
+    // parsed markup (the security invariant: untrusted tag bytes can't become live
+    // markup). Asserting a single text child + zero element children is the guard.
+    const dom = new HashtagWidget("a<b>c").toDOM();
+    expect(dom.tagName).toBe("SPAN");
+    expect(dom.textContent).toBe("#a<b>c");
+    expect(dom.children.length).toBe(0); // innerHTML would have parsed a <b> child
+    expect(dom.childNodes.length).toBe(1); // exactly one node: the text node
+    expect(dom.childNodes[0].nodeType).toBe(3); // Node.TEXT_NODE
+  });
+
+  it("eq() compares the tag label", () => {
+    expect(new HashtagWidget("deploy").eq(new HashtagWidget("deploy"))).toBe(true);
+    expect(new HashtagWidget("deploy").eq(new HashtagWidget("ops"))).toBe(false);
+  });
+
+  it("ignoreEvent() returns false so a click can place the cursor (reveal-to-source)", () => {
+    expect(new HashtagWidget("deploy").ignoreEvent()).toBe(false);
   });
 });

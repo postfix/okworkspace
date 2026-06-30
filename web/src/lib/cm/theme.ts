@@ -103,6 +103,19 @@ export const theme = EditorView.theme({
   ".cm-md-link:hover": {
     textDecoration: "underline",
   },
+
+  // Inline `#tag` badge (ED-02a) — a subtle accent pill. Accent text on a faint
+  // accent fill, sm radius, xs horizontal padding. Font-size and line-height are
+  // INHERITED (no override) so swapping the badge for the raw `#tag` on the active
+  // line never reflows neighbors (layout-neutral reveal, Pitfall 2). `cursor: text`
+  // because it is editor content, not a button — Phase 21 has no navigation.
+  ".cm-hashtag": {
+    color: "var(--color-accent)",
+    backgroundColor: "var(--color-accent-soft)",
+    borderRadius: "var(--radius-sm)",
+    padding: "0 var(--space-xs)",
+    cursor: "text",
+  },
 });
 
 // sourceTheme renders the WHOLE document monospace (Source mode shows raw Markdown
