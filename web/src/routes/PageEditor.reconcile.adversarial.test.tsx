@@ -197,7 +197,11 @@ describe("ED-03a reconcileAppliedTags — adversarial", () => {
     const body = screen.getByLabelText("body");
     fireEvent.change(body, { target: { value: "original and more" } });
     fireEvent.click(screen.getByRole("button", { name: "Save page" }));
-    await screen.findByText(/this page was changed somewhere else/i);
+    // D-08a: this 409 is caused by the user's OWN apply (it advanced the server
+    // revision while baseRevision stayed stale after the failed refresh), so the
+    // dialog attributes it accurately rather than the misleading "changed somewhere
+    // else". The data-safety (Overwrite preserves the applied tag) is unchanged.
+    await screen.findByText(/your change overlapped with a save in progress/i);
     expect(
       vi.mocked(client.savePage).mock.calls.at(-1)![1].base_revision,
     ).toBe("rev-1");
@@ -215,22 +219,28 @@ describe("ED-03a reconcileAppliedTags — adversarial", () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // HOLDS — unsaved DESCRIPTION preserved through the convergence autosave
-  // (attack vector 1 variant; the existing suite only covers an unsaved TITLE).
-  // ORACLE: no-data-loss — the unsaved local field must ride the convergence save.
+  // HOLDS — an existing frontmatter DESCRIPTION survives the tag reconcile. ED-01a
+  // removed the manual Description input, so a description is now a frontmatter value
+  // (seeded/applied), never typed inline. The tag apply's setTags must touch ONLY the
+  // tags region and leave the description scalar intact. A server-side tag-indent
+  // divergence (4-space) forces the convergence autosave so we can inspect the bytes.
+  // ORACLE: no-data-loss — the description scalar rides the convergence save unchanged.
   // ───────────────────────────────────────────────────────────────────────────
-  it("an unsaved DESCRIPTION typed before applying tags is NOT lost by the reconcile", async () => {
+  it("an existing frontmatter description is preserved through the tag reconcile (ED-01a)", async () => {
     vi.useFakeTimers();
     try {
       vi.mocked(client.getPage)
         .mockResolvedValueOnce({
-          frontmatter: "type: Page\ntitle: Notes\n",
+          frontmatter: "type: Page\ntitle: Notes\ndescription: Saved blurb\n",
           body: "original",
           revision: "rev-1",
         })
         .mockResolvedValue({
-          // The server never saw the unsaved description.
-          frontmatter: "type: Page\ntitle: Notes\ntags:\n  - release\n",
+          // The server keeps the description + adds the tag at a 4-space indent (as
+          // yaml.v3 re-marshals), diverging from the client's 2-space merge → exactly
+          // one convergence autosave.
+          frontmatter:
+            "type: Page\ntitle: Notes\ndescription: Saved blurb\ntags:\n    - release\n",
           body: "original",
           revision: "rev-2",
         });
@@ -244,12 +254,8 @@ describe("ED-03a reconcileAppliedTags — adversarial", () => {
       renderEditor("notes.md");
       await flush();
 
-      const desc = screen.getByLabelText("Description");
-      fireEvent.change(desc, { target: { value: "Unsaved blurb" } });
-
       fireEvent.click(screen.getByRole("button", { name: /suggest tags/i }));
       await flush();
-      expect(client.savePage).not.toHaveBeenCalled(); // description still unsaved
       fireEvent.click(screen.getByRole("button", { name: /apply tags/i }));
       await flush();
 
@@ -259,7 +265,7 @@ describe("ED-03a reconcileAppliedTags — adversarial", () => {
       await flush();
 
       const last = vi.mocked(client.savePage).mock.calls.at(-1)!;
-      expect(last[1].frontmatter).toContain("description: Unsaved blurb");
+      expect(last[1].frontmatter).toContain("description: Saved blurb");
       expect(readTags(last[1].frontmatter)).toContain("release");
       expect(last[1].base_revision).toBe("rev-2");
     } finally {
@@ -267,19 +273,23 @@ describe("ED-03a reconcileAppliedTags — adversarial", () => {
     }
   });
 
-  // HOLDS — an unsaved TITLE *and* DESCRIPTION together survive (both regions are
-  // text-patched into the same raw frontmatter the reconcile's setTags edits).
-  it("an unsaved title+description together are NOT lost by the reconcile", async () => {
+  // HOLDS — an UNSAVED title (still a manual input) AND an EXISTING description
+  // together survive the tag reconcile. Post-ED-01a the description is a frontmatter
+  // value, not a manual input, but both regions are patched into the same raw
+  // frontmatter the reconcile's setTags edits, so neither is lost.
+  it("an unsaved title and an existing description together survive the reconcile", async () => {
     vi.useFakeTimers();
     try {
       vi.mocked(client.getPage)
         .mockResolvedValueOnce({
-          frontmatter: "type: Page\ntitle: Notes\n",
+          frontmatter: "type: Page\ntitle: Notes\ndescription: Saved blurb\n",
           body: "original",
           revision: "rev-1",
         })
         .mockResolvedValue({
-          frontmatter: "type: Page\ntitle: Notes\ntags:\n  - release\n",
+          // The server never saw the unsaved title; it keeps "Notes" + the description.
+          frontmatter:
+            "type: Page\ntitle: Notes\ndescription: Saved blurb\ntags:\n  - release\n",
           body: "original",
           revision: "rev-2",
         });
@@ -296,9 +306,6 @@ describe("ED-03a reconcileAppliedTags — adversarial", () => {
       fireEvent.change(screen.getByLabelText("Title"), {
         target: { value: "Brand New Title" },
       });
-      fireEvent.change(screen.getByLabelText("Description"), {
-        target: { value: "Brand New Desc" },
-      });
 
       fireEvent.click(screen.getByRole("button", { name: /suggest tags/i }));
       await flush();
@@ -312,7 +319,7 @@ describe("ED-03a reconcileAppliedTags — adversarial", () => {
 
       const last = vi.mocked(client.savePage).mock.calls.at(-1)!;
       expect(last[1].frontmatter).toContain("title: Brand New Title");
-      expect(last[1].frontmatter).toContain("description: Brand New Desc");
+      expect(last[1].frontmatter).toContain("description: Saved blurb");
       expect(readTags(last[1].frontmatter)).toContain("release");
       expect(last[1].base_revision).toBe("rev-2");
     } finally {

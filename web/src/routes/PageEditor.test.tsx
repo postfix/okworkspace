@@ -21,6 +21,9 @@ vi.mock("../api/client", async (importOriginal) => {
     me: vi.fn(),
     suggestTags: vi.fn(),
     applyTags: vi.fn(),
+    // Phase 24: the embedded DescriptionGenerate needs the generate/apply endpoints.
+    generateDescription: vi.fn(),
+    applyDescription: vi.fn(),
   };
 });
 
@@ -655,6 +658,242 @@ describe("PageEditor", () => {
       expect(last[1].frontmatter).toContain("title: New Title");
       expect(readTags(last[1].frontmatter)).toContain("release");
       expect(last[1].base_revision).toBe("rev-2");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // ─── Phase 24 (ED-01a/ED-01b) — LLM-generated description ──────────────────
+
+  // ED-01a: the manual Description <input> is gone, and an existing description in
+  // frontmatter is PRESERVED (okf.Repair never blanks it; nothing writes to it on a
+  // plain body autosave) — not silently dropped by the editor.
+  it("removes the Description input and preserves an existing description across a body autosave (ED-01a)", async () => {
+    vi.useFakeTimers();
+    const flush = async () => {
+      for (let i = 0; i < 10; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+    };
+    try {
+      vi.mocked(client.getPage).mockResolvedValue({
+        frontmatter: "type: Page\ntitle: Notes\ndescription: Existing blurb\n",
+        body: "original",
+        revision: "rev-1",
+      });
+      vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+      renderEditor("notes.md");
+      await flush();
+
+      // The manual Description input is gone; the generate affordance replaces it.
+      expect(screen.queryByLabelText("Description")).toBeNull();
+      expect(
+        screen.getByRole("button", { name: /generate description/i }),
+      ).toBeInTheDocument();
+
+      // Type the body and let the autosave fire — the existing description rides along
+      // unchanged (it is part of frontmatterRef, never blanked).
+      const body = screen.getByLabelText("body");
+      fireEvent.change(body, { target: { value: "original and more" } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await flush();
+
+      const last = vi.mocked(client.savePage).mock.calls.at(-1)!;
+      expect(last[1].frontmatter).toContain("description: Existing blurb");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // ED-01b D-07: mounting the editor issues NO generate or apply call — generate fires
+  // only on the explicit click, apply only on the explicit approve (never auto-runs).
+  it("mounting issues no generate/apply call (never-auto, ED-01b)", async () => {
+    vi.mocked(client.getPage).mockResolvedValue({
+      frontmatter: "type: Page\ntitle: Notes\n",
+      body: "original",
+      revision: "rev-1",
+    });
+    renderEditor("notes.md");
+    await screen.findByLabelText("body");
+    // The trigger is present (editor) but nothing has been called.
+    expect(
+      screen.getByRole("button", { name: /generate description/i }),
+    ).toBeInTheDocument();
+    expect(client.generateDescription).not.toHaveBeenCalled();
+    expect(client.applyDescription).not.toHaveBeenCalled();
+  });
+
+  // ED-01b criterion 4 (HARD BAR): generate → approve → keep typing the body → the
+  // next autosave uses the POST-APPLY revision and does NOT 409 / does NOT revert the
+  // applied description (merge-first reconcile + advanced baseRevision).
+  it("autosave after applying a description uses the post-apply revision and does NOT 409 / does NOT revert it", async () => {
+    vi.useFakeTimers();
+    const flush = async () => {
+      for (let i = 0; i < 10; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+    };
+    try {
+      vi.mocked(client.getPage)
+        .mockResolvedValueOnce({
+          frontmatter: "type: Page\ntitle: Notes\n",
+          body: "original",
+          revision: "rev-1",
+        })
+        .mockResolvedValue({
+          // The server view after the apply (description present), post-apply rev-2.
+          frontmatter: "type: Page\ntitle: Notes\ndescription: Draft desc\n",
+          body: "original",
+          revision: "rev-2",
+        });
+      vi.mocked(client.generateDescription).mockResolvedValue({
+        page_path: "notes.md",
+        description: "Draft desc",
+        base_revision: "rev-1",
+      });
+      vi.mocked(client.applyDescription).mockResolvedValue(undefined);
+      vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+      renderEditor("notes.md");
+      await flush();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /generate description/i }),
+      );
+      await flush();
+      fireEvent.click(screen.getByRole("button", { name: /^apply$/i }));
+      await flush();
+
+      // reconcile advanced baseRevision to the post-apply rev-2. Keep typing the body.
+      const body = screen.getByLabelText("body");
+      fireEvent.change(body, { target: { value: "original and more typing" } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await flush();
+
+      const calls = vi.mocked(client.savePage).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const last = calls.at(-1)!;
+      // Saved against the POST-APPLY revision — never a self-409.
+      expect(last[1].base_revision).toBe("rev-2");
+      // The applied description rode along in the saved frontmatter (NOT reverted).
+      expect(last[1].frontmatter).toContain("description: Draft desc");
+      // No conflict dialog opened (no 409 thrash).
+      expect(
+        screen.queryByText(/changed somewhere else/i),
+      ).toBeNull();
+      expect(
+        screen.queryByText(/overlapped with a save in progress/i),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // D-08b — the targeted apply-vs-in-flight-autosave interleave Phase 23 lacked: a
+  // body autosave is IN FLIGHT (held) when the description apply lands and advances
+  // the server revision; releasing the held save 409s ON THE USER'S OWN APPLY. The
+  // data must be safe (the approved description is in frontmatterRef, so Overwrite
+  // preserves it) AND the conflict copy must be attributed accurately (D-08a) — never
+  // the misleading "changed somewhere else".
+  it("an apply landing while a body save is in flight 409s as OWN-apply, stays data-safe, and is attributed (D-08a/b)", async () => {
+    vi.useFakeTimers();
+    const flush = async () => {
+      for (let i = 0; i < 12; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+    };
+    try {
+      vi.mocked(client.getPage)
+        .mockResolvedValueOnce({
+          frontmatter: "type: Page\ntitle: Notes\n",
+          body: "original",
+          revision: "rev-1",
+        })
+        // reconcile's getPage (apply committed) — EQUAL to the local merge so no
+        // convergence autosave fires; advances baseRevision to rev-2.
+        .mockResolvedValueOnce({
+          frontmatter: "type: Page\ntitle: Notes\ndescription: Draft desc\n",
+          body: "original",
+          revision: "rev-2",
+        })
+        // the conflict-fetch + overwrite read-backs.
+        .mockResolvedValue({
+          frontmatter: "type: Page\ntitle: Notes\ndescription: Draft desc\n",
+          body: "original",
+          revision: "rev-3",
+        });
+
+      // The FIRST savePage (the body autosave) is held in flight, then REJECTED with a
+      // 409 (its base_revision rev-1 is stale once the apply advanced to rev-2). The
+      // subsequent Overwrite save succeeds.
+      const conflict = Object.assign(new Error("conflict"), { status: 409 });
+      let reject409: () => void = () => {};
+      const held = new Promise<undefined>((_, rej) => {
+        reject409 = () => rej(conflict);
+      });
+      vi.mocked(client.savePage)
+        .mockImplementationOnce(() => held)
+        .mockResolvedValue(undefined);
+
+      vi.mocked(client.generateDescription).mockResolvedValue({
+        page_path: "notes.md",
+        description: "Draft desc",
+        base_revision: "rev-1",
+      });
+      vi.mocked(client.applyDescription).mockResolvedValue(undefined);
+
+      renderEditor("notes.md");
+      await flush();
+
+      // Type the body and let the 1s debounce start the (now-held) body save.
+      const body = screen.getByLabelText("body");
+      fireEvent.change(body, { target: { value: "original X" } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(client.savePage).toHaveBeenCalledTimes(1); // body save in flight
+
+      // While that save is held, generate + apply a description → reconcile advances
+      // baseRevision to rev-2 and merges the description into frontmatterRef.
+      fireEvent.click(
+        screen.getByRole("button", { name: /generate description/i }),
+      );
+      await flush();
+      fireEvent.click(screen.getByRole("button", { name: /^apply$/i }));
+      await flush();
+
+      // Release the held body save → it 409s ON THE OWN APPLY.
+      reject409();
+      await flush();
+
+      // D-08a: attributed as the user's own apply, NOT the misleading external copy.
+      // (getByText, not findByText — under fake timers findByText's polling never
+      // advances; the conflict opens synchronously once flush drains the catch.)
+      expect(
+        screen.getByText(/your change overlapped with a save in progress/i),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/changed somewhere else/i)).toBeNull();
+
+      // Resolve via Overwrite — the approved description is PRESERVED (it was merged
+      // into frontmatterRef before the conflict could arise).
+      fireEvent.click(
+        screen.getByRole("button", { name: /overwrite with my version/i }),
+      );
+      await flush();
+
+      const last = vi.mocked(client.savePage).mock.calls.at(-1)!;
+      expect(last[1].frontmatter).toContain("description: Draft desc");
     } finally {
       vi.useRealTimers();
     }

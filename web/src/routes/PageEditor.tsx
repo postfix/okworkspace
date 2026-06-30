@@ -29,6 +29,7 @@ import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
 import TagBadgeBar from "../components/TagBadgeBar";
 import TagSuggest from "../components/TagSuggest";
+import DescriptionGenerate from "../components/DescriptionGenerate";
 import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
 
@@ -44,6 +45,16 @@ const LOCK_HEARTBEAT_MS = 30_000;
 // serialized coalescing saver replaces the earlier draft+idle two-timer scheme,
 // which could fire overlapping saves and let a stale snapshot clobber a newer one.
 const DRAFT_DEBOUNCE_MS = 1000;
+
+// OWN_APPLY_409_WINDOW_MS is the window after an agent apply (tags/description)
+// within which a save 409 is attributed to THIS session's own apply rather than an
+// external edit (D-08a). An agent apply advances the server revision, so a body
+// autosave already in flight (or the next save while a transient post-apply refresh
+// kept baseRevision stale) can 409 on the user's OWN apply — surfacing the generic
+// "changed somewhere else" copy is a misattribution. The race window is sub-second;
+// this generous bound covers it while a genuine external conflict (well after any
+// apply) still shows the accurate copy. Self-expiring (no flag to clear).
+const OWN_APPLY_409_WINDOW_MS = 8000;
 
 // PageEditor is Edit mode. The body is edited as a raw Markdown string (never a
 // block model — protects the byte-stable round-trip); a small frontmatter form
@@ -82,6 +93,10 @@ export default function PageEditor() {
   const [conflict, setConflict] = useState<{
     serverBody: string;
     serverRevision: string;
+    // True when this 409 was caused by THIS session's own agent apply (tags/
+    // description) rather than an external edit — drives the accurate conflict copy
+    // (D-08a). See OWN_APPLY_409_WINDOW_MS.
+    fromOwnApply: boolean;
   } | null>(null);
   const [conflictBusy, setConflictBusy] = useState<ConflictBusy>(null);
   // mergeReference holds the server version surfaced for reference after a Manual
@@ -122,6 +137,12 @@ export default function PageEditor() {
   // advances after each successful save so subsequent saves are not self-409s.
   const baseRevision = useRef("");
   const draftTimer = useRef<number | null>(null);
+  // The timestamp of the last agent apply→reconcile (tags/description). A save 409
+  // within OWN_APPLY_409_WINDOW_MS of it is this session's OWN apply, not an external
+  // edit — so the conflict dialog shows the accurate copy (D-08a). NEGATIVE_INFINITY
+  // ("no apply yet") makes the window check false regardless of the clock base, so an
+  // external 409 before any apply is never misattributed.
+  const lastApplyAt = useRef(Number.NEGATIVE_INFINITY);
 
   // saving is the in-flight guard (WR-03): it drops any overlapping save so two
   // PUTs never race on the same base revision and self-409. bodyRef/frontmatterRef
@@ -262,16 +283,23 @@ export default function PageEditor() {
           } catch (err) {
             const status = (err as Error & { status?: number }).status;
             if (status === 409) {
-              // A stale save collided with someone else's commit. Fetch the CURRENT
-              // server version and open the conflict dialog (oldText = their body,
-              // newText = mine) — the resolution surface that supersedes the banner.
-              // baseRevision is deliberately NOT advanced: my edits stay intact and
-              // every resolution choice re-routes through the revision-checked save.
+              // A stale save collided with a newer commit. Attribute it: a 409 within
+              // OWN_APPLY_409_WINDOW_MS of an agent apply was caused by THIS session's
+              // own apply (it advanced the server revision under an in-flight/next
+              // save), not an external edit — so the dialog copy is accurate (D-08a).
+              // Capture the attribution at 409-detection time, before the getPage await.
+              const fromOwnApply =
+                Date.now() - lastApplyAt.current < OWN_APPLY_409_WINDOW_MS;
+              // Fetch the CURRENT server version and open the conflict dialog (oldText =
+              // their body, newText = mine) — the resolution surface that supersedes the
+              // banner. baseRevision is deliberately NOT advanced: my edits stay intact
+              // and every resolution choice re-routes through the revision-checked save.
               try {
                 const server = await getPage(path);
                 setConflict({
                   serverBody: server.body,
                   serverRevision: server.revision,
+                  fromOwnApply,
                 });
               } catch {
                 // If we can't fetch the server version we can't show a real diff;
@@ -311,6 +339,9 @@ export default function PageEditor() {
           baseRevision.current = fresh.revision;
           lastSavedBody.current = sentBody;
           lastSavedFrontmatter.current = sentFrontmatter;
+          // We've caught up to the server, so close the own-apply attribution window:
+          // any later 409 is now a genuine external edit, not our own apply (D-08a).
+          lastApplyAt.current = Number.NEGATIVE_INFINITY;
           // Refresh the soft lock on a successful save (COLL-02): a save is proof
           // of an active editing session, so re-stamp the TTL alongside the ~30s
           // heartbeat. Fire-and-forget — a failed refresh is reaped by GC and must
@@ -378,32 +409,39 @@ export default function PageEditor() {
   //   4. If the local merge diverges from the server bytes (unsaved edits, or an
   //      indent/format difference), schedule one autosave so the editor converges
   //      cleanly against the fresh revision — no 409, no revert.
-  const reconcileAppliedTags = useCallback(
-    async (appliedTags: string[]) => {
-      // The apply ALREADY committed server-side (applyMutation.onSuccess fires only on
-      // a 2xx) — the approved tags are AUTHORITATIVE. Merge them into the LOCAL
-      // frontmatter FIRST, independent of the refresh below, so a transient getPage
-      // failure can never drop an approved tag from the editor (and a later
-      // conflict-Overwrite, which saves frontmatterRef, then preserves them rather than
-      // reverting the server's just-applied tag). setTags rewrites ONLY the tags region
-      // → an unsaved title/description survives.
+  // reconcileApplied is the autosave-safe apply→reconcile shared by the tag-apply
+  // (ED-03a) and description-apply (ED-01b) surfaces — the SAME merge-first contract,
+  // parameterized by the region-merge fn and its refresh-error copy. `merge` rewrites
+  // ONLY the applied region (setTags / setField), so an unsaved edit in the other keys
+  // survives.
+  const reconcileApplied = useCallback(
+    async (merge: (fm: string) => string, refreshErrorMsg: string) => {
+      // The apply advanced the server revision; a body autosave already in flight (or
+      // the next save while a transient refresh below keeps baseRevision stale) will
+      // 409 on THIS session's OWN apply. Stamp the time so that 409's conflict copy is
+      // attributed correctly (D-08a) rather than the misleading "changed somewhere else".
+      lastApplyAt.current = Date.now();
+
+      // The apply ALREADY committed server-side (onApplied fires only on a 2xx) — the
+      // approved value is AUTHORITATIVE. Merge it into the LOCAL frontmatter FIRST,
+      // independent of the refresh below, so a transient getPage failure can never drop
+      // it from the editor (and a later conflict-Overwrite, which saves frontmatterRef,
+      // then PRESERVES it rather than reverting the server's just-applied value).
       const cur = frontmatterRef.current;
-      const merged = setTags(cur, unionTags(readTags(cur), appliedTags));
+      const merged = merge(cur);
       setFrontmatter(merged);
       frontmatterRef.current = merged;
 
       // Learn the post-apply revision so the next autosave saves against it (no false
-      // 409). If this refresh fails we KEEP the merged tags locally and leave
+      // 409). If this refresh fails we KEEP the merged value locally and leave
       // baseRevision as-is; the next save then routes through the revision-checked path
       // exactly like runSaver's own read-back-failure handling — recoverable, and now
-      // data-safe (the tag is in frontmatterRef, so a conflict-Overwrite preserves it).
+      // data-safe (the value is in frontmatterRef, so a conflict-Overwrite preserves it).
       let fresh: Awaited<ReturnType<typeof getPage>>;
       try {
         fresh = await getPage(path);
       } catch {
-        setSaveError(
-          "We couldn't refresh tags just now. Your changes are kept here — check your connection and try Save again.",
-        );
+        setSaveError(refreshErrorMsg);
         return;
       }
       baseRevision.current = fresh.revision; // advance past the apply write → no false 409
@@ -414,6 +452,30 @@ export default function PageEditor() {
       if (merged !== fresh.frontmatter) scheduleAutosave();
     },
     [path, scheduleAutosave],
+  );
+
+  // reconcileAppliedTags (ED-03a): merge the approved tags into the LOCAL tags region
+  // (union, byte-stable setTags) — the merge-first pattern the Phase-23 gate proved.
+  const reconcileAppliedTags = useCallback(
+    (appliedTags: string[]) =>
+      reconcileApplied(
+        (cur) => setTags(cur, unionTags(readTags(cur), appliedTags)),
+        "We couldn't refresh tags just now. Your changes are kept here — check your connection and try Save again.",
+      ),
+    [reconcileApplied],
+  );
+
+  // reconcileAppliedDescription (ED-01b): merge the approved description into the LOCAL
+  // `description` scalar (byte-stable setField) — the same autosave-safe, merge-first
+  // contract. Apply is authoritative, so a transient getPage failure cannot strand or
+  // revert the approved description; the next autosave converges at the fresh revision.
+  const reconcileAppliedDescription = useCallback(
+    (text: string) =>
+      reconcileApplied(
+        (cur) => setField(cur, "description", text),
+        "We couldn't refresh the description just now. Your changes are kept here — check your connection and try Save again.",
+      ),
+    [reconcileApplied],
   );
 
   function onBodyChange(value?: string) {
@@ -500,11 +562,16 @@ export default function PageEditor() {
       } catch (err) {
         const status = (err as Error & { status?: number }).status;
         if (status === 409) {
-          // Yet another commit landed — re-open with the newer server version.
+          // Yet another commit landed — re-open with the newer server version. Re-run
+          // the own-apply attribution (D-08a): a re-409 still inside the apply window
+          // is our own apply; a later one is a genuine external edit.
+          const fromOwnApply =
+            Date.now() - lastApplyAt.current < OWN_APPLY_409_WINDOW_MS;
           const server = await getPage(path);
           setConflict({
             serverBody: server.body,
             serverRevision: server.revision,
+            fromOwnApply,
           });
           return;
         }
@@ -516,6 +583,8 @@ export default function PageEditor() {
       baseRevision.current = after.revision;
       lastSavedBody.current = bodyRef.current;
       lastSavedFrontmatter.current = frontmatterRef.current;
+      // Caught up to the server — close the own-apply attribution window (D-08a).
+      lastApplyAt.current = Number.NEGATIVE_INFINITY;
       setConflict(null);
       setMergeReference(null);
       setSaveState("saved");
@@ -540,6 +609,9 @@ export default function PageEditor() {
     // Advance baseRevision to the server's so a normal Save after reconciling does
     // not instantly re-409 against the version I am now merging against.
     if (conflict) baseRevision.current = conflict.serverRevision;
+    // Merging against the server version — close the own-apply attribution window so a
+    // later genuine external 409 reads accurately (D-08a).
+    lastApplyAt.current = Number.NEGATIVE_INFINITY;
     setSaveState("idle");
   }
 
@@ -664,8 +736,20 @@ export default function PageEditor() {
       <DiffReviewDialog
         open={conflict !== null}
         mode="conflict"
-        title="This page was changed somewhere else"
-        summary="Someone saved a different version while you were editing. Compare your version with theirs, then choose what to keep."
+        // D-08a — when this 409 was caused by THIS session's own agent apply (an
+        // in-flight/next save colliding with the apply's revision bump), say so
+        // accurately rather than the misleading "changed somewhere else". Either way
+        // the data is safe and every resolution routes through the revision-checked save.
+        title={
+          conflict?.fromOwnApply
+            ? "Your change overlapped with a save in progress"
+            : "This page was changed somewhere else"
+        }
+        summary={
+          conflict?.fromOwnApply
+            ? "An automatic save was still in progress when your applied change landed, so they overlapped. Nothing is lost — compare the two versions and choose which to keep."
+            : "Someone saved a different version while you were editing. Compare your version with theirs, then choose what to keep."
+        }
         columnCaption="Left: the saved version · Right: your unsaved version"
         oldText={conflict?.serverBody ?? ""}
         newText={body}
@@ -707,18 +791,10 @@ export default function PageEditor() {
             onChange={(e) => onFieldChange("title", e.target.value)}
           />
         </div>
-        <div className="field">
-          <label className="field-label" htmlFor="fm-description">
-            Description
-          </label>
-          <input
-            id="fm-description"
-            className="input"
-            type="text"
-            value={readField(frontmatter, "description")}
-            onChange={(e) => onFieldChange("description", e.target.value)}
-          />
-        </div>
+        {/* ED-01a — the manual Description input is removed; the `description`
+            frontmatter key is preserved (okf.Repair only ADDS a missing key, never
+            blanks an existing one). The agent generator below is the only editor
+            surface for the description now. */}
         {/* ED-02c — read-only effective-tag bar. Inline tags are authored as `#tag`
             in the body (materialized on save by runSaver's reconcile); only non-inline
             (LLM/imported) tags get an ✕, which does a byte-stable setTags removal off
@@ -751,6 +827,15 @@ export default function PageEditor() {
           body={body}
           frontmatter={frontmatter}
           onApplied={(tags) => void reconcileAppliedTags(tags)}
+        />
+        {/* ED-01b — per-page LLM description. Editor-gated by DescriptionGenerate
+            itself. Generate (read-only) → review/edit/regenerate → approve via the
+            server apply-description path, then hand the approved text to
+            reconcileAppliedDescription so the apply is autosave-safe (merge-first; no
+            409, no revert). The description lands ONLY in frontmatter. Never auto-runs. */}
+        <DescriptionGenerate
+          pagePath={path}
+          onApplied={(text) => void reconcileAppliedDescription(text)}
         />
       </div>
 
