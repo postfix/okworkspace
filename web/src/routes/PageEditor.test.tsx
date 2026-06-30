@@ -350,4 +350,130 @@ describe("PageEditor", () => {
     await waitFor(() => expect(client.savePage).toHaveBeenCalled());
     expect(fmOfLastSave()).toBe(seededFm); // byte-identical — no churn
   });
+
+  // ADVERSARIAL (invariant 5) — a reconciled save must NOT re-fire. After a
+  // materializing save the loop sets frontmatterRef.current AND
+  // lastSavedFrontmatter.current to the reconciled value, so the single-flight
+  // while-loop's condition is false and exactly ONE PUT is issued. A debounced
+  // autosave (not a click) is used so the whole keystroke→reconcile→save path runs.
+  it("an autosave that materializes a tag fires EXACTLY ONE save (no re-fire loop)", async () => {
+    vi.useFakeTimers();
+    const flush = async () => {
+      for (let i = 0; i < 8; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+    };
+    try {
+      vi.mocked(client.getPage).mockResolvedValue({
+        frontmatter: "title: Notes\n",
+        body: "start",
+        revision: "rev-1",
+      });
+      vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+      renderEditor("notes.md");
+      await flush();
+      const body = screen.getByLabelText("body");
+
+      // Type a tag, then let the 1s debounce fire the autosave.
+      fireEvent.change(body, { target: { value: "start #deploy" } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000); // DRAFT_DEBOUNCE_MS
+      });
+      await flush();
+
+      expect(client.savePage).toHaveBeenCalledTimes(1);
+      expect(readTags(fmOfLastSave())).toContain("deploy");
+
+      // Let any further timers/microtasks settle — the reconcile already advanced
+      // lastSavedFrontmatter, so no spurious second save (no 409-thrash loop).
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      await flush();
+      expect(client.savePage).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // ADVERSARIAL (invariant 2, integration) — a page authored on disk with a QUOTED
+  // block tag (yaml.v3 quotes reserved/numeric/special tags; data-open files may quote
+  // freely) whose tag also appears inline must save BYTE-IDENTICAL frontmatter. Before
+  // the readTags block-form quote-strip fix, `"deploy"` never matched the inline
+  // `#deploy`, so every save appended a `- deploy` duplicate and 409-thrashed.
+  it("a QUOTED block tag matching an inline tag saves byte-identical frontmatter (no 409 thrash)", async () => {
+    const seededFm = 'title: Notes\ntags:\n  - "deploy"\n';
+    vi.mocked(client.getPage).mockResolvedValue({
+      frontmatter: seededFm,
+      body: "has #deploy",
+      revision: "rev-1",
+    });
+    vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+    renderEditor("notes.md");
+    await screen.findByLabelText("body");
+    fireEvent.click(screen.getByRole("button", { name: "Save page" }));
+
+    await waitFor(() => expect(client.savePage).toHaveBeenCalled());
+    expect(fmOfLastSave()).toBe(seededFm); // quotes preserved, no duplicate appended
+  });
+
+  // ED-02c — the badge ✕ on a non-inline (LLM/imported) tag must PERSIST the removal.
+  // onRemoveTag schedules an autosave, so the removal is durable (not lost on navigate).
+  it("clicking the badge ✕ removes a non-inline tag and persists it via autosave", async () => {
+    vi.useFakeTimers();
+    const flush = async () => {
+      for (let i = 0; i < 8; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+    };
+    try {
+      vi.mocked(client.getPage).mockResolvedValue({
+        frontmatter: "title: Notes\ntags:\n  - llm\n",
+        body: "prose with no inline tags",
+        revision: "rev-1",
+      });
+      vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+      renderEditor("notes.md");
+      await flush();
+
+      // `llm` is not inline in the body ⇒ the badge carries a Remove ✕.
+      fireEvent.click(screen.getByRole("button", { name: "Remove tag llm" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000); // DRAFT_DEBOUNCE_MS
+      });
+      await flush();
+
+      expect(client.savePage).toHaveBeenCalled();
+      expect(readTags(fmOfLastSave())).not.toContain("llm");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // BLOCKER regression — a server-repaired page has 4-space frontmatter (yaml.v3
+  // re-marshal). With a matching inline tag the save must be BYTE-IDENTICAL: the
+  // reconcile reads the 4-space block correctly (no phantom-empty → no corruption).
+  it("a server-repaired 4-space frontmatter with a matching inline tag saves byte-identical", async () => {
+    const seededFm = "title: Notes\ntags:\n    - deploy\n"; // 4-space, as yaml.v3 emits
+    vi.mocked(client.getPage).mockResolvedValue({
+      frontmatter: seededFm,
+      body: "has #deploy",
+      revision: "rev-1",
+    });
+    vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+    renderEditor("notes.md");
+    await screen.findByLabelText("body");
+    fireEvent.click(screen.getByRole("button", { name: "Save page" }));
+
+    await waitFor(() => expect(client.savePage).toHaveBeenCalled());
+    expect(fmOfLastSave()).toBe(seededFm); // 4-space preserved, NOT corrupted
+  });
 });

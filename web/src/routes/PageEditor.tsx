@@ -668,8 +668,10 @@ export default function PageEditor() {
         {/* ED-02c — read-only effective-tag bar. Inline tags are authored as `#tag`
             in the body (materialized on save by runSaver's reconcile); only non-inline
             (LLM/imported) tags get an ✕, which does a byte-stable setTags removal off
-            the LATEST frontmatter (frontmatterRef, never a stale render closure). The
-            removal persists on the next save, mirroring the old chip field's contract. */}
+            the LATEST frontmatter (frontmatterRef, never a stale render closure). We
+            scheduleAutosave so the removal actually PERSISTS — ED-02c says non-inline
+            tags "remain removable", which a removal that vanished on navigate-away would
+            not honour (the old chip field relied on an accompanying edit to save). */}
         <TagBadgeBar
           body={body}
           frontmatter={frontmatter}
@@ -682,6 +684,7 @@ export default function PageEditor() {
             setFrontmatter(next);
             frontmatterRef.current = next;
             setSaveState("idle");
+            scheduleAutosave();
           }}
         />
       </div>

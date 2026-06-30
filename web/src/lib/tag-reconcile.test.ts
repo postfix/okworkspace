@@ -131,3 +131,30 @@ describe("reconcileFrontmatterTags — additions and code-region safety", () => 
     expect(readTags(out)).toEqual(["llm"]);
   });
 });
+
+describe("reconcileFrontmatterTags — server-repaired (4-space) frontmatter (BLOCKER)", () => {
+  // A repaired page is re-marshaled by yaml.v3 at 4-space. The reconcile must read it
+  // correctly: an unchanged set is byte-identical (no corruption), and a real change is
+  // a CLEAN canonical rewrite (no orphaned 4-space line folded into a scalar).
+  it("4-space block + matching inline tag → no churn, byte-identical (no corruption)", () => {
+    const fm = "title: T\ntags:\n    - deploy\n";
+    const { frontmatter: out, changed } = reconcileFrontmatterTags({
+      lastSavedBody: "see #deploy",
+      currentBody: "see #deploy",
+      frontmatter: fm,
+    });
+    expect(changed).toBe(false);
+    expect(out).toBe(fm); // 4-space preserved verbatim — NOT rewritten/corrupted
+  });
+
+  it("4-space block + a newly added inline tag → clean 2-space rewrite, no orphan", () => {
+    const { frontmatter: out, changed } = reconcileFrontmatterTags({
+      lastSavedBody: "see #deploy",
+      currentBody: "see #deploy #feature",
+      frontmatter: "title: T\ntags:\n    - deploy\n",
+    });
+    expect(changed).toBe(true);
+    expect(readTags(out)).toEqual(["deploy", "feature"]);
+    expect(out).not.toContain("    - "); // no orphaned 4-space item line
+  });
+});
