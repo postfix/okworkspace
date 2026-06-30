@@ -982,6 +982,55 @@ export async function applyTags(payload: {
   await mutate<void>("/api/v1/agent/apply-tags", payload);
 }
 
+// --- Per-page description: generate (read) + apply (write) (ED-01a/ED-01b) ---
+//
+// These mirror suggestTags/applyTags exactly: generateDescription is an awaited
+// read-side POST (a validated ~1-sentence description produced server-side; it
+// NEVER writes); applyDescription is the consequential editor+CSRF write that
+// re-uses the same optimistic-concurrency floor as applyTags. The server is
+// authoritative on both sides — it validates the generated text and RE-validates
+// the apply value (the client's edited text is never trusted verbatim).
+
+// GenerateDescriptionResult mirrors POST /agent/generate-description exactly: the
+// generated description + the page's base_revision captured at generate time. The
+// review surface echoes base_revision back to applyDescription so a moved revision
+// 409s instead of clobbering a concurrent edit.
+export interface GenerateDescriptionResult {
+  page_path: string;
+  description: string;
+  base_revision: string;
+}
+
+// generateDescription asks the assistant to write a one-sentence description for a
+// page (ED-01b, any-authed read server-side). It returns the description + the base
+// revision; it NEVER writes — apply is the separate editor-gated endpoint below. A
+// fail-closed status (503 agent off, 502 unreachable, 422 the model could not
+// produce a clean description) rejects with the server's generic, hidden-Git-safe
+// message via mutate(), exactly like suggestTags/rewrite.
+export async function generateDescription(
+  pagePath: string,
+): Promise<GenerateDescriptionResult> {
+  return mutate<GenerateDescriptionResult>(
+    "/api/v1/agent/generate-description",
+    { page_path: pagePath },
+  );
+}
+
+// applyDescription applies the user-approved (and possibly user-edited) description
+// (ED-01b, editor + CSRF). base_revision is the token generateDescription captured.
+// A stale value (the page moved while the user reviewed) surfaces as a 409
+// (err.status === 409) so the review surface shows its "page changed — regenerate"
+// stale state and never overwrites a concurrent edit — exactly the applyTags
+// contract. The server RE-validates+cleans the text server-side (the client value
+// is never trusted) and owns the byte-stable okf.SetField write.
+export async function applyDescription(payload: {
+  page_path: string;
+  description: string;
+  base_revision: string;
+}): Promise<void> {
+  await mutate<void>("/api/v1/agent/apply-description", payload);
+}
+
 // humanFileSize formats a byte count as a short, human-friendly string using the
 // DECIMAL (SI, 1000-based) convention so "1.4 MB" reads the way the UI-SPEC shows
 // it (matches what most users and OS file managers display). Sub-KB values are
