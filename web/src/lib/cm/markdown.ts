@@ -9,11 +9,17 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { commonmarkLanguage } from "@codemirror/lang-markdown";
 import { Table, Strikethrough, TaskList, Autolink } from "@lezer/markdown";
+import { hashtagExtension } from "./hashtag";
 
 // markdownExtension is the configured CM6 language extension. liveExtensions /
 // sourceExtensions (mode.ts) and the LivePreviewEditor both compose this so the
 // Lezer syntax tree the decoration plugin (06-02) walks is GFM-only.
+//
+// hashtagExtension (ED-02a) adds a `Hashtag` inline node ON TOP of the four GFM
+// extensions — a purely additive client-side parser (no server-side counterpart, so
+// no client/server drift; the server's Goldmark never sees a `#tag` construct, and
+// because rendering is decoration-only the stored bytes are unchanged either way).
 export const markdownExtension = markdown({
   base: commonmarkLanguage,
-  extensions: [Table, Strikethrough, TaskList, Autolink],
+  extensions: [Table, Strikethrough, TaskList, Autolink, hashtagExtension],
 });
