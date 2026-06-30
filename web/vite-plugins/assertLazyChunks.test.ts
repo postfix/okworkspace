@@ -40,7 +40,7 @@ function entryChunk(fileName: string, moduleIds: string[], code = ""): Synthetic
 // Mirrors vite.config.ts: the four CORE grammars (markdown + its transitive html/css/js)
 // are excluded; every genuinely-lazy grammar stays forbidden.
 const FORBIDDEN = [
-  /node_modules\/@codemirror\/lang-(?!markdown|html|css|javascript)/,
+  /node_modules\/@codemirror\/lang-(?!(?:markdown|html|css|javascript)\/)/,
   /node_modules\/@codemirror\/legacy-modes\//,
 ];
 
@@ -154,6 +154,17 @@ describe("assertLazyChunks", () => {
         bundle,
       ),
     ).not.toThrow();
+  });
+
+  it("anchors the exclusion to the full name — a hypothetical lang-cssinjs stays forbidden", () => {
+    // The trailing-`/` anchor means only the exact core names (css/html/javascript/
+    // markdown) are excluded; a prefix-colliding future grammar is NOT silently allowed.
+    const bundle = entryChunk("index.js", [
+      "/app/node_modules/@codemirror/lang-cssinjs/dist/index.js",
+    ]);
+    expect(() =>
+      runGenerateBundle(assertLazyChunks({ forbidden: FORBIDDEN }), bundle),
+    ).toThrow(/lang-cssinjs/);
   });
 
   it("is reusable: a custom forbidden list (e.g. mermaid) is honored", () => {

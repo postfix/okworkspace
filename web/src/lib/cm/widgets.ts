@@ -151,47 +151,56 @@ export class CodeBlockWidget extends WidgetType {
   // detached meanwhile.
   private async highlight(pre: HTMLElement, codeEl: HTMLElement): Promise<void> {
     if (!this.lang) return;
-    const desc = LanguageDescription.matchLanguageName(codeLanguages, this.lang);
-    // No curated grammar for this info string (covers `mermaid`, unknown langs) → plain.
+    // Exact (case-insensitive) name/alias match only — `fuzzy=false` so an UNLISTED info
+    // string (e.g. `jsonl`, `diffstat`, `mermaid`) never substring-matches a curated
+    // language and is left plain, honoring the documented "unknown → plain" contract.
+    const desc = LanguageDescription.matchLanguageName(codeLanguages, this.lang, false);
     if (!desc || !desc.load) return;
 
-    let support;
+    // The ENTIRE async pass — load, parse, and token emit — is guarded: any failure
+    // leaves the synchronous plain render untouched (no throw, no unhandled rejection),
+    // honoring the "failures leave plain text" contract for the whole pass, not just load.
     try {
-      support = await desc.load();
+      const support = await desc.load();
+      // Teardown guard: the widget may have been destroyed or its DOM detached/replaced
+      // while the chunk was loading. Never write into a stale node.
+      if (this.destroyed || !codeEl.isConnected) return;
+
+      // Build the token DOM into a DETACHED fragment FIRST, then swap atomically. If
+      // parse/emit throws, the live <code> is never cleared → the plain baseline survives
+      // (no blanking) and the catch below swallows it.
+      const tree = support.language.parser.parse(this.code);
+      const frag = document.createDocumentFragment();
+      highlightCode(
+        this.code,
+        tree,
+        codeHighlightStyle,
+        (text, classes) => {
+          if (classes) {
+            const span = document.createElement("span");
+            span.className = classes;
+            // textContent ONLY — never innerHTML (T-06-08).
+            span.textContent = text;
+            frag.appendChild(span);
+          } else {
+            // Unstyled run → an inert text node (still no innerHTML).
+            frag.appendChild(document.createTextNode(text));
+          }
+        },
+        () => {
+          // putBreak fires per newline.
+          frag.appendChild(document.createTextNode("\n"));
+        },
+      );
+      // Atomic swap: clear the plain text and mount the prebuilt tokens in one step.
+      while (codeEl.firstChild) codeEl.removeChild(codeEl.firstChild);
+      codeEl.appendChild(frag);
+      // Toggle the fade-in class (color-only transition; zero layout shift).
+      pre.classList.add("cm-md-codeblock--highlighted");
     } catch {
-      // Chunk failed to load → leave the plain render untouched (no throw).
+      // Chunk load, parse, or emit failed → leave the plain render untouched.
       return;
     }
-    // Teardown guard: the widget may have been destroyed or its DOM detached/replaced
-    // while the chunk was loading. Never write into a stale node.
-    if (this.destroyed || !codeEl.isConnected) return;
-
-    const tree = support.language.parser.parse(this.code);
-    // Re-emit: clear the plain text, then build one text node / token span per run.
-    while (codeEl.firstChild) codeEl.removeChild(codeEl.firstChild);
-    highlightCode(
-      this.code,
-      tree,
-      codeHighlightStyle,
-      (text, classes) => {
-        if (classes) {
-          const span = document.createElement("span");
-          span.className = classes;
-          // textContent ONLY — never innerHTML (T-06-08).
-          span.textContent = text;
-          codeEl.appendChild(span);
-        } else {
-          // Unstyled run → an inert text node (still no innerHTML).
-          codeEl.appendChild(document.createTextNode(text));
-        }
-      },
-      () => {
-        // putBreak fires per newline.
-        codeEl.appendChild(document.createTextNode("\n"));
-      },
-    );
-    // Toggle the fade-in class (color-only transition; zero layout shift).
-    pre.classList.add("cm-md-codeblock--highlighted");
   }
 
   // CM6 calls destroy when the widget's DOM is removed/replaced — flip the flag so a

@@ -14,8 +14,12 @@ import { assertLazyChunks } from "./vite-plugins/assertLazyChunks";
 // those four; every genuinely-lazy grammar (python/go/rust/json/yaml/sql + legacy-modes
 // shell/diff) stays forbidden. maxEntryBytes is the MEASURED entry size + ~20% headroom
 // (see 25-01-PLAN-SUMMARY.md) — empirical, re-measured if the entry legitimately grows.
+// The excluded names are anchored with a trailing `/` (the path-segment boundary in a
+// module id like `.../@codemirror/lang-css/dist/index.js`) so the lookahead matches the
+// WHOLE name, not a prefix — a future `lang-cssinjs` / `lang-htmlx` would NOT be silently
+// allowed (it stays forbidden because `cssinjs/` ≠ `css/`).
 const FORBIDDEN_IN_ENTRY = [
-  /node_modules\/@codemirror\/lang-(?!markdown|html|css|javascript)/,
+  /node_modules\/@codemirror\/lang-(?!(?:markdown|html|css|javascript)\/)/,
   /node_modules\/@codemirror\/legacy-modes\//,
 ];
 
