@@ -54,7 +54,7 @@ import type { Extension, Range } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 
-import { BulletWidget, CodeBlockWidget, HashtagWidget, ImageWidget, TableWidget } from "./widgets";
+import { BulletWidget, CodeBlockWidget, HashtagWidget, ImageWidget, MermaidWidget, TableWidget } from "./widgets";
 import type { TableData } from "./widgets";
 
 // cleanRender — the READ-mode switch. When a surface provides `cleanRender.of(true)`
@@ -487,11 +487,14 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
     enter: (node) => {
       if (node.name !== "FencedCode") return;
       const { code, lang } = parseFenced(state.doc, node.node);
+      // ED-05a: a ```mermaid fence renders as a DIAGRAM (MermaidWidget), every other
+      // fence stays the Phase-25 CodeBlockWidget (unchanged). Both are block replaces.
+      const widget =
+        lang === "mermaid"
+          ? new MermaidWidget(code)
+          : new CodeBlockWidget(code, lang);
       deco.push(
-        Decoration.replace({
-          widget: new CodeBlockWidget(code, lang),
-          block: true,
-        }).range(node.from, node.to),
+        Decoration.replace({ widget, block: true }).range(node.from, node.to),
       );
       return false; // never descend into the fence/info/code children
     },

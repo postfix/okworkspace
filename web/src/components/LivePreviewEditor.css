@@ -192,3 +192,34 @@
     opacity: 1;
   }
 }
+
+/* Mermaid diagram block (ED-05a). The wrapper holds either the raw-code fallback
+ * (a .cm-md-codeblock <pre>, before/instead of a successful render) or the rendered
+ * <svg>. A min-height reserves space so the async fallback→svg swap reads as a fill,
+ * not a jump (blunts layout shift; the widget also calls view.requestMeasure after the
+ * swap). Dark surface via the same code background token as fenced code. */
+.cm-md-mermaid {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 2.5rem;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: var(--color-code-bg, #1e1e1e);
+  overflow-x: auto;
+}
+
+/* The injected diagram fits the column (the widget also sets max-width inline). */
+.cm-md-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Fade the rendered diagram in when the swap lands (opacity only — no metric change,
+ * so neighbors never reflow). Matches the Phase-25 code fade convention (D-08). */
+@media (prefers-reduced-motion: no-preference) {
+  .cm-md-mermaid.cm-md-mermaid--rendered svg {
+    animation: tok-fade-in 160ms ease-out;
+  }
+}

@@ -30,6 +30,7 @@
     "@lezer/markdown": "^1.6.4",
     "@tanstack/react-query": "5.101.0",
     "lucide-react": "0.469.0",
+    "mermaid": "^11.16.0",
     "react": "19.2.7",
     "react-diff-viewer-continued": "^4.2.2",
     "react-dom": "19.2.7",

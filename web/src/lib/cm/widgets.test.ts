@@ -11,9 +11,25 @@
 // The security cases are explicit: a `javascript:`/executable-`data:`/protocol-
 // relative image src must yield the RAW-text fallback <span>, NOT an <img> (which
 // would load/execute the blocked URL).
-import { describe, it, expect, vi } from "vitest";
-import { CodeBlockWidget, HashtagWidget, ImageWidget, TableWidget } from "./widgets";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  CodeBlockWidget,
+  HashtagWidget,
+  ImageWidget,
+  MermaidWidget,
+  TableWidget,
+} from "./widgets";
 import type { TableData } from "./widgets";
+import { renderMermaid } from "./mermaid";
+
+// MermaidWidget exercises ONLY our DOM handling — mermaid's real renderer cannot run
+// under jsdom (no getBBox), so the lazy wrapper is mocked. The widget then sees a
+// resolved svg STRING / a rejection, and we assert the inject-vs-fallback behaviour.
+vi.mock("./mermaid", () => ({ renderMermaid: vi.fn() }));
+const renderMermaidMock = vi.mocked(renderMermaid);
+beforeEach(() => {
+  renderMermaidMock.mockReset();
+});
 
 describe("ImageWidget (EDIT-01 inline image + EDIT-04 src gate)", () => {
   it("renders an <img> for a safe http(s) src", () => {
@@ -309,5 +325,144 @@ describe("CodeBlockWidget (ED-04a async syntax highlight — no-innerHTML + tear
     const c = new CodeBlockWidget("x", "rust");
     expect(a.eq(b)).toBe(true);
     expect(a.eq(c)).toBe(false);
+  });
+});
+
+describe("MermaidWidget (ED-05a — strict SVG inject + raw-code fallback, teardown-safe)", () => {
+  const CODE = "graph TD; A-->B;";
+  // A well-formed SVG string (xmlns so it parses as image/svg+xml cleanly), carrying a
+  // child so we can assert structure was preserved through DOMParser + importNode.
+  const CANNED_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><g class="node"></g></svg>';
+
+  it("renders the raw-code fallback (a CodeBlockWidget <pre>) SYNCHRONOUSLY — no svg yet", () => {
+    // Never resolves → the synchronous fallback is all that exists at toDOM time.
+    renderMermaidMock.mockReturnValue(new Promise<string>(() => {}));
+    const wrapper = new MermaidWidget(CODE).toDOM();
+    expect(wrapper.tagName).toBe("DIV");
+    expect(wrapper.className).toBe("cm-md-mermaid");
+    const pre = wrapper.querySelector("pre.cm-md-codeblock")!;
+    expect(pre).not.toBeNull();
+    // The fallback shows the exact fenced code the user typed, via textContent.
+    expect(pre.querySelector("code")!.textContent).toBe(CODE);
+    // No diagram has been injected synchronously.
+    expect(wrapper.querySelector("svg")).toBeNull();
+  });
+
+  it("injects the parsed <svg> (element structure, never innerHTML) once render resolves", async () => {
+    renderMermaidMock.mockResolvedValue(CANNED_SVG);
+    const w = new MermaidWidget(CODE);
+    const wrapper = w.toDOM();
+    document.body.appendChild(wrapper); // connected → the async swap is allowed to write
+    try {
+      await vi.waitFor(() => {
+        expect(wrapper.querySelector("svg")).not.toBeNull();
+      });
+      const svg = wrapper.querySelector("svg")!;
+      // Parsed as a REAL svg element (namespace + tagName), not a text/innerHTML blob.
+      expect(svg.tagName.toLowerCase()).toBe("svg");
+      expect(svg.namespaceURI).toBe("http://www.w3.org/2000/svg");
+      // Child structure survived DOMParser + importNode (proves a parsed tree, not a string).
+      expect(svg.querySelector("g.node")).not.toBeNull();
+      // Sizing constraint applied (blunts layout shift).
+      expect(svg.getAttribute("style")).toContain("max-width:100%");
+      // The raw-code fallback was atomically replaced — the <pre> is gone.
+      expect(wrapper.querySelector("pre.cm-md-codeblock")).toBeNull();
+      expect(wrapper.classList.contains("cm-md-mermaid--rendered")).toBe(true);
+    } finally {
+      wrapper.remove();
+    }
+  });
+
+  it("a render REJECTION (invalid diagram) keeps the raw-code fallback — no throw, no svg", async () => {
+    renderMermaidMock.mockRejectedValue(new Error("Parse error on line 1"));
+    const wrapper = new MermaidWidget("not a diagram").toDOM();
+    document.body.appendChild(wrapper);
+    try {
+      // Give the rejected promise time to settle.
+      await new Promise((r) => setTimeout(r, 30));
+      // Fallback intact, no diagram, no error-svg.
+      expect(wrapper.querySelector("svg")).toBeNull();
+      const pre = wrapper.querySelector("pre.cm-md-codeblock")!;
+      expect(pre.querySelector("code")!.textContent).toBe("not a diagram");
+    } finally {
+      wrapper.remove();
+    }
+  });
+
+  it("a parsererror svg (malformed XML) keeps the raw-code fallback — never injects broken markup", async () => {
+    // Mismatched tags → DOMParser yields a <parsererror> document.
+    renderMermaidMock.mockResolvedValue("<svg><g></svg>");
+    const wrapper = new MermaidWidget(CODE).toDOM();
+    document.body.appendChild(wrapper);
+    try {
+      await new Promise((r) => setTimeout(r, 30));
+      // No <svg> injected; the fallback <pre> remains.
+      expect(wrapper.querySelector("svg")).toBeNull();
+      expect(wrapper.querySelector("pre.cm-md-codeblock")).not.toBeNull();
+    } finally {
+      wrapper.remove();
+    }
+  });
+
+  it("a non-<svg> root (e.g. a <div>) keeps the fallback (defends against a mangled result)", async () => {
+    renderMermaidMock.mockResolvedValue(
+      '<div xmlns="http://www.w3.org/1999/xhtml">nope</div>',
+    );
+    const wrapper = new MermaidWidget(CODE).toDOM();
+    document.body.appendChild(wrapper);
+    try {
+      await new Promise((r) => setTimeout(r, 30));
+      expect(wrapper.querySelector("svg")).toBeNull();
+      expect(wrapper.querySelector("pre.cm-md-codeblock")).not.toBeNull();
+    } finally {
+      wrapper.remove();
+    }
+  });
+
+  it("teardown-safe: destroy() before render resolves → no write into the (detached) node", async () => {
+    // Resolve only AFTER we have destroyed the widget.
+    let resolve!: (svg: string) => void;
+    renderMermaidMock.mockReturnValue(
+      new Promise<string>((r) => {
+        resolve = r;
+      }),
+    );
+    const w = new MermaidWidget(CODE);
+    const wrapper = w.toDOM();
+    document.body.appendChild(wrapper);
+    try {
+      w.destroy(); // cursor entered the block / text changed mid-render
+      resolve(CANNED_SVG); // the in-flight render now resolves
+      await new Promise((r) => setTimeout(r, 30));
+      // The destroyed guard discarded the result — fallback intact, no svg.
+      expect(wrapper.querySelector("svg")).toBeNull();
+      expect(wrapper.querySelector("pre.cm-md-codeblock")).not.toBeNull();
+    } finally {
+      wrapper.remove();
+    }
+  });
+
+  it("stale-safe: a detached wrapper (isConnected false) is never written into", async () => {
+    renderMermaidMock.mockResolvedValue(CANNED_SVG);
+    // Never attached → wrapper.isConnected stays false through the resolve.
+    const wrapper = new MermaidWidget(CODE).toDOM();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(wrapper.querySelector("svg")).toBeNull();
+    expect(wrapper.querySelector("pre.cm-md-codeblock")).not.toBeNull();
+  });
+
+  it("eq() compares (code, theme) so an unchanged diagram is not re-rendered", () => {
+    const a = new MermaidWidget("graph TD; A-->B;", "dark");
+    const b = new MermaidWidget("graph TD; A-->B;", "dark");
+    const c = new MermaidWidget("graph TD; A-->C;", "dark");
+    const d = new MermaidWidget("graph TD; A-->B;", "light");
+    expect(a.eq(b)).toBe(true);
+    expect(a.eq(c)).toBe(false); // code changed
+    expect(a.eq(d)).toBe(false); // theme changed
+  });
+
+  it("ignoreEvent() returns false so a click can place the cursor (reveal-to-source)", () => {
+    expect(new MermaidWidget(CODE).ignoreEvent()).toBe(false);
   });
 });

@@ -21,10 +21,12 @@
 // markup. The tests assert on element structure (tagName/children/textContent),
 // never on HTML strings, to lock this in.
 import { WidgetType } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import { LanguageDescription } from "@codemirror/language";
 import { highlightCode } from "@lezer/highlight";
 import { sanitizeImageSrc } from "./sanitizeSrc";
 import { codeHighlightStyle, codeLanguages } from "./highlight";
+import { renderMermaid } from "./mermaid";
 
 // ImageWidget renders an inline image. Constructed with the parsed src/alt and the
 // RAW `![alt](src)` markdown so the blocked-src path can fall back to plain text.
@@ -205,6 +207,107 @@ export class CodeBlockWidget extends WidgetType {
 
   // CM6 calls destroy when the widget's DOM is removed/replaced — flip the flag so a
   // still-in-flight grammar load won't write into the dead node.
+  destroy(): void {
+    this.destroyed = true;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+// MermaidWidget replaces a ```mermaid fenced block with the rendered diagram as inline
+// SVG, on BOTH CM6 surfaces (read mode + the live editor; livePreview.ts gates the
+// emission). It mirrors the Phase-25 CodeBlockWidget async-widget pattern (D-06):
+//
+//   1. toDOM builds a SYNCHRONOUS raw-code fallback FIRST (the exact CodeBlockWidget
+//      <pre>, so a slow/failed/invalid render shows the fenced code the user typed —
+//      never a blank widget). mermaid is not a curated grammar, so the reused
+//      CodeBlockWidget stays plain (its highlight() returns early) → no nested async.
+//   2. Then it lazy-loads + renders mermaid (renderMermaid, its own dynamic-import
+//      chunk) and, on success, ATOMICALLY swaps the parsed <svg> in.
+//
+// SECURITY (D-04, T-06-08): the diagram source is untrusted page content. renderMermaid
+// runs under securityLevel:'strict' (mermaid DOMPurify-sanitizes the svg + disables
+// click/interactivity), and we STILL inject via `new DOMParser().parseFromString(svg,
+// "image/svg+xml")` + a parsererror check + appendChild — NEVER innerHTML of page
+// content. bindFunctions is deliberately NOT called (strict disables interactivity).
+// A malformed svg (parsererror, or a non-<svg> root) keeps the raw-code fallback.
+//
+// FALLBACK (D-05): a parse/render throw (invalid diagram) — or any DOM step failing — is
+// swallowed by the whole-pass try/catch, leaving the raw-code fallback. No error escapes
+// toDOM; suppressErrorRendering (mermaid.ts) means no leftover temp <div> on the body.
+//
+// TEARDOWN / STALE GUARD (D-06, Task 3): the render is async, but the widget may be
+// destroyed (cursor enters the block → reveal drops the decoration; or the block text
+// changed → eq() mismatch → a NEW instance replaces this one) or its DOM detached before
+// it resolves. The swap is guarded by a per-instance `destroyed` flag AND
+// `wrapper.isConnected`, so a resolved svg is discarded rather than written into a stale
+// node. eq() keyed on (code, theme) → an unchanged diagram is reused (not re-rendered)
+// when the cursor leaves, so live mode is not per-keystroke (the reveal model + eq).
+export class MermaidWidget extends WidgetType {
+  private destroyed = false;
+
+  constructor(
+    readonly code: string,
+    readonly theme: string = "dark",
+  ) {
+    super();
+  }
+
+  eq(other: MermaidWidget): boolean {
+    return other.code === this.code && other.theme === this.theme;
+  }
+
+  toDOM(view?: EditorView): HTMLElement {
+    const wrapper = document.createElement("div");
+    wrapper.className = "cm-md-mermaid";
+    // Synchronous raw-code fallback FIRST — the exact CodeBlockWidget render (so an
+    // unrendered/failed diagram is indistinguishable from a normal fenced code block).
+    const fallback = new CodeBlockWidget(this.code, "mermaid").toDOM();
+    wrapper.appendChild(fallback);
+    // Fire-and-forget async render; a failure leaves the fallback untouched.
+    void this.render(wrapper, view);
+    return wrapper;
+  }
+
+  // render lazy-loads mermaid, renders to an svg string, and (if still live) swaps the
+  // parsed <svg> in for the fallback. The ENTIRE pass is guarded: any throw leaves the
+  // synchronous fallback intact (no blank, no escaping error, no unhandled rejection).
+  private async render(wrapper: HTMLElement, view?: EditorView): Promise<void> {
+    try {
+      const svg = await renderMermaid(this.code);
+      // Teardown/stale guard (post-await): destroyed or detached → discard the result.
+      if (this.destroyed || !wrapper.isConnected) return;
+      // Parse the (strict-sanitized) svg string WITHOUT innerHTML. A parsererror node or
+      // a non-<svg> root → keep the raw-code fallback rather than inject broken markup.
+      const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
+      if (parsed.querySelector("parsererror")) return;
+      const root = parsed.documentElement;
+      if (!root || root.tagName.toLowerCase() !== "svg") return;
+      // importNode adopts the node into THIS document (a DOMParser doc is separate).
+      const svgEl = document.importNode(root, true);
+      // Constrain sizing so a large diagram fits the column (blunts layout shift; CSS
+      // also sets a min-height). Set as a single attribute (no innerHTML).
+      svgEl.setAttribute("style", "max-width:100%;height:auto");
+      // Re-check liveness right before the write (defensive; nothing awaited since).
+      if (this.destroyed || !wrapper.isConnected) return;
+      // Atomic swap: drop the fallback and mount the <svg> in one step.
+      while (wrapper.firstChild) wrapper.removeChild(wrapper.firstChild);
+      wrapper.appendChild(svgEl);
+      wrapper.classList.add("cm-md-mermaid--rendered");
+      // The fallback→svg swap changes block height — ask CM6 to re-measure so cursor
+      // coordinates / scroll stay correct. Guarded: tests call toDOM() with no view.
+      view?.requestMeasure?.();
+    } catch {
+      // Invalid diagram (mermaid threw) or a DOM step failed → keep the raw-code fallback.
+      return;
+    }
+  }
+
+  // CM6 calls destroy when the widget's DOM is removed/replaced (cursor-enter reveal, an
+  // eq() mismatch on edited text, or unmount) — flip the flag so a still-in-flight render
+  // never writes into the dead node.
   destroy(): void {
     this.destroyed = true;
   }

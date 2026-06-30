@@ -18,12 +18,20 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { DecorationSet } from "@codemirror/view";
 
+import { vi } from "vitest";
 import { markdownExtension } from "./markdown";
 import { cleanRender, livePreview, livePreviewExtension } from "./livePreview";
 import { HashtagWidget } from "./widgets";
 import { inlineTagsFromBody } from "./hashtag";
 import { EditorView as CMEditorView } from "@codemirror/view";
 import type { WidgetType } from "@codemirror/view";
+
+// MermaidWidget.toDOM (called when CM6 renders a visible block widget in the harness)
+// invokes renderMermaid → a dynamic import("mermaid") whose real renderer cannot run
+// under jsdom. Stub it with a pending promise: these tests assert on the emitted
+// DECORATION SET (widget type / presence), never on a rendered diagram, so the render
+// never needs to resolve.
+vi.mock("./mermaid", () => ({ renderMermaid: vi.fn(() => new Promise<string>(() => {})) }));
 
 // A description of a single decoration as emitted by the plugin, flattened for
 // assertion: its range plus the class (for marks), whether it is a "replace"
@@ -426,6 +434,26 @@ describe("livePreview clean render (read mode)", () => {
     expect(widget).not.toBeNull();
     expect(widget!.constructor.name).toBe("CodeBlockWidget");
     expect(hasMark(clean, "cm-code-block")).toBe(false);
+  });
+
+  it("mermaid fence: read mode yields a MermaidWidget (not a CodeBlockWidget)", () => {
+    // ED-05a: a ```mermaid fence renders as a DIAGRAM in read mode; a ```go fence stays
+    // a CodeBlockWidget. Same block-replace machinery, branched on the info string.
+    const doc = "para\n\n```mermaid\ngraph TD; A-->B;\n```\n";
+    const fenceFrom = doc.indexOf("```mermaid");
+    const fenceTo = doc.lastIndexOf("```") + 3;
+    const clean = decorationsFor(doc, 1, { clean: true });
+    const widget = widgetDecoAt(clean, fenceFrom, fenceTo);
+    expect(widget).not.toBeNull();
+    expect(widget!.constructor.name).toBe("MermaidWidget");
+  });
+
+  it("a ```go fence still yields a CodeBlockWidget in read mode (mermaid branch is additive)", () => {
+    const doc = "```go\nfmt.Println(1)\n```\n";
+    const clean = decorationsFor(doc, undefined, { clean: true });
+    const widget = clean.find((d) => d.widget != null && d.from === 0);
+    expect(widget).toBeDefined();
+    expect(widget!.widget!.constructor.name).toBe("CodeBlockWidget");
   });
 
   it("CodeBlockWidget renders code text without the ``` fences or info string", () => {
