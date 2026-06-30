@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Check, Loader2, Tags } from "lucide-react";
 
 import {
@@ -9,6 +9,8 @@ import {
   type Me,
   type TagSuggestion,
 } from "../api/client";
+import { inlineTagsFromBody } from "../lib/cm/hashtag";
+import { readTags } from "../lib/tag-frontmatter";
 import "./TagSuggest.css";
 
 // TagSuggest is the per-page tag-suggestion TRUST SURFACE (TAG-01 trigger +
@@ -26,9 +28,26 @@ import "./TagSuggest.css";
 //
 // The trigger is editor-gated (renders only for editor/admin — the server gate is
 // the real boundary; this is convenience). Nothing is written until Apply.
-export default function TagSuggest({ pagePath }: { pagePath: string }) {
-  const queryClient = useQueryClient();
-
+//
+// `body` + `frontmatter` are the LIVE editor content (PageEditor passes its current
+// state). They drive the criterion-3 union de-dup: a suggestion already present as an
+// inline body `#tag` OR a frontmatter tag is filtered out BEFORE the review surface
+// opens (covering unsaved inline tags the server, which only sees the saved page,
+// cannot). `onApplied(appliedTags)` hands the approved set back to PageEditor, which
+// owns the autosave-safe reconciliation (it alone holds the revision/frontmatter refs)
+// — this REPLACES a bare query invalidate, which cannot re-seed the editor past its
+// `seeded` guard and would race the autosave.
+export default function TagSuggest({
+  pagePath,
+  body,
+  frontmatter,
+  onApplied,
+}: {
+  pagePath: string;
+  body: string;
+  frontmatter: string;
+  onApplied?: (appliedTags: string[]) => void;
+}) {
   // The role lives in the cached ["me"] session query (App.tsx seeds it). We read
   // it here for the editor gate; the apply endpoint is independently editor+CSRF
   // gated server-side, so this client gate is convenience, not the boundary.
@@ -44,16 +63,43 @@ export default function TagSuggest({ pagePath }: { pagePath: string }) {
   const [baseRevision, setBaseRevision] = useState("");
   const [stale, setStale] = useState(false);
   const [applyError, setApplyError] = useState(false);
+  // The empty-state copy distinguishes "the model returned nothing" from "every
+  // suggestion was already on the page" (all filtered by the union de-dup).
+  const [emptyLabel, setEmptyLabel] = useState(
+    "No tag suggestions for this page.",
+  );
+
+  // onPageRef captures the union(inline #tags, frontmatter tags) set at suggest-CLICK
+  // time (lower-cased), so the filter in onSuccess is deterministically against the
+  // LIVE body+frontmatter at the moment of the request — not whatever a later render's
+  // closure happens to hold (D-03). Re-run recomputes it too.
+  const onPageRef = useRef<Set<string>>(new Set());
 
   const suggestMutation = useMutation({
     mutationFn: () => suggestTags(pagePath),
     onSuccess: (res) => {
-      setSuggestions(res.suggestions);
+      // Union de-dup (criterion 3): drop any suggestion already on the page as an
+      // inline #tag or a frontmatter tag (case-insensitive). The server `existing`
+      // flag is a DIFFERENT axis (vocab membership → the "new" badge) — kept intact.
+      const onPage = onPageRef.current;
+      const filtered = res.suggestions.filter(
+        (s) => !onPage.has(s.tag.trim().toLowerCase()),
+      );
+      setSuggestions(filtered);
+      // If the model DID suggest tags but all were already on-page, say so plainly
+      // (a quiet no-new state, never an auto-write); otherwise the model-returned-
+      // nothing copy. Empty-after-filter still opens the surface so the user gets
+      // explicit feedback rather than a silent no-op.
+      setEmptyLabel(
+        res.suggestions.length > 0 && filtered.length === 0
+          ? "No new tags to suggest — this page already has them."
+          : "No tag suggestions for this page.",
+      );
       setBaseRevision(res.base_revision);
       // New tags default UNCHECKED (the user opts IN to new vocabulary); existing
       // tags default checked. This is the second non-color signal beyond the badge.
       setChecked(
-        Object.fromEntries(res.suggestions.map((s) => [s.tag, s.existing])),
+        Object.fromEntries(filtered.map((s) => [s.tag, s.existing])),
       );
       setStale(false);
       setApplyError(false);
@@ -64,10 +110,12 @@ export default function TagSuggest({ pagePath }: { pagePath: string }) {
   const applyMutation = useMutation({
     mutationFn: (tags: string[]) =>
       applyTags({ page_path: pagePath, tags, base_revision: baseRevision }),
-    onSuccess: () => {
-      // The new tags are written server-side; reload the page so the editor shows
-      // the freshly written frontmatter rather than racing the autosave.
-      queryClient.invalidateQueries({ queryKey: ["page", pagePath] });
+    // `appliedTags` is the mutation variable (the CHECKED set passed to mutate) —
+    // hand it to PageEditor's reconciliation. The editor owns advancing baseRevision
+    // + merging the tags into local frontmatter (autosave-safe); a bare invalidate
+    // here could not (the seeded guard blocks a re-seed and it would race autosave).
+    onSuccess: (_data, appliedTags) => {
+      onApplied?.(appliedTags);
       setOpen(false);
     },
     onError: (err: Error & { status?: number }) => {
@@ -77,6 +125,18 @@ export default function TagSuggest({ pagePath }: { pagePath: string }) {
       else setApplyError(true);
     },
   });
+
+  // triggerSuggest captures the live on-page tag set, THEN fires the request, so the
+  // union de-dup in onSuccess filters against exactly the body+frontmatter present at
+  // suggest time. Both the trigger and Re-run route through it.
+  function triggerSuggest() {
+    onPageRef.current = new Set(
+      [...inlineTagsFromBody(body), ...readTags(frontmatter)].map((t) =>
+        t.trim().toLowerCase(),
+      ),
+    );
+    suggestMutation.mutate();
+  }
 
   const selectedCount = useMemo(
     () => suggestions.filter((s) => checked[s.tag]).length,
@@ -97,7 +157,7 @@ export default function TagSuggest({ pagePath }: { pagePath: string }) {
   function onRerun() {
     setStale(false);
     setApplyError(false);
-    suggestMutation.mutate();
+    triggerSuggest();
   }
 
   // Editor-gated: a reader never sees the write trigger.
@@ -108,7 +168,7 @@ export default function TagSuggest({ pagePath }: { pagePath: string }) {
       <button
         type="button"
         className="btn btn-ghost tagsuggest-trigger"
-        onClick={() => suggestMutation.mutate()}
+        onClick={triggerSuggest}
         disabled={suggestMutation.isPending}
       >
         {suggestMutation.isPending ? (
@@ -150,6 +210,7 @@ export default function TagSuggest({ pagePath }: { pagePath: string }) {
           onApply={onApply}
           onCancel={closeSurface}
           onRerun={onRerun}
+          emptyLabel={emptyLabel}
         />
       )}
     </div>
@@ -177,6 +238,10 @@ export interface TagSuggestListProps {
   // accent + never auto-focused. Defaults preserve the Phase-11 copy verbatim.
   cancelLabel?: string;
   applyLabel?: string;
+  // The empty-state copy. Defaults to the model-returned-nothing line; the per-page
+  // TagSuggest overrides it with a "no NEW tags (all already on page)" line when the
+  // union de-dup filtered every suggestion. The batch route keeps the default.
+  emptyLabel?: string;
 }
 
 // TagSuggestList is the modal approval surface. It clones the Dialog/DiffReviewDialog
@@ -204,6 +269,7 @@ export function TagSuggestList({
   onRerun,
   cancelLabel = "Cancel",
   applyLabel = "Apply tags",
+  emptyLabel = "No tag suggestions for this page.",
 }: TagSuggestListProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   // Cancel is the deliberate initial-focus target (NEVER Apply) — a reflexive
@@ -315,7 +381,7 @@ export function TagSuggestList({
           // The model returned no tags — a quiet muted line (mirrors .diff-empty),
           // hidden-Git-safe. Cancel is still the DOM-first focused safe default.
           <>
-            <p className="tagsuggest-empty">No tag suggestions for this page.</p>
+            <p className="tagsuggest-empty">{emptyLabel}</p>
             <div className="dialog-footer tagsuggest-footer">
               <button
                 ref={cancelRef}

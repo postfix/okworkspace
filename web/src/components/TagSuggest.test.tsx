@@ -32,7 +32,14 @@ vi.mock("../api/client", async (importOriginal) => {
 import * as client from "../api/client";
 import TagSuggest from "./TagSuggest";
 
-function renderSuggest(role = "editor") {
+function renderSuggest(
+  role = "editor",
+  opts: {
+    body?: string;
+    frontmatter?: string;
+    onApplied?: (appliedTags: string[]) => void;
+  } = {},
+) {
   vi.mocked(client.me).mockResolvedValue({
     username: "u",
     display_name: "U",
@@ -50,7 +57,12 @@ function renderSuggest(role = "editor") {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <TagSuggest pagePath="notes/a.md" />
+      <TagSuggest
+        pagePath="notes/a.md"
+        body={opts.body ?? ""}
+        frontmatter={opts.frontmatter ?? ""}
+        onApplied={opts.onApplied}
+      />
     </QueryClientProvider>,
   );
 }
@@ -240,5 +252,120 @@ describe("TagSuggest trust surface", () => {
     ).toBeTruthy();
     // The surface stays in the review state (Apply still present), not stale.
     expect(screen.getByRole("button", { name: /apply tags/i })).toBeTruthy();
+  });
+});
+
+// Phase 23 (ED-03a) — the union de-dup, the onApplied handoff, and the server-as-
+// authority pin. These are the criterion-3/criterion-4/reconcile-handoff gates.
+describe("TagSuggest — union de-dup + onApplied (Phase 23)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("filters suggestions already on the page (union over LIVE body inline #tags + frontmatter tags, case-insensitive)", async () => {
+    vi.mocked(client.suggestTags).mockResolvedValue({
+      // The model re-offers an inline tag (different case), a frontmatter tag, a
+      // nested inline tag, and one genuinely fresh tag.
+      suggestions: [
+        { tag: "Inline", existing: true }, // == body #inline (case-insensitive)
+        { tag: "fmtag", existing: true }, // == frontmatter tag
+        { tag: "a/b", existing: true }, // == body #a/b (nested)
+        { tag: "fresh", existing: true }, // the only NEW tag
+      ],
+      base_revision: "rev-1",
+    });
+    const user = userEvent.setup();
+    renderSuggest("editor", {
+      body: "see #inline and #a/b here",
+      frontmatter: "tags:\n  - fmtag\n",
+    });
+    await openSurface(user);
+
+    // Only the not-on-page tag is offered; the inline, nested, and frontmatter tags
+    // are filtered out BEFORE the surface opens.
+    expect(screen.getByText("fresh")).toBeTruthy();
+    expect(screen.queryByText("Inline")).toBeNull();
+    expect(screen.queryByText("fmtag")).toBeNull();
+    expect(screen.queryByText("a/b")).toBeNull();
+  });
+
+  it("approving calls onApplied with EXACTLY the approved (checked) tags", async () => {
+    vi.mocked(client.suggestTags).mockResolvedValue({
+      suggestions: [
+        { tag: "fmtag", existing: true }, // filtered (on page)
+        { tag: "fresh", existing: true }, // remains, checked by default
+      ],
+      base_revision: "rev-1",
+    });
+    vi.mocked(client.applyTags).mockResolvedValue(undefined);
+    const onApplied = vi.fn();
+    const user = userEvent.setup();
+    renderSuggest("editor", { frontmatter: "tags:\n  - fmtag\n", onApplied });
+    await openSurface(user);
+
+    await user.click(screen.getByRole("button", { name: /apply tags/i }));
+
+    // The CHECKED set goes to the server AND to onApplied (the editor reconciles).
+    await waitFor(() =>
+      expect(client.applyTags).toHaveBeenCalledWith({
+        page_path: "notes/a.md",
+        tags: ["fresh"],
+        base_revision: "rev-1",
+      }),
+    );
+    await waitFor(() => expect(onApplied).toHaveBeenCalledWith(["fresh"]));
+  });
+
+  it("shows the quiet no-new-tags state when every suggestion is already on the page (never writes)", async () => {
+    vi.mocked(client.suggestTags).mockResolvedValue({
+      suggestions: [
+        { tag: "inline", existing: true },
+        { tag: "fmtag", existing: true },
+      ],
+      base_revision: "rev-1",
+    });
+    vi.mocked(client.applyTags).mockResolvedValue(undefined);
+    const onApplied = vi.fn();
+    const user = userEvent.setup();
+    renderSuggest("editor", {
+      body: "#inline",
+      frontmatter: "tags:\n  - fmtag\n",
+      onApplied,
+    });
+    await openSurface(user);
+
+    expect(screen.getByText(/no new tags to suggest/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /apply tags/i })).toBeNull();
+    expect(client.applyTags).not.toHaveBeenCalled();
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  // Criterion 4 (D-05): the client never trusts its own list — a server rejection of
+  // an approved tag (422 from re-validation / 400 from charset) surfaces as the apply-
+  // error line, the surface is NOT dismissed, and onApplied is NEVER called (nothing
+  // is reconciled into the editor on a rejected write).
+  it("surfaces a server rejection (422/400) of an approved tag and does NOT call onApplied", async () => {
+    vi.mocked(client.suggestTags).mockResolvedValue({
+      suggestions: [{ tag: "fresh", existing: true }],
+      base_revision: "rev-1",
+    });
+    const rejected = new Error("There are no valid tags to apply.") as Error & {
+      status?: number;
+    };
+    rejected.status = 422;
+    vi.mocked(client.applyTags).mockRejectedValue(rejected);
+    const onApplied = vi.fn();
+    const user = userEvent.setup();
+    renderSuggest("editor", { onApplied });
+    await openSurface(user);
+
+    await user.click(screen.getByRole("button", { name: /apply tags/i }));
+
+    expect(
+      await screen.findByText("Couldn’t apply the tags. Try again."),
+    ).toBeTruthy();
+    // Not the stale (409) path — the review surface stays, Apply still present.
+    expect(screen.getByRole("button", { name: /apply tags/i })).toBeTruthy();
+    expect(onApplied).not.toHaveBeenCalled();
   });
 });
