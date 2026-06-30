@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Paperclip, Pencil } from "lucide-react";
+import { BookOpen, Paperclip } from "lucide-react";
 
 import Dialog from "../components/Dialog";
 
@@ -92,10 +92,12 @@ export default function PageView() {
               type="button"
               className="btn btn-ghost icon-btn"
               onClick={() => navigate(`/app/edit/${path}`)}
-              aria-label="Edit page"
-              title="Edit"
+              aria-label="Switch to editing"
+              title="Switch to editing"
             >
-              <Pencil size={18} aria-hidden="true" />
+              {/* Reading view: the icon reflects the CURRENT mode (a book = you are
+                  reading); the tooltip says what a click does (switch to editing). */}
+              <BookOpen size={18} aria-hidden="true" />
             </button>
           )}
           <button

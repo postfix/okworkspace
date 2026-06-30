@@ -2,10 +2,11 @@
 .centered-screen {
   min-height: 100%;
   display: flex;
-  align-items: flex-start;
+  /* Vertically centred to match the login screen (was top-pinned). */
+  align-items: center;
   justify-content: center;
-  padding-top: var(--space-3xl);
-  background: var(--color-surface);
+  padding: var(--space-xl);
+  background: transparent;
 }
 
 .centered-card {

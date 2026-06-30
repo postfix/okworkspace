@@ -119,15 +119,6 @@
 
 /* .btn-ghost is a shared primitive declared in styles/controls.css. */
 
-/* Top-bar search trigger (left of UserMenu, like repo-health). A ghost button
-   with a Search icon + label + a muted ⌘K keycap. */
-.topbar-search {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  min-height: var(--hit-min-height);
-}
-
 /* A muted keyboard-shortcut keycap. Surface fill + hairline border, label type —
    neutral, never accent. All values from tokens. */
 .keycap {
@@ -277,17 +268,36 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  /* Rows touch (no gap) so the per-level indent guides read as continuous
+     vertical hairlines down a folder's children — the Obsidian explorer feel. */
+  gap: 0;
 }
 
 .navrow {
+  --tree-depth: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  min-height: var(--hit-min-height);
-  padding: var(--space-sm);
+  gap: var(--space-xs);
+  /* Compact, explorer-style rows: tighter height + label-size text (not body)
+     so the tree reads as a dense file list rather than a menu. */
+  min-height: 28px;
+  padding: 3px var(--space-sm);
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-body);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  /* Indent guides: one 1px vertical hairline at the right edge of each ancestor
+     indent cell. background-size clamps the repeat to --tree-depth cells, so a
+     depth-0 row (e.g. Trash, root pages) shows none. The translucent hover/active
+     colors paint behind this image, so guides stay visible under hover. */
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--tree-indent) - 1px),
+    var(--color-tree-guide) calc(var(--tree-indent) - 1px),
+    var(--color-tree-guide) var(--tree-indent)
+  );
+  background-repeat: no-repeat;
+  background-size: calc(var(--tree-depth) * var(--tree-indent)) 100%;
 }
 
 .navrow-disabled {
@@ -362,7 +372,9 @@
 
 .empty-state {
   max-width: 560px;
-  margin: var(--space-2xl) auto 0 auto;
+  /* margin:auto centres the block both ways in the flex mainpane — a centred empty
+     state reads as deliberate, not as content that failed to load at the top. */
+  margin: auto;
   text-align: center;
 }
 

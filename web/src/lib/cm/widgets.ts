@@ -69,6 +69,62 @@ export class ImageWidget extends WidgetType {
   }
 }
 
+// BulletWidget replaces an unordered list's `ListMark` (-, *, +) with a typographic
+// bullet "•" in the READ surface only (clean render). It is an inline widget mounted
+// at the marker's own position, so nested-list indentation is preserved naturally
+// (the widget sits exactly where the dash was). Edit mode never mounts it — the raw
+// dash stays editable there.
+export class BulletWidget extends WidgetType {
+  eq(): boolean {
+    // All bullets are identical — let CM6 reuse one DOM node for every bullet.
+    return true;
+  }
+
+  toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cm-md-bullet";
+    span.textContent = "•";
+    return span;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+// CodeBlockWidget replaces a whole fenced code block with a clean <pre><code> in the
+// READ surface only — the ``` fences and the info string disappear, leaving just the
+// code on the code background (the language is exposed as a data-lang label via CSS).
+// Like every widget here the DOM is built with createElement + textContent ONLY (no
+// innerHTML), so untrusted code bytes can never become live markup (T-06-08). There
+// is no syntax highlighting (kept deliberately simple); the raw text is preserved.
+export class CodeBlockWidget extends WidgetType {
+  constructor(
+    readonly code: string,
+    readonly lang: string,
+  ) {
+    super();
+  }
+
+  eq(other: CodeBlockWidget): boolean {
+    return other.code === this.code && other.lang === this.lang;
+  }
+
+  toDOM(): HTMLElement {
+    const pre = document.createElement("pre");
+    pre.className = "cm-md-codeblock";
+    if (this.lang) pre.setAttribute("data-lang", this.lang);
+    const code = document.createElement("code");
+    code.textContent = this.code;
+    pre.appendChild(code);
+    return pre;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 // A parsed GFM table: the header cell texts and the body rows (each a list of cell
 // texts). Built by the caller from the Lezer Table subtree and handed in verbatim.
 export interface TableData {

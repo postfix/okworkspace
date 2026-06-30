@@ -86,6 +86,8 @@
 
   /* Page/tree/editor/prose surfaces */
   --tree-indent: 16px;
+  /* Indent-guide hairline drawn one-per-ancestor-level in the file tree. */
+  --color-tree-guide: rgba(255, 255, 255, 0.08);
   --prose-max-width: 720px;
   --editor-min-height: 480px;
   --color-code-bg: rgba(139, 92, 246, 0.12);

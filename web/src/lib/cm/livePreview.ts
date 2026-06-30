@@ -49,13 +49,25 @@ import {
 } from "@codemirror/view";
 import type { DecorationSet, ViewUpdate } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import { StateField } from "@codemirror/state";
+import { Facet, StateField } from "@codemirror/state";
 import type { Extension, Range } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 
-import { ImageWidget, TableWidget } from "./widgets";
+import { BulletWidget, CodeBlockWidget, ImageWidget, TableWidget } from "./widgets";
 import type { TableData } from "./widgets";
+
+// cleanRender — the READ-mode switch. When a surface provides `cleanRender.of(true)`
+// (PageView only), the live-preview renders FINISHED prose instead of an editing
+// surface: the active-line marker reveal is disabled (so even line 1's "# " hides),
+// unordered list bullets become typographic "•", blockquote "> " markers become a
+// styled rule, and fenced code blocks render as clean <pre> widgets without their
+// ``` fences. Edit mode NEVER provides the facet, so it defaults to false and edit
+// behavior (active-line reveal, raw markers visible for editing) is byte-for-byte
+// unchanged — the EDIT-02/EDIT-03 round-trip guarantees are untouched.
+export const cleanRender = Facet.define<boolean, boolean>({
+  combine: (values) => values.some(Boolean),
+});
 
 // hideMark hides a syntax marker. Zero-width + NON-atomic (no atomicRanges) so the
 // cursor is never trapped and revealing it does not reflow neighbors (Pitfall 1/2).
@@ -75,6 +87,30 @@ const codeBlockMark = Decoration.mark({ class: "cm-code-block" });
 const headingLine = [1, 2, 3, 4, 5, 6].map((n) =>
   Decoration.line({ class: `cm-heading-${n}` }),
 );
+
+// Clean-render LINE decorations (read mode only). A blockquote line gets a left
+// rule + muted text; the "> " QuoteMark is hidden separately. The bullet itself is
+// an inline BulletWidget mounted at the dash position (so nested indentation holds).
+const blockquoteLine = Decoration.line({ class: "cm-blockquote" });
+// A bullet widget replacing the unordered ListMark ("-", "*", "+") in clean render.
+const bulletWidget = Decoration.replace({ widget: new BulletWidget() });
+
+// parseFenced extracts (code, lang) from a `FencedCode` node. The Lezer grammar nests
+// the language as `CodeInfo` and the body as `CodeText`; both are read from the doc
+// bytes (no tree-to-text re-serialization). An empty/absent CodeText → "" (a blank
+// block), which the widget renders as an empty <pre>.
+function parseFenced(
+  doc: { sliceString(from: number, to: number): string },
+  node: SyntaxNode,
+): { code: string; lang: string } {
+  let code = "";
+  let lang = "";
+  for (let c = node.firstChild; c; c = c.nextSibling) {
+    if (c.name === "CodeInfo") lang = doc.sliceString(c.from, c.to).trim();
+    else if (c.name === "CodeText") code = doc.sliceString(c.from, c.to);
+  }
+  return { code, lang };
+}
 
 // ATXHeading1..6 → its level (1..6); anything else → 0.
 function headingLevel(name: string): number {
@@ -146,12 +182,18 @@ interface BuildResult {
 }
 
 function buildDecorations(view: EditorView): BuildResult {
-  // Lines the selection touches → reveal (skip hides) on those lines.
+  // Read mode (cleanRender) renders finished prose: there is no editing caret to
+  // reveal markers for, so NO line is ever "active" and every marker hides.
+  const clean = view.state.facet(cleanRender);
+  // Lines the selection touches → reveal (skip hides) on those lines. In clean
+  // render the set stays empty (the read view never reveals raw markers).
   const activeLines = new Set<number>();
-  for (const r of view.state.selection.ranges) {
-    const fromLine = view.state.doc.lineAt(r.from).number;
-    const toLine = view.state.doc.lineAt(r.to).number;
-    for (let ln = fromLine; ln <= toLine; ln++) activeLines.add(ln);
+  if (!clean) {
+    for (const r of view.state.selection.ranges) {
+      const fromLine = view.state.doc.lineAt(r.from).number;
+      const toLine = view.state.doc.lineAt(r.to).number;
+      for (let ln = fromLine; ln <= toLine; ln++) activeLines.add(ln);
+    }
   }
   const isActive = (pos: number) =>
     activeLines.has(view.state.doc.lineAt(pos).number);
@@ -207,7 +249,11 @@ function buildDecorations(view: EditorView): BuildResult {
             deco.push(inlineCodeMark.range(node.from, node.to));
             break;
           case "FencedCode":
-            // Style the block; its fence CodeMarks are KEPT (not hidden).
+            // Read mode: the whole block is replaced by a clean <pre> CodeBlockWidget
+            // (produced by codeBlockField, a StateField — block widgets cannot come
+            // from a ViewPlugin). Skip its subtree so no stray fence/info hides land.
+            if (clean) return false;
+            // Edit mode: style the block; its fence CodeMarks are KEPT (not hidden).
             deco.push(codeBlockMark.range(node.from, node.to));
             break;
           case "Link": {
@@ -282,8 +328,27 @@ function buildDecorations(view: EditorView): BuildResult {
             if (parent && parent.name === "Link") pushHide(node.from, node.to);
             break;
           }
-          // List bullets (ListMark) are intentionally NOT hidden in v1
-          // (RESEARCH Open Q3) — they stay visible/styled by the theme.
+          case "ListMark": {
+            // Edit mode keeps list markers visible/editable (RESEARCH Open Q3).
+            // Read mode (clean) swaps an UNORDERED dash/star/plus for a typographic
+            // bullet widget; ordered markers ("1.", "2)") are left as-is so the
+            // numbering shows.
+            if (!clean) break;
+            const txt = view.state.doc.sliceString(node.from, node.to);
+            if (/^[-*+]$/.test(txt)) {
+              deco.push(bulletWidget.range(node.from, node.to));
+            }
+            break;
+          }
+          case "QuoteMark": {
+            // Read mode: hide the "> " marker and style the whole line as a quote
+            // (left rule + muted text). Edit mode leaves the ">" visible/editable.
+            if (!clean) break;
+            const line = view.state.doc.lineAt(node.from);
+            pushHide(node.from, Math.min(node.to + 1, line.to));
+            deco.push(blockquoteLine.range(line.from));
+            break;
+          }
         }
       },
     });
@@ -391,6 +456,51 @@ const tableField = StateField.define<DecorationSet>({
   ],
 });
 
-// livePreviewExtension bundles the inline ViewPlugin and the block table StateField
-// — the full EDIT-01 live-render surface. mode.ts adds this to liveExtensions.
-export const livePreviewExtension: Extension = [livePreview, tableField];
+// buildCodeBlockDecorations: the BLOCK fenced-code widgets, READ MODE ONLY. Like the
+// table grid these are block / line-break-spanning replace decorations, so they must
+// come from a StateField (CM6 forbids block decorations from a ViewPlugin). Each
+// FencedCode is replaced — fences, info string and all — by a clean CodeBlockWidget
+// <pre>. Gated on the cleanRender facet: in edit mode the facet is false and this
+// returns no decorations, so the editing surface keeps its raw fences untouched.
+function buildCodeBlockDecorations(state: EditorState): DecorationSet {
+  if (!state.facet(cleanRender)) return Decoration.none;
+  const deco: Range<Decoration>[] = [];
+  syntaxTree(state).iterate({
+    enter: (node) => {
+      if (node.name !== "FencedCode") return;
+      const { code, lang } = parseFenced(state.doc, node.node);
+      deco.push(
+        Decoration.replace({
+          widget: new CodeBlockWidget(code, lang),
+          block: true,
+        }).range(node.from, node.to),
+      );
+      return false; // never descend into the fence/info/code children
+    },
+  });
+  return Decoration.set(deco, true);
+}
+
+// codeBlockField holds the read-mode fenced-code widgets. It recomputes only when the
+// document changes (read mode has no editing selection that matters); the facet is
+// constant for a given surface, so no selection dependency is needed.
+const codeBlockField = StateField.define<DecorationSet>({
+  create: (state) => buildCodeBlockDecorations(state),
+  update(value, tr) {
+    if (tr.docChanged) return buildCodeBlockDecorations(tr.state);
+    return value;
+  },
+  provide: (f) => [
+    EditorView.decorations.from(f),
+    EditorView.atomicRanges.of((view) => view.state.field(f)),
+  ],
+});
+
+// livePreviewExtension bundles the inline ViewPlugin and the block table + fenced-code
+// StateFields — the full EDIT-01 live-render surface. mode.ts adds this to
+// liveExtensions; the code-block field is inert in edit mode (cleanRender = false).
+export const livePreviewExtension: Extension = [
+  livePreview,
+  tableField,
+  codeBlockField,
+];

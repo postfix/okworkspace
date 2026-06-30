@@ -72,7 +72,7 @@
 /* Folder rows get the same hover affordance as page rows so hovering anywhere in
    the tree gives feedback (the "feels like Obsidian" bar). */
 .navrow-folder:hover {
-  background: var(--color-tree-hover);
+  background-color: var(--color-tree-hover);
 }
 
 /* A draggable folder row hints it can be picked up to relocate its subtree. The
@@ -104,25 +104,20 @@
 }
 
 .navrow-attachment:hover {
-  background: var(--color-tree-hover);
+  background-color: var(--color-tree-hover);
   color: var(--color-text);
 }
 
 .navrow-page:hover {
-  background: var(--color-tree-hover);
+  background-color: var(--color-tree-hover);
 }
 
 .navrow-active {
-  /* Soft horizontal accent wash (Obsidian/Linear), with a hairline accent edge
-     instead of a solid fill block. */
-  background: linear-gradient(
-    90deg,
-    var(--color-tree-active-bg),
-    var(--color-accent-soft)
-  );
-  box-shadow:
-    inset 2px 0 0 var(--color-accent),
-    inset 0 0 0 1px var(--color-accent-soft);
+  /* Solid translucent active fill + a hairline accent left edge (Obsidian/Linear).
+     background-COLOR (not the shorthand) so the row's indent-guide background-image
+     keeps painting through the active wash. */
+  background-color: var(--color-tree-active-bg);
+  box-shadow: inset 2px 0 0 var(--color-accent);
   color: var(--color-text);
 }
 

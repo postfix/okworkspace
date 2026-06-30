@@ -19,7 +19,7 @@ import { EditorView } from "@codemirror/view";
 import type { DecorationSet } from "@codemirror/view";
 
 import { markdownExtension } from "./markdown";
-import { livePreviewExtension } from "./livePreview";
+import { cleanRender, livePreviewExtension } from "./livePreview";
 import { EditorView as CMEditorView } from "@codemirror/view";
 import type { WidgetType } from "@codemirror/view";
 
@@ -37,7 +37,11 @@ interface FlatDeco {
 // mount builds a headless EditorView with the markdown language + livePreview
 // plugin, seeds `doc`, optionally places the selection at `selectionAt`, and
 // returns the flattened decoration list the plugin produced.
-function decorationsFor(doc: string, selectionAt?: number): FlatDeco[] {
+function decorationsFor(
+  doc: string,
+  selectionAt?: number,
+  opts?: { clean?: boolean },
+): FlatDeco[] {
   const parent = document.createElement("div");
   // Give the view a viewport so visibleRanges covers the whole (small) doc under
   // jsdom — without a measured layout CM6 still reports the full doc as visible
@@ -48,8 +52,14 @@ function decorationsFor(doc: string, selectionAt?: number): FlatDeco[] {
       doc,
       selection:
         selectionAt != null ? { anchor: selectionAt } : { anchor: 0 },
-      // livePreviewExtension = the inline ViewPlugin + the block table StateField.
-      extensions: [markdownExtension, livePreviewExtension],
+      // livePreviewExtension = the inline ViewPlugin + the block table/code StateFields.
+      // `clean` adds the read-mode facet (PageView's render: no active-line reveal,
+      // list/quote/fence markers hidden).
+      extensions: [
+        markdownExtension,
+        livePreviewExtension,
+        ...(opts?.clean ? [cleanRender.of(true)] : []),
+      ],
     }),
   });
   views.push(view);
@@ -261,5 +271,92 @@ describe("livePreview decorations (EDIT-01)", () => {
     // Cursor on a table line → the widget is dropped (reveal-to-source).
     const onTable = decorationsFor(doc, tableFrom + 2);
     expect(widgetDecoAt(onTable, tableFrom, tableTo)).toBeNull();
+  });
+});
+
+// Clean render is the PageView (read-mode) surface: the cleanRender facet disables
+// the active-line marker reveal and turns list/quote/fence markers into finished
+// prose. Edit mode never provides the facet, so the tests above (no facet) prove the
+// editing surface is byte-for-byte unchanged.
+describe("livePreview clean render (read mode)", () => {
+  it("heading on the selection line still hides its '#' (no active-line reveal)", () => {
+    // Selection at 0 sits on the heading line. In EDIT mode that reveals the "# ";
+    // in clean mode the reveal is disabled, so the HeaderMark is still hidden.
+    const doc = "# Title\n\nbody\n";
+    const edit = decorationsFor(doc, 0); // active-line reveal → no hide on line 1
+    expect(hides(edit).some((d) => d.from === 0)).toBe(false);
+
+    const clean = decorationsFor(doc, 0, { clean: true });
+    expect(hasMark(clean, "cm-heading-1")).toBe(true);
+    // The "# " run (and its trailing space) is hidden even though the selection is
+    // on the heading line.
+    expect(hides(clean).some((d) => d.from === 0)).toBe(true);
+  });
+
+  it("unordered list: the ListMark is replaced by a BulletWidget", () => {
+    const doc = "- one\n- two\n";
+    // Edit mode: bullets are NOT touched (no widget at the dash).
+    const edit = decorationsFor(doc, 8);
+    expect(edit.some((d) => d.widget != null && d.from === 0)).toBe(false);
+
+    const clean = decorationsFor(doc, undefined, { clean: true });
+    const bullet = clean.find((d) => d.widget != null && d.from === 0);
+    expect(bullet).toBeDefined();
+    expect(bullet!.widget!.constructor.name).toBe("BulletWidget");
+  });
+
+  it("ordered list: numeric markers are left intact (no bullet widget)", () => {
+    const doc = "1. one\n2. two\n";
+    const clean = decorationsFor(doc, undefined, { clean: true });
+    // No widget replaces the "1." / "2." markers.
+    expect(clean.some((d) => d.widget != null && d.from === 0)).toBe(false);
+  });
+
+  it("blockquote: the '>' is hidden and the line carries cm-blockquote", () => {
+    const doc = "> quoted line\n\nafter\n";
+    const edit = decorationsFor(doc, 17);
+    expect(hasMark(edit, "cm-blockquote")).toBe(false);
+    expect(hides(edit).some((d) => d.from === 0)).toBe(false);
+
+    const clean = decorationsFor(doc, undefined, { clean: true });
+    expect(hasMark(clean, "cm-blockquote")).toBe(true);
+    expect(hides(clean).some((d) => d.from === 0)).toBe(true);
+  });
+
+  it("fenced code: a CodeBlockWidget replaces the whole block (fences hidden)", () => {
+    const doc = "para\n\n```go\ncode()\n```\n";
+    const fenceFrom = doc.indexOf("```go");
+    const fenceTo = doc.lastIndexOf("```") + 3;
+
+    // Edit mode keeps the cm-code-block styling mark and shows the fences (no widget).
+    const edit = decorationsFor(doc, 1);
+    expect(hasMark(edit, "cm-code-block")).toBe(true);
+    expect(edit.some((d) => d.widget != null && d.from === fenceFrom)).toBe(false);
+
+    // Clean mode replaces the block with a CodeBlockWidget — no cm-code-block mark.
+    const clean = decorationsFor(doc, 1, { clean: true });
+    const widget = widgetDecoAt(clean, fenceFrom, fenceTo);
+    expect(widget).not.toBeNull();
+    expect(widget!.constructor.name).toBe("CodeBlockWidget");
+    expect(hasMark(clean, "cm-code-block")).toBe(false);
+  });
+
+  it("CodeBlockWidget renders code text without the ``` fences or info string", () => {
+    const doc = "```go\nfmt.Println(1)\n```\n";
+    const clean = decorationsFor(doc, undefined, { clean: true });
+    const widget = clean.find(
+      (d) => d.widget != null && d.widget.constructor.name === "CodeBlockWidget",
+    );
+    expect(widget).toBeDefined();
+    const dom = (
+      widget!.widget as import("@codemirror/view").WidgetType & {
+        toDOM(): HTMLElement;
+      }
+    ).toDOM();
+    expect(dom.tagName).toBe("PRE");
+    expect(dom.getAttribute("data-lang")).toBe("go");
+    expect(dom.textContent).toBe("fmt.Println(1)");
+    // No backtick fences leaked into the rendered text.
+    expect(dom.textContent).not.toContain("`");
   });
 });

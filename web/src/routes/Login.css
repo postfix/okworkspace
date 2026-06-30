@@ -1,10 +1,12 @@
 .login-screen {
   min-height: 100%;
   display: flex;
-  align-items: flex-start;
+  /* Vertically centred — a top-pinned card reads as unfinished on a tall window. */
+  align-items: center;
   justify-content: center;
-  padding-top: var(--space-3xl);
-  background: var(--color-surface);
+  padding: var(--space-xl);
+  /* Let the body's ambient accent glow show through behind the card. */
+  background: transparent;
 }
 
 .login-card {

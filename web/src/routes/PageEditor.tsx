@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Code, Eye, Paperclip, Save } from "lucide-react";
+import { Code, Eye, Paperclip, Pencil, Save } from "lucide-react";
 
 import {
   acquireLock,
@@ -563,10 +563,12 @@ export default function PageEditor() {
           type="button"
           className="btn btn-ghost icon-btn"
           onClick={() => navigate(`/app/page/${path}`)}
-          aria-label="Switch to reading view"
-          title="Read view"
+          aria-label="Switch to reading"
+          title="Switch to reading"
         >
-          <BookOpen size={18} aria-hidden="true" />
+          {/* Editing view: the icon reflects the CURRENT mode (a pencil = you are
+              editing); the tooltip says what a click does (switch to reading). */}
+          <Pencil size={18} aria-hidden="true" />
         </button>
       </div>
       {lockedBy && (

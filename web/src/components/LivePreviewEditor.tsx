@@ -11,6 +11,7 @@ import {
   toggleKeymap,
 } from "../lib/cm/mode";
 import { linkNav } from "../lib/cm/linkNav";
+import { cleanRender } from "../lib/cm/livePreview";
 import { headingAnchors, scrollToHash } from "../lib/cm/headingAnchors";
 import { useAgentContext } from "../stores/agentContext";
 import "./LivePreviewEditor.css";
@@ -148,6 +149,11 @@ export default function LivePreviewEditor({
           nav,
           selectionListener,
           headingAnchors,
+          // Read mode renders FINISHED prose, not an editing surface: cleanRender
+          // disables the active-line marker reveal and hides list/quote/fence markers
+          // (livePreview.ts). Edit mode never adds this facet, so its byte-stable
+          // round-trip and active-line reveal are untouched.
+          cleanRender.of(true),
           // Force Live decorations through the same compartment seam edit mode uses,
           // so read and edit are pixel-identical. No toggleKeymap, no Source path.
           modeCompartment.of(liveExtensions),
@@ -247,5 +253,12 @@ export default function LivePreviewEditor({
     });
   }, [readOnly]);
 
-  return <div ref={host} className="livepreview-editor" />;
+  return (
+    <div
+      ref={host}
+      className={
+        readOnly ? "livepreview-editor livepreview-readonly" : "livepreview-editor"
+      }
+    />
+  );
 }

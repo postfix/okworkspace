@@ -71,3 +71,80 @@
   border: 1px solid var(--color-border);
   padding: var(--space-xs) var(--space-sm);
 }
+
+.livepreview-editor .cm-md-table th {
+  background: var(--color-surface);
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+}
+
+.livepreview-editor .cm-md-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ── READ-MODE (clean render) prose ──────────────────────────────────────────
+ * These classes only appear on the read surface (PageView), where the live-preview
+ * runs with the cleanRender facet: list/quote/fence markers are hidden and replaced
+ * by finished prose. Scoped to .livepreview-readonly so the editing surface is
+ * untouched. */
+
+/* Cap the reading column to a comfortable measure — long lines on a wide monitor
+ * hurt readability (Obsidian's "readable line length"). Anchored to the LEFT (not
+ * centred) so the body lines up under the left-aligned page title, while the header
+ * actions stay pinned at the far right. Edit mode keeps the full width. */
+.livepreview-readonly .cm-content {
+  max-width: var(--prose-max-width);
+  margin-left: 0;
+  margin-right: auto;
+  padding-left: 0;
+  padding-right: var(--space-md);
+}
+
+/* Unordered bullet (BulletWidget replaces the "-"/"*"/"+" ListMark). */
+.livepreview-editor .cm-md-bullet {
+  color: var(--color-accent-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Blockquote line (QuoteMark hidden; the line carries cm-blockquote). A left rule +
+ * muted text, Obsidian-style. */
+.livepreview-editor .cm-blockquote {
+  border-left: 3px solid var(--color-accent-border);
+  padding-left: var(--space-md);
+  color: var(--color-text-2);
+  font-style: italic;
+}
+
+/* Fenced code block widget (CodeBlockWidget → <pre class="cm-md-codeblock">). A clean
+ * mono block on the code background; the language (data-lang) shows as a small tab. */
+.livepreview-editor .cm-md-codeblock {
+  position: relative;
+  margin: var(--space-md) 0;
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-body);
+}
+
+.livepreview-editor .cm-md-codeblock code {
+  font-family: inherit;
+  white-space: pre;
+}
+
+.livepreview-editor .cm-md-codeblock[data-lang]::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 2px var(--space-sm);
+  font-family: var(--font-family-ui);
+  font-size: 11px;
+  color: var(--color-faint);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  border-bottom-left-radius: var(--radius-sm);
+}

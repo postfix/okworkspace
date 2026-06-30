@@ -5,6 +5,7 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type CSSProperties,
   type DragEvent,
   type MouseEvent,
 } from "react";
@@ -539,9 +540,12 @@ function TreeRow({
   onContext: (e: MouseEvent, target: MenuTarget) => void;
   onDropNode: (kind: DragKind, srcPath: string, destFolder: string) => void;
 }) {
+  // paddingLeft indents the row by depth; --tree-depth feeds the CSS indent-guide
+  // gradient (one vertical hairline per ancestor level, Obsidian-style).
   const indentStyle = {
     paddingLeft: `calc(${depth} * var(--tree-indent) + var(--space-sm))`,
-  };
+    "--tree-depth": depth,
+  } as CSSProperties;
   if (node.type === "folder") {
     return (
       <FolderRow
@@ -574,7 +578,7 @@ function AttachmentRow({
   indentStyle,
 }: {
   node: TreeNode;
-  indentStyle: { paddingLeft: string };
+  indentStyle: CSSProperties;
 }) {
   return (
     <li>
@@ -603,7 +607,7 @@ function FolderRow({
 }: {
   node: TreeNode;
   depth: number;
-  indentStyle: { paddingLeft: string };
+  indentStyle: CSSProperties;
   canEdit: boolean;
   filtering: boolean;
   onContext: (e: MouseEvent, target: MenuTarget) => void;
@@ -703,7 +707,7 @@ function PageRow({
 }: {
   node: TreeNode;
   depth: number;
-  indentStyle: { paddingLeft: string };
+  indentStyle: CSSProperties;
   canEdit: boolean;
   onContext: (e: MouseEvent, target: MenuTarget) => void;
 }) {
@@ -717,7 +721,8 @@ function PageRow({
   // Attachments render one level deeper than the page.
   const attachmentIndent = {
     paddingLeft: `calc(${depth + 1} * var(--tree-indent) + var(--space-sm))`,
-  };
+    "--tree-depth": depth + 1,
+  } as CSSProperties;
 
   return (
     <li>
