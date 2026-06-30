@@ -16,6 +16,11 @@ vi.mock("../api/client", async (importOriginal) => {
     // Lock calls: default to "you hold it" (acquired) so existing tests stay editable.
     acquireLock: vi.fn().mockResolvedValue({ result: "acquired" }),
     releaseLock: vi.fn().mockResolvedValue(undefined),
+    // Phase 23: the embedded TagSuggest needs `me` (editor gate) + the suggest/apply
+    // endpoints. Defaults are set per-test; `me` resolves editor so the trigger shows.
+    me: vi.fn(),
+    suggestTags: vi.fn(),
+    applyTags: vi.fn(),
   };
 });
 
@@ -46,6 +51,15 @@ import PageEditor from "./PageEditor";
 
 function renderEditor(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Seed the cached ["me"] session so the embedded TagSuggest's editor gate resolves
+  // synchronously (mirrors App.tsx). Harmless to the pre-Phase-23 save tests — they
+  // never assert on the "Suggest tags" trigger.
+  qc.setQueryData(["me"], {
+    username: "u",
+    display_name: "U",
+    role: "editor",
+    must_change_password: false,
+  });
   render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[`/app/edit/${path}`]}>
@@ -72,6 +86,13 @@ describe("PageEditor", () => {
     // held-by-other state override acquireLock per-test.
     vi.mocked(client.acquireLock).mockResolvedValue({ result: "acquired" });
     vi.mocked(client.releaseLock).mockResolvedValue(undefined);
+    // Phase 23 embedded TagSuggest: default `me` to an editor so the trigger renders.
+    vi.mocked(client.me).mockResolvedValue({
+      username: "u",
+      display_name: "U",
+      role: "editor",
+      must_change_password: false,
+    });
   });
 
   it("issues a save PUT on Save page click", async () => {
@@ -475,5 +496,167 @@ describe("PageEditor", () => {
 
     await waitFor(() => expect(client.savePage).toHaveBeenCalled());
     expect(fmOfLastSave()).toBe(seededFm); // 4-space preserved, NOT corrupted
+  });
+
+  // ED-03a — the embedded TagSuggest applies via the server apply-tags path, then
+  // PageEditor.reconcileAppliedTags makes the apply autosave-safe. These three tests
+  // are the criterion-5 hard bar: apply → tag in frontmatter; apply → keep typing →
+  // no 409 / no revert; an unsaved title is NOT lost by the reconcile.
+  it("approving suggested tags lands the tag in frontmatter and renders it in TagBadgeBar (non-inline → removable)", async () => {
+    vi.mocked(client.getPage)
+      .mockResolvedValueOnce({
+        frontmatter: "type: Page\ntitle: Notes\n",
+        body: "original",
+        revision: "rev-1",
+      })
+      .mockResolvedValue({
+        // The server's post-apply view (reconcile fetches this for the fresh revision).
+        frontmatter: "type: Page\ntitle: Notes\ntags:\n  - release\n",
+        body: "original",
+        revision: "rev-2",
+      });
+    vi.mocked(client.suggestTags).mockResolvedValue({
+      suggestions: [{ tag: "release", existing: true }],
+      base_revision: "rev-1",
+    });
+    vi.mocked(client.applyTags).mockResolvedValue(undefined);
+    vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+    renderEditor("notes.md");
+    await screen.findByLabelText("body");
+
+    fireEvent.click(screen.getByRole("button", { name: /suggest tags/i }));
+    // `release` is existing → checked by default. Approve.
+    fireEvent.click(await screen.findByRole("button", { name: /apply tags/i }));
+
+    // After apply→reconcile the tag is in local frontmatter and rendered by
+    // TagBadgeBar as a NON-INLINE (LLM) tag → it carries the Remove ✕ (it never
+    // entered the body).
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Remove tag release" }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("autosave after applying tags uses the post-apply revision and does NOT 409 (no conflict dialog, no revert)", async () => {
+    vi.useFakeTimers();
+    const flush = async () => {
+      for (let i = 0; i < 10; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+    };
+    try {
+      vi.mocked(client.getPage)
+        .mockResolvedValueOnce({
+          frontmatter: "type: Page\ntitle: Notes\n",
+          body: "original",
+          revision: "rev-1",
+        })
+        .mockResolvedValue({
+          frontmatter: "type: Page\ntitle: Notes\ntags:\n  - release\n",
+          body: "original",
+          revision: "rev-2",
+        });
+      vi.mocked(client.suggestTags).mockResolvedValue({
+        suggestions: [{ tag: "release", existing: true }],
+        base_revision: "rev-1",
+      });
+      vi.mocked(client.applyTags).mockResolvedValue(undefined);
+      vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+      renderEditor("notes.md");
+      await flush();
+
+      fireEvent.click(screen.getByRole("button", { name: /suggest tags/i }));
+      await flush();
+      fireEvent.click(screen.getByRole("button", { name: /apply tags/i }));
+      await flush();
+
+      // reconcile advanced baseRevision to the post-apply rev-2. Keep typing the body.
+      const body = screen.getByLabelText("body");
+      fireEvent.change(body, { target: { value: "original and more typing" } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000); // DRAFT_DEBOUNCE_MS
+      });
+      await flush();
+
+      // The autosave saved against the POST-APPLY revision (rev-2) — never a self-409.
+      const calls = vi.mocked(client.savePage).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const last = calls.at(-1)!;
+      expect(last[1].base_revision).toBe("rev-2");
+      // The applied tag rode along in the saved frontmatter (NOT reverted).
+      expect(readTags(last[1].frontmatter)).toContain("release");
+      // No conflict dialog opened (criterion 5: no 409 thrash).
+      expect(
+        screen.queryByText(/this page was changed somewhere else/i),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an unsaved title typed BEFORE applying tags is NOT lost by the reconcile (no data loss)", async () => {
+    vi.useFakeTimers();
+    const flush = async () => {
+      for (let i = 0; i < 10; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+    };
+    try {
+      vi.mocked(client.getPage)
+        .mockResolvedValueOnce({
+          frontmatter: "type: Page\ntitle: Notes\n",
+          body: "original",
+          revision: "rev-1",
+        })
+        .mockResolvedValue({
+          // The server never saw the unsaved title — its post-apply view keeps "Notes".
+          frontmatter: "type: Page\ntitle: Notes\ntags:\n  - release\n",
+          body: "original",
+          revision: "rev-2",
+        });
+      vi.mocked(client.suggestTags).mockResolvedValue({
+        suggestions: [{ tag: "release", existing: true }],
+        base_revision: "rev-1",
+      });
+      vi.mocked(client.applyTags).mockResolvedValue(undefined);
+      vi.mocked(client.savePage).mockResolvedValue(undefined);
+
+      renderEditor("notes.md");
+      await flush();
+
+      // Type a NEW title but do NOT let its 1s autosave fire — apply happens inside
+      // the debounce window, so the title is purely LOCAL (unsaved) at apply time.
+      const title = screen.getByLabelText("Title");
+      fireEvent.change(title, { target: { value: "New Title" } });
+
+      fireEvent.click(screen.getByRole("button", { name: /suggest tags/i }));
+      await flush(); // 0ms elapsed — the title autosave (1s) has NOT fired
+      expect(client.savePage).not.toHaveBeenCalled(); // title still unsaved
+      fireEvent.click(screen.getByRole("button", { name: /apply tags/i }));
+      await flush();
+
+      // reconcile merged the tag into the LOCAL frontmatter (which still holds the
+      // unsaved title) and scheduled the convergence autosave. Let it fire.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await flush();
+
+      // The save preserved BOTH the unsaved title AND the applied tag, against the
+      // post-apply revision — the title was never overwritten by the server bytes.
+      const last = vi.mocked(client.savePage).mock.calls.at(-1)!;
+      expect(last[1].frontmatter).toContain("title: New Title");
+      expect(readTags(last[1].frontmatter)).toContain("release");
+      expect(last[1].base_revision).toBe("rev-2");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

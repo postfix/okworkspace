@@ -6,7 +6,7 @@
 //   • a 4-space block read as EMPTY → Phase-22's reconcile corrupts it on first save;
 //   • a quoted block tag read WITH quotes → never equals its inline form → churn + dup.
 import { describe, it, expect } from "vitest";
-import { readTags, setTags } from "./tag-frontmatter";
+import { readTags, setTags, unionTags } from "./tag-frontmatter";
 
 describe("readTags — indent-agnostic block sequence", () => {
   it("reads a 2-space block (the app's own emit form)", () => {
@@ -77,5 +77,34 @@ describe("readTags ∘ setTags round-trip is indent-stable", () => {
     expect(readTags(rewritten)).toEqual(["deploy", "llm", "extra"]);
     // No orphaned 4-space line survived the rewrite.
     expect(rewritten).not.toContain("    - ");
+  });
+});
+
+// unionTags is the apply-tags reconcile merge (Phase 23): existing local tags first,
+// then NEW applied tags, normalized (trim+lowercase) + de-duped case-insensitively.
+// Matching reconcileFrontmatterTags's `norm` is what keeps an apply + the next
+// body-save autosave from churning each other's bytes.
+describe("unionTags — case-insensitive, order-preserving, normalized", () => {
+  it("appends only NEW tags, preserving existing order", () => {
+    expect(unionTags(["deploy", "llm"], ["fresh"])).toEqual([
+      "deploy",
+      "llm",
+      "fresh",
+    ]);
+  });
+
+  it("de-dupes case-insensitively (a re-applied tag is not duplicated)", () => {
+    expect(unionTags(["Deploy"], ["deploy", "fresh"])).toEqual([
+      "deploy",
+      "fresh",
+    ]);
+  });
+
+  it("normalizes to trimmed + lower-case (matches the body-save reconcile)", () => {
+    expect(unionTags(["  Deploy  "], [" Fresh "])).toEqual(["deploy", "fresh"]);
+  });
+
+  it("drops empties and de-dupes within the applied set", () => {
+    expect(unionTags([], ["a", "", "A", "b"])).toEqual(["a", "b"]);
   });
 });

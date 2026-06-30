@@ -43,6 +43,25 @@ export function readTags(frontmatter: string): string[] {
 }
 
 /**
+ * Case-insensitive union of two tag lists. Normalizes every tag to trimmed +
+ * lower-cased, de-dupes, and preserves `existing` order first then appends the new
+ * tags from `added` in their given order. Mirrors the `norm` (trim+lowercase) the
+ * body-save reconcile (`reconcileFrontmatterTags`) applies, so an apply-tags merge and
+ * a subsequent autosave agree on the tag SET byte-for-byte and never churn each other.
+ */
+export function unionTags(existing: string[], added: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [...existing, ...added]) {
+    const t = raw.trim().toLowerCase();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+}
+
+/**
  * Replace the tags section in a raw YAML frontmatter string.
  * Emits block-sequence format: `tags:\n  - tag1\n  - tag2\n`
  */

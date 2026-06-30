@@ -14,7 +14,7 @@ import {
   type Page,
 } from "../api/client";
 import { readField, setField } from "../lib/frontmatter";
-import { readTags, setTags } from "../lib/tag-frontmatter";
+import { readTags, setTags, unionTags } from "../lib/tag-frontmatter";
 import { reconcileFrontmatterTags } from "../lib/tag-reconcile";
 import { getConnId } from "../lib/connId";
 import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
@@ -28,6 +28,7 @@ import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
 import TagBadgeBar from "../components/TagBadgeBar";
+import TagSuggest from "../components/TagSuggest";
 import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
 
@@ -362,6 +363,43 @@ export default function PageEditor() {
     [],
   );
 
+  // reconcileAppliedTags is the autosave-safe apply→reconcile (ED-03a; the pattern
+  // Phase 24 reuses for the description). TagSuggest applies tags via the server
+  // apply-tags path — a SECOND writer against this editor's autosave. apply returns
+  // 204 (no body), advances the server revision, and writes the tags region. Naively
+  // leaving baseRevision stale would 409 (or revert the tag) on the next autosave, so:
+  //   1. getPage → the fresh { frontmatter, revision } the apply produced.
+  //   2. Merge the applied tags into the LOCAL frontmatter via setTags (touches ONLY
+  //      the tags region) — preserving any unsaved local edit (e.g. a typed title);
+  //      do NOT overwrite with the server bytes wholesale (that loses the unsaved edit).
+  //   3. Advance baseRevision to the fresh revision so the next save is not a self-409,
+  //      and set lastSavedFrontmatter to what the server now holds. Leave body refs
+  //      untouched (apply did not change the body).
+  //   4. If the local merge diverges from the server bytes (unsaved edits, or an
+  //      indent/format difference), schedule one autosave so the editor converges
+  //      cleanly against the fresh revision — no 409, no revert.
+  const reconcileAppliedTags = useCallback(
+    async (appliedTags: string[]) => {
+      let fresh: Awaited<ReturnType<typeof getPage>>;
+      try {
+        fresh = await getPage(path);
+      } catch {
+        setSaveError(
+          "We couldn't refresh tags just now. Your changes are kept here — check your connection and try Save again.",
+        );
+        return;
+      }
+      const cur = frontmatterRef.current;
+      const merged = setTags(cur, unionTags(readTags(cur), appliedTags));
+      setFrontmatter(merged);
+      frontmatterRef.current = merged;
+      baseRevision.current = fresh.revision; // advance past the apply write → no false 409
+      lastSavedFrontmatter.current = fresh.frontmatter; // what the server now holds
+      if (merged !== fresh.frontmatter) scheduleAutosave();
+    },
+    [path, scheduleAutosave],
+  );
+
   function onBodyChange(value?: string) {
     const next = value ?? "";
     setBody(next);
@@ -686,6 +724,17 @@ export default function PageEditor() {
             setSaveState("idle");
             scheduleAutosave();
           }}
+        />
+        {/* ED-03a — per-page LLM tag suggestions. Editor-gated by TagSuggest itself.
+            It suggests against the LIVE body+frontmatter (union de-dup), applies via
+            the server apply-tags path, then hands the approved set to
+            reconcileAppliedTags so the apply is autosave-safe (no 409, no revert, no
+            loss of an unsaved title). Approved tags land ONLY in frontmatter. */}
+        <TagSuggest
+          pagePath={path}
+          body={body}
+          frontmatter={frontmatter}
+          onApplied={(tags) => void reconcileAppliedTags(tags)}
         />
       </div>
 
