@@ -1,0 +1,47 @@
+/* TagBadgeBar — read-only effective-tag pills. The badge echoes the in-editor
+   `.cm-hashtag` look (theme.ts): accent text on a faint accent fill, sm radius. */
+.tag-badge-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 2px 0;
+}
+
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--color-accent, #8b5cf6);
+  background: var(--color-accent-soft, rgba(139, 92, 246, 0.12));
+  border-radius: var(--radius-sm, 4px);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Inline-origin tags are managed in the body, not here — no pointer affordance. */
+.tag-badge-inline {
+  cursor: default;
+}
+
+.tag-badge-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  opacity: 0.6;
+}
+.tag-badge-x:hover {
+  opacity: 1;
+  background: rgba(139, 92, 246, 0.2);
+}
