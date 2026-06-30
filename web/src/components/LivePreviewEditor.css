@@ -148,3 +148,47 @@
   letter-spacing: 0.02em;
   border-bottom-left-radius: var(--radius-sm);
 }
+
+/* Syntax-highlight token colors (ED-04a). The ONE shared HighlightStyle
+ * (lib/cm/highlight.ts) emits these `.tok-*` classes on token spans for BOTH
+ * surfaces: inside the read CodeBlockWidget <pre> AND inside .cm-content (the
+ * live editor's nested fenced code). Color is the ONLY property set per role
+ * (tokens-only, no hex) — same font/size/padding as plain, so the
+ * plain→highlighted swap is zero layout shift (D-08). Not scoped under
+ * .livepreview-editor: the live-editor spans live in .cm-content which the
+ * editor mounts, and these classes are intentionally global to cover both. */
+.tok-keyword {
+  color: var(--syntax-keyword);
+}
+.tok-string {
+  color: var(--syntax-string);
+}
+.tok-comment {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+.tok-number {
+  color: var(--syntax-number);
+}
+.tok-function {
+  color: var(--syntax-function);
+}
+
+/* Plain→highlighted reveal: a subtle fade so the async re-highlight reads as
+ * intentional, never a flicker (D-08). Only the <code> opacity animates — no
+ * metric changes, so neighbors never reflow. Applied when the widget toggles
+ * `--highlighted` after the lazy grammar resolves. */
+@media (prefers-reduced-motion: no-preference) {
+  .livepreview-editor .cm-md-codeblock.cm-md-codeblock--highlighted code {
+    animation: tok-fade-in 160ms ease-out;
+  }
+}
+
+@keyframes tok-fade-in {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}

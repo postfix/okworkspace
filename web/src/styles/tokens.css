@@ -94,6 +94,19 @@
   --color-tree-hover: var(--color-hover);
   --color-tree-active-bg: rgba(139, 92, 246, 0.18);
 
+  /* ── Syntax highlighting (ED-04a) ───────────────────────────────────────────
+     Muted / Obsidian-like code palette, ~5 desaturated roles, legible on the
+     #0b0d12 canvas. ONE shared HighlightStyle (lib/cm/highlight.ts) maps Lezer
+     tags → `.tok-*` classes → these vars (tokens-only contract: no inline hex in
+     theme.ts or the HighlightStyle). Authored for DARK only; the names/structure
+     are theme-agnostic so a future light theme is a pure value swap here (D-01). */
+  --syntax-keyword: #93b4f5;   /* soft blue   — keywords, operators, modifiers */
+  --syntax-string: #8fd6a0;    /* soft green  — strings, chars, regexp */
+  --syntax-comment: #6b7488;   /* muted grey  — comments (also italic) */
+  --syntax-number: #e6c07b;    /* amber       — numbers, booleans, constants */
+  --syntax-function: #b794f6;  /* soft purple — functions, types (harmonizes
+                                  with --color-accent #8b5cf6) */
+
   /* Radius & elevation */
   --radius-sm: 6px;
   --radius-md: 10px;
