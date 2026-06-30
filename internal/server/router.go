@@ -211,6 +211,12 @@ func New(deps Deps) (http.Handler, error) {
 			authed.Get("/tags/vocabulary", h.handleTagVocabulary)
 			authed.Post("/agent/suggest-tags", h.handleSuggestTags)
 
+			// Per-page LLM description (ED-01b) — generate is READ-ONLY (any-authed,
+			// like suggest-tags): it returns a validated ~1-sentence proposal + the
+			// base revision and NEVER writes. Apply is the consequential editor+CSRF
+			// write (registered in the editor subgroup below). NEITHER is an Eino tool.
+			authed.Post("/agent/generate-description", h.handleGenerateDescription)
+
 			// Page/folder MUTATIONS — editor-gated subgroup (mirrors the admin
 			// subgroup). Authorization is read from the session role via
 			// RequireRole, never client input (T-02-02). Admin passes the editor
@@ -234,6 +240,13 @@ func New(deps Deps) (http.Handler, error) {
 				// lines byte-stably via okf.SetTags through pages.Save → the single-
 				// writer commit, and 409s on a moved base revision. NOT an Eino tool.
 				editor.Post("/agent/apply-tags", h.handleApplyTags)
+
+				// Apply an approved description (ED-01b write) — the consequential
+				// editor+CSRF write. It RE-validates+cleans the client description
+				// server-side (the client value is never trusted), writes ONLY the
+				// `description:` scalar byte-stably via okf.SetField through pages.Save →
+				// the single-writer commit, and 409s on a moved base revision. NOT a tool.
+				editor.Post("/agent/apply-description", h.handleApplyDescription)
 
 				editor.Post("/pages", h.handleCreatePage)
 				editor.Put("/pages/*", h.handleSavePage)

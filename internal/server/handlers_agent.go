@@ -392,6 +392,8 @@ func writeAgentModeError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusUnprocessableEntity, "The assistant couldn't produce a clean result. Try rephrasing your request.")
 	case errors.Is(err, agent.ErrTagsInvalid):
 		writeError(w, http.StatusUnprocessableEntity, "The assistant couldn't produce a clean set of tags. Try again.")
+	case errors.Is(err, agent.ErrDescriptionInvalid):
+		writeError(w, http.StatusUnprocessableEntity, "The assistant couldn't produce a clean description. Try again.")
 	default:
 		writeError(w, http.StatusBadGateway, "The assistant is unavailable right now. Try again in a moment.")
 	}
@@ -816,6 +818,175 @@ func (h *authHandlers) handleApplyTags(w http.ResponseWriter, r *http.Request) {
 // owns final assembly.
 func setTagsFrontmatter(frontmatter, body string, tags []string) (string, error) {
 	return pages.SetTagsFrontmatter(frontmatter, body, tags)
+}
+
+// ─── Generate / Apply description: per-page LLM description (ED-01a/ED-01b) ────
+//
+// /generate-description (any-authed read) calls the agent's GenerateDescription
+// MODE — a single-shot, validated ~1-sentence proposal — returning the description
+// + the page's base revision captured at generate time. It NEVER writes.
+// /apply-description (editor + CSRF) is the consequential write: it RE-validates the
+// client description server-side (the client value is never trusted — ED-01b),
+// writes ONLY the `description:` scalar byte-stably via okf.SetField through
+// pages.Save → the single-writer commit, and 409s on a moved revision (mirrors
+// /apply-tags). NEITHER is an Eino tool — the read-only 5-tool allow-list is
+// unchanged (generate is a mode, apply is a non-tool endpoint, AGNT-11).
+
+// generateDescriptionRequest is the POST /agent/generate-description body. page_path
+// is the page to describe (read via the role-scoped pages service).
+type generateDescriptionRequest struct {
+	PagePath string `json:"page_path"`
+}
+
+// generateDescriptionResponse carries the generated description + the base revision
+// the eventual /apply-description must echo back for the stale-revision floor. The
+// description renders as a plain string (the frontend renders it as React text — no
+// HTML).
+type generateDescriptionResponse struct {
+	PagePath     string `json:"page_path"`
+	Description  string `json:"description"`
+	BaseRevision string `json:"base_revision"`
+}
+
+// handleGenerateDescription generates a one-sentence description for a page
+// (ED-01b). Any-authed, read-only — it returns a proposal the review surface drives;
+// it never writes. Fails closed when the agent is off/unreachable or could not
+// produce a clean description (mirrors handleSuggestTags).
+func (h *authHandlers) handleGenerateDescription(w http.ResponseWriter, r *http.Request) {
+	if h.agent == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req generateDescriptionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	path := strings.TrimSpace(req.PagePath)
+	if path == "" || !validIdentifier(path) {
+		writeError(w, http.StatusBadRequest, "Choose a page to describe.")
+		return
+	}
+
+	h.auditAgentMode(r, "generate-description", path)
+
+	description, baseRev, err := h.agent.GenerateDescription(r.Context(), path)
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		writeAgentModeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, generateDescriptionResponse{
+		PagePath:     path,
+		Description:  description,
+		BaseRevision: baseRev,
+	})
+}
+
+// applyDescriptionRequest is the POST /agent/apply-description body. description is
+// the client-approved text (NEVER trusted verbatim — re-validated+cleaned server-
+// side); base_revision is the token captured at generate time, re-checked by
+// pages.Save so a moved revision 409s instead of overwriting.
+type applyDescriptionRequest struct {
+	PagePath     string `json:"page_path"`
+	Description  string `json:"description"`
+	BaseRevision string `json:"base_revision"`
+}
+
+// handleApplyDescription applies an approved description (ED-01b write half).
+// Editor-gated + CSRF (the global nosurf middleware covers the mutating method). It
+// RE-validates+cleans the client description server-side (defense in depth — the
+// client value is NEVER written verbatim: trim, reject NUL/control/newline → single
+// line, length cap), writes ONLY the `description:` scalar byte-stably via
+// okf.SetField, and reuses pages.Save with the generate-time base_revision: a moved
+// revision returns ErrStaleRevision → 409 and writes nothing (mirrors handleApplyTags).
+func (h *authHandlers) handleApplyDescription(w http.ResponseWriter, r *http.Request) {
+	if h.pages == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	var req applyDescriptionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+	path := strings.TrimSpace(req.PagePath)
+	if path == "" || !validIdentifier(path) {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+
+	// RE-VALIDATE + CLEAN the client description server-side (ED-01b — never trust the
+	// client). The CLEANED value is what we write (server-authoritative), so a tampered
+	// multi-line / over-cap / control-bearing value can never reach the page. An invalid
+	// description → 422 (never written).
+	cleaned, err := agent.ValidateDescription(req.Description)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "That description can't be applied. Generate a fresh one and try again.")
+		return
+	}
+
+	// Fetch the current page (404 on not-found). We need its frontmatter region + body
+	// to produce the new frontmatter byte-stably.
+	pg, err := h.pages.Get(r.Context(), path)
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+
+	// Produce the NEW frontmatter region with ONLY the `description` scalar set
+	// byte-stably via okf.SetField. The body is passed through unchanged — only the
+	// description line changes. pages.Save owns the final ---fence--- assembly.
+	newFrontmatter, err := setDescriptionFrontmatter(pg.Frontmatter, pg.Body, cleaned)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "We couldn't apply that description just now. Try again.")
+		return
+	}
+
+	actor := h.actorUsername(r.Context())
+	// pages.Save reuses the SAME single-writer commit + 409 floor /apply-tags uses.
+	err = h.pages.Save(r.Context(), path, pg.Body, newFrontmatter, req.BaseRevision, actor)
+	if err != nil {
+		if errors.Is(err, pages.ErrPageNotFound) {
+			writeError(w, http.StatusNotFound, "This page no longer exists. It may have been moved or deleted.")
+			return
+		}
+		if errors.Is(err, pages.ErrStaleRevision) {
+			// The page changed since the assistant read it — block, never overwrite.
+			writeError(w, http.StatusConflict, "This page changed since the assistant described it. Generate a fresh description against the latest version.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "We couldn't apply that description just now. Check your connection and try again.")
+		return
+	}
+
+	// Audit the approval (non-fatal). Detail carries only the non-secret role — never
+	// the description text or the page content (mirrors handleApplyTags's discipline).
+	_ = h.audit.Record(r.Context(), audit.Event{
+		Action: audit.ActionAgentPatchApproval,
+		Actor:  actor,
+		Target: path,
+		Detail: "mode=apply-description role=" + h.actorRole(r.Context()),
+		Source: auditSourceWeb,
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setDescriptionFrontmatter returns the new frontmatter REGION string for a page
+// whose `description` key is set to text byte-stably via okf.SetField — the body and
+// every other frontmatter key stay unchanged. It delegates to
+// pages.SetFieldFrontmatter so the byte-stable scalar-region write is owned in ONE
+// place (alongside the tags-region write) and cannot drift. The handler does NOT
+// hand-roll a second ---fence---; pages.Save owns final assembly.
+func setDescriptionFrontmatter(frontmatter, body, text string) (string, error) {
+	return pages.SetFieldFrontmatter(frontmatter, body, "description", text)
 }
 
 // actorRole resolves the session-bound user's role for the audit Detail. It

@@ -238,3 +238,29 @@ func SetTagsFrontmatter(frontmatter, body string, tags []string) (string, error)
 	}
 	return string(doc2.RawFront), nil
 }
+
+// SetFieldFrontmatter returns the new frontmatter REGION string for a page whose
+// scalar `field` is set to `value` byte-stably via okf.SetField — the body and
+// every other frontmatter key stay unchanged. It is the scalar-field analog of
+// SetTagsFrontmatter and the ONE place the byte-stable scalar-region write is
+// owned (the per-page apply-description handler delegates here), so it cannot
+// drift from the tags-region write. It assembles the page from its frontmatter +
+// body via the canonical assembler, parses, sets the field, re-emits, re-parses
+// the emitted bytes, and returns the resulting RawFront region (the caller hands
+// that region to the writer, which owns the final ---fence--- assembly).
+func SetFieldFrontmatter(frontmatter, body, field, value string) (string, error) {
+	doc, err := okf.Parse(AssembleSource(frontmatter, body))
+	if err != nil {
+		return "", fmt.Errorf("pages: set-field parse: %w", err)
+	}
+	okf.SetField(doc, field, value)
+	emitted, err := doc.Emit()
+	if err != nil {
+		return "", fmt.Errorf("pages: set-field emit: %w", err)
+	}
+	doc2, err := okf.Parse(emitted)
+	if err != nil {
+		return "", fmt.Errorf("pages: set-field re-parse emitted: %w", err)
+	}
+	return string(doc2.RawFront), nil
+}
