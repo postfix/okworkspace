@@ -227,12 +227,19 @@ export class CodeBlockWidget extends WidgetType {
 //   2. Then it lazy-loads + renders mermaid (renderMermaid, its own dynamic-import
 //      chunk) and, on success, ATOMICALLY swaps the parsed <svg> in.
 //
-// SECURITY (D-04, T-06-08): the diagram source is untrusted page content. renderMermaid
-// runs under securityLevel:'strict' (mermaid DOMPurify-sanitizes the svg + disables
-// click/interactivity), and we STILL inject via `new DOMParser().parseFromString(svg,
-// "image/svg+xml")` + a parsererror check + appendChild — NEVER innerHTML of page
-// content. bindFunctions is deliberately NOT called (strict disables interactivity).
-// A malformed svg (parsererror, or a non-<svg> root) keeps the raw-code fallback.
+// SECURITY (D-04, T-06-08): the diagram source is untrusted page content. The script-
+// stripping boundary is UPSTREAM: renderMermaid runs under securityLevel:'strict', so
+// mermaid pipes the svg through DOMPurify (removing <script>/event-handler attributes)
+// AND disables click/interactivity before the string ever reaches this widget — that is
+// what guarantees no live script, not this widget's own logic. The widget's job is the
+// INJECTION hygiene on top of it: parse via `new DOMParser().parseFromString(svg,
+// "image/svg+xml")` + a parsererror check + a non-<svg>-root check + appendChild, NEVER
+// innerHTML of page content (so we never re-parse bytes into live markup; and a
+// DOMParser-created <script>, having its "already started" flag set, would not execute on
+// insertion even if one slipped past DOMPurify). bindFunctions is deliberately NOT called
+// (strict disables interactivity). A malformed svg (parsererror, or a non-<svg> root)
+// keeps the raw-code fallback. This widget is NOT a second sanitizer — re-sanitizing here
+// would be redundant with DOMPurify and a footgun to hand-roll.
 //
 // FALLBACK (D-05): a parse/render throw (invalid diagram) — or any DOM step failing — is
 // swallowed by the whole-pass try/catch, leaving the raw-code fallback. No error escapes

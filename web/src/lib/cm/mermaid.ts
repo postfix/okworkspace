@@ -33,21 +33,38 @@ let initialized = false;
 // (it mounts a temp node keyed on it). A monotonic counter is collision-free per page.
 let idCounter = 0;
 
-// renderMermaid lazy-loads mermaid, initializes once, pre-validates with `parse`
-// (DOM-free, throws on invalid), then renders to an SVG STRING. It THROWS on any
-// parse/render failure (suppressErrorRendering ensures render rethrows + cleans up its
-// temp node) — the caller turns a throw into the raw-code fallback. The returned SVG is
-// DOMPurify-sanitized (strict) but the caller STILL injects it via DOMParser (never
-// innerHTML) as defense-in-depth.
-export async function renderMermaid(code: string): Promise<string> {
-  const mermaid = (await import("mermaid")).default;
-  if (!initialized) {
-    mermaid.initialize(MERMAID_CONFIG);
-    initialized = true;
-  }
-  // Cheap pre-validation gate (throws on invalid, builds no DOM). render also throws
-  // under suppressErrorRendering, but parse fails fast without touching the document.
-  await mermaid.parse(code);
-  const { svg } = await mermaid.render("mmd-" + idCounter++, code);
-  return svg;
+// SERIALIZATION (concurrency): mermaid's parse/render mutate module-GLOBAL per-diagram-type
+// DB singletons (e.g. flowDb), cleared + repopulated at the start of each call — they are
+// NOT reentrant, and there is no happens-before edge between two interleaved calls. A page
+// with ≥2 ```mermaid blocks fires renderMermaid concurrently (each MermaidWidget.toDOM
+// does a fire-and-forget render), and the parse→render await gap lets a second block's
+// parse clobber the first's DB. We close that by chaining every call through a module-level
+// promise so exactly one parse+render pair runs at a time (the pair is atomic w.r.t. the
+// shared DB). The chain survives a rejection (`.catch`) so one bad diagram doesn't wedge
+// the rest. Serial is fine at this app's scale (a few small diagrams per page).
+let queue: Promise<unknown> = Promise.resolve();
+
+// renderMermaid lazy-loads mermaid, initializes once, pre-validates with `parse` (DOM-free,
+// throws on invalid), then renders to an SVG STRING — all SERIALIZED behind `queue`. It
+// REJECTS on any parse/render failure (suppressErrorRendering ensures render rethrows +
+// cleans up its temp node) — the caller turns a rejection into the raw-code fallback. The
+// returned SVG is DOMPurify-sanitized (strict) but the caller STILL injects it via DOMParser
+// (never innerHTML) as defense-in-depth.
+export function renderMermaid(code: string): Promise<string> {
+  const run = queue.then(async () => {
+    const mermaid = (await import("mermaid")).default;
+    if (!initialized) {
+      mermaid.initialize(MERMAID_CONFIG);
+      initialized = true;
+    }
+    // Cheap pre-validation gate (throws on invalid, builds no DOM). render also throws
+    // under suppressErrorRendering, but parse fails fast without touching the document.
+    await mermaid.parse(code);
+    const { svg } = await mermaid.render("mmd-" + idCounter++, code);
+    return svg;
+  });
+  // Keep the chain alive past a rejection so a single invalid diagram doesn't block the
+  // queue for every later block; the caller still sees `run` reject and falls back.
+  queue = run.catch(() => {});
+  return run;
 }

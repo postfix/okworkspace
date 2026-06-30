@@ -481,9 +481,11 @@ const tableField = StateField.define<DecorationSet>({
 //   • ```mermaid (ED-05a / D-02) — renders in READ mode AND the LIVE editor (Obsidian
 //     parity), via a MermaidWidget block replace, EXCEPT when the selection intersects
 //     the block: there we emit NOTHING so the raw ```mermaid source is revealed for
-//     editing (active-line reveal, mirroring buildTableDecorations). Because eq() keys on
-//     (code, theme), leaving the block reuses the already-rendered SVG (no re-render), and
-//     no render runs while the cursor is inside → live mode is not per-keystroke.
+//     editing (active-line reveal, mirroring buildTableDecorations). No render runs while
+//     the cursor is inside the block, so live mode is NOT per-keystroke. (Note: revealing
+//     DROPS the decoration → CM6 destroys the widget; re-exiting builds a NEW MermaidWidget
+//     → a fresh render. eq() on (code,theme) only avoids a re-render when the decoration
+//     PERSISTS across a recompute — e.g. editing elsewhere on the page — not on enter/exit.)
 //
 //   • every other fence (Phase-25, UNCHANGED) — a clean CodeBlockWidget <pre> in READ
 //     mode ONLY (gated on cleanRender). Edit mode emits no widget for it, so a ```go block
@@ -514,7 +516,10 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
     enter: (node) => {
       if (node.name !== "FencedCode") return;
       const { code, lang } = parseFenced(state.doc, node.node);
-      if (lang === "mermaid") {
+      // Match the info string case-INsensitively (```Mermaid / ```MERMAID), consistent
+      // with CodeBlockWidget's case-insensitive grammar match — a capitalized fence from a
+      // non-technical author still renders a diagram rather than silently dropping to plain.
+      if (lang.toLowerCase() === "mermaid") {
         // Render in read mode (clean → activeLines empty → always) OR in edit mode when the
         // selection is OUTSIDE the block. When the selection intersects → emit nothing
         // (reveal the raw source). The dropped widget's destroy() discards any in-flight render.
