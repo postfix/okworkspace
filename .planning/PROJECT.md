@@ -12,7 +12,9 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 **Shipped: v1.2 Graph Schema Extension (2026-06-28).** Phase 18 extended the backend `GraphNode` struct with `Aliases`, `Tags`, `Exists`, and `type: "attachment"` — activating the 3 inert Phase 17 filter toggles (Attachments, Existing files only, search by aliases/tags). All 12 GF-02 criteria met.
 
-**Current milestone: v1.3 Tag Management UX** — workspace-wide tag rename, merge, and delete across all pages. Riding the existing byte-stable `SetTagsFrontmatter` + single-writer `EnqueueCommit` path. Preview→approve safety contract; derived graph store consistency after bulk mutations.
+**Current milestone: v1.4 Editor Enhancements & Authoring Polish** — make the page editor a richer, lower-friction authoring surface: the agent generates the page description (no manual field), tags become first-class (inline `#tag` rendered as badges + LLM suggestions; the manual Tags field is dropped), fenced code gets language-aware syntax highlighting, ` ```mermaid ` blocks render as diagrams, and Obsidian-style page templates speed up new pages. Builds on the CM6 live-preview surface shipped just prior (the `cleanRender` read facet + `CodeBlockWidget`).
+
+**Deferred: v1.3 Tag Management UX** — admin-only workspace-wide tag rename/merge/delete with a preview→approve safety contract. Roadmapped (Phases 19–20) but not built; planning archived to `.planning/milestones/v1.3-{REQUIREMENTS,ROADMAP}.md`. Resume before or after v1.4.
 
 ## Requirements
 
@@ -42,13 +44,20 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 ### Active
 
-<!-- v1.3 Tag Management UX -->
+<!-- v1.4 Editor Enhancements & Authoring Polish (detailed REQ-IDs in REQUIREMENTS.md) -->
 
-- **TM-01: Tag rename** — Rename a tag across all pages that carry it. Single operation, batched single-writer commit, preview→approve. Handles case-folding and whitespace normalization.
-- **TM-02: Tag merge** — Merge source tag into target tag across all pages. Removes source tag, adds target tag where source existed. Preview shows affected pages.
-- **TM-03: Tag delete** — Remove a tag from every page that carries it. Preview shows affected pages before commit.
-- **TM-04: Tag admin UI** — Admin-only surface for tag management operations with preview/approve flow. Rides the existing `SetTagsFrontmatter` byte-stable builder + single-writer commit path.
-- **TM-05: Graph store consistency** — Derived graph store stays consistent after bulk tag mutations (rebuild or incremental update of `page_tags`).
+- **ED-01: LLM-generated description** — remove the manual Description field; the agent generates/refreshes the page description (review→apply, byte-stable frontmatter, no silent writes).
+- **ED-02: Inline `#tag` badges** — author `#tag` tokens in the page body, rendered as labeled badges (Obsidian-style) on the read/live surface; replaces the manual Tags field while staying byte-stable in the source.
+- **ED-03: LLM tag suggestions** — the agent suggests tags (extends v1.0 auto-tagging) feeding the same tag/badge model; suggest→approve, no silent writes.
+- **ED-04: Code syntax highlighting** — fenced code blocks render with language-aware highlighting on the read/live-preview CM6 surface.
+- **ED-05: Mermaid diagrams** — ` ```mermaid ` fenced blocks render as diagrams (read/live surface), with a safe fallback to the raw code on parse error.
+- **ED-06: Page templates** — Obsidian-style insertable page templates for new pages.
+
+### Deferred / Queued
+
+<!-- v1.3 Tag Management UX — roadmapped (Phases 19–20), not built; planning archived to .planning/milestones/v1.3-* -->
+
+- **TM-01…05: Tag Management UX (v1.3, deferred)** — admin tag rename / merge / delete + admin UI + derived-graph consistency, all preview→approve. Resume before or after v1.4; full spec in `.planning/milestones/v1.3-REQUIREMENTS.md`.
 
 ### Out of Scope
 
@@ -121,4 +130,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-28 — v1.3 milestone (Tag Management UX) started*
+*Last updated: 2026-06-30 — v1.4 milestone (Editor Enhancements & Authoring Polish) started; v1.3 (Tag Management UX) deferred*
