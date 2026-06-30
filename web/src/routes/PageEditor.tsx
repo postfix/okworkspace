@@ -27,7 +27,7 @@ import LivePreviewEditor from "../components/LivePreviewEditor";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
-import InlineTagEditor from "../components/InlineTagEditor";
+import TagBadgeBar from "../components/TagBadgeBar";
 import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
 
@@ -665,15 +665,22 @@ export default function PageEditor() {
             onChange={(e) => onFieldChange("description", e.target.value)}
           />
         </div>
-        <InlineTagEditor
-          pagePath={path}
-          tags={readTags(frontmatter)}
-          onTagsChange={(newTags) => {
-            setFrontmatter((fm) => {
-              const next = setTags(fm, newTags);
-              frontmatterRef.current = next;
-              return next;
-            });
+        {/* ED-02c — read-only effective-tag bar. Inline tags are authored as `#tag`
+            in the body (materialized on save by runSaver's reconcile); only non-inline
+            (LLM/imported) tags get an ✕, which does a byte-stable setTags removal off
+            the LATEST frontmatter (frontmatterRef, never a stale render closure). The
+            removal persists on the next save, mirroring the old chip field's contract. */}
+        <TagBadgeBar
+          body={body}
+          frontmatter={frontmatter}
+          onRemoveTag={(tag) => {
+            const cur = frontmatterRef.current;
+            const next = setTags(
+              cur,
+              readTags(cur).filter((t) => t.toLowerCase() !== tag.toLowerCase()),
+            );
+            setFrontmatter(next);
+            frontmatterRef.current = next;
             setSaveState("idle");
           }}
         />
