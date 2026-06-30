@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Editor Enhancements & Authoring Polish
-status: defining_requirements
+status: roadmap_created
 stopped_at: ""
-last_updated: "2026-06-30T09:30:00Z"
-last_activity: 2026-06-30 — v1.4 milestone started (v1.3 Tag Management UX deferred)
+last_updated: "2026-06-30T10:00:00Z"
+last_activity: 2026-06-30 — v1.4 roadmap created (7 phases, 21–27), red-team revised; ready to build
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 ## Current Position
 
 Milestone: v1.4 Editor Enhancements & Authoring Polish
-Phases: Not yet planned (continuing numbering from Phase 20 → v1.4 starts at Phase 21)
-Status: Defining requirements (research-first selected)
-Last activity: 2026-06-30 — Milestone v1.4 started
+Phases: 7 planned (21–27); next = Phase 21 (Inline #tag parser + badge render)
+Status: Roadmap created (red-team revised) — ready to build
+Last activity: 2026-06-30 — v1.4 roadmap approved
 
 ## Deferred
 

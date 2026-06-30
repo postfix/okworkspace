@@ -1,157 +1,159 @@
 # Roadmap: OKF Workspace
 
-## Overview
+Milestone **v1.4 — Editor Enhancements & Authoring Polish**. Seven phases (21–27), risk-first and
+dependency-ordered per the research synthesis (`.planning/research/SUMMARY.md`) and the roadmap
+red-team pre-mortem (which split the original Phase 21 and hardened several criteria).
 
-OKF Workspace is built dependency-first: from auth and the single-writer commit spine through OKF pages, search, Eino agent, collaboration, knowledge graph, and LLM tagging. v1.3 adds workspace-wide tag management — rename, merge, and delete tags across all pages with preview→approve safety.
+> Phases 19–20 belong to the **deferred v1.3 Tag Management UX** milestone (roadmapped, not built;
+> archived to `.planning/milestones/v1.3-ROADMAP.md`). v1.4 continues numbering at 21.
+>
+> **Tag-model label note:** this roadmap/REQUIREMENTS/SUMMARY call the chosen model "Model B =
+> frontmatter-canonical, sync-at-save". `PITFALLS.md` uses swapped A/B labels — the
+> *frontmatter-canonical* model is the chosen one regardless of label.
 
-## Milestones
+**Coverage:** every v1.4 requirement (ED-01…ED-06) maps to exactly one phase. 7 phases · all covered.
 
-- ✅ **v0.9.9 MVP** — Phases 0–7 (shipped 2026-06-23) — full self-hosted OKF wiki
-- ✅ **v1.0 Knowledge Graph & LLM Auto-Tagging** — Phases 8–12 (shipped 2026-06-24)
-- ✅ **v1.1 Hardening & Polish** — Phases 13–17 (shipped 2026-06-27)
-- ✅ **v1.2 Graph Schema Extension** — Phase 18 (shipped 2026-06-28)
+**Shared surfaces (merge-coordination note — not separate deps):** `PageEditor.tsx` is touched by
+21/22 (tags) and 24 (description); `markdown.ts` by 21 (Hashtag) and 25 (codeLanguages);
+`livePreview.ts`+`widgets.ts` by 21/22, 25, 26. Logically additive (different functions), but
+sequence 21 first and coordinate merges across these files.
 
 ## Phases
 
-### v1.3 Tag Management UX
-
-- [ ] **Phase 19: Tag Management Backend** — TM-01, TM-02, TM-03, TM-05 — tag rename/merge/delete endpoints riding `SetTagsFrontmatter` + batched single-writer commits; preview→approve flow; incremental graph store update after bulk tag mutations.
-- [ ] **Phase 20: Tag Admin UI** — TM-04 — admin panel surface for tag management with tag list, rename/merge/delete dialogs, preview, approve flow, error handling.
-
----
-
-## Phase 19: Tag Management Backend
-
-**Goal:** Build admin-only tag rename, merge, and delete endpoints that ride the existing byte-stable `SetTagsFrontmatter` + single-writer `EnqueueCommit` path. Each operation follows the preview→approve safety contract. Derived graph store stays consistent after bulk mutations.
-
-**Requirements:** TM-01, TM-02, TM-03, TM-05
-
-### Context
-
-v1.0 delivered per-page LLM tag suggestion and admin bulk sweep. Tags live in YAML frontmatter and in a derived SQLite `page_tags` graph store. There is no way to rename, merge, or delete a tag workspace-wide — changing a tag name requires editing every page manually.
-
-This phase adds three admin endpoints that operate on tags across all pages in one batched commit, using the same `SetTagsFrontmatter` byte-stable builder and the same single-writer commit path that Phase 11 and Phase 12 already rely on.
-
-### Success Criteria
-
-1. `POST /api/v1/admin/tags/rename` — preview + approve tag rename across all pages
-2. `POST /api/v1/admin/tags/merge` — preview + approve tag merge (source → target)
-3. `POST /api/v1/admin/tags/delete` — preview + approve tag removal from all pages
-4. All three endpoints follow the preview→approve pattern (two-step: fetch affected pages, then commit)
-5. Single batched commit for all affected pages (N pages → 1 git commit)
-6. Tag name normalization: trim, lowercase, reject empty
-7. Case-only rename (e.g. "Ops" → "ops") is a no-op
-8. Per-page stale revision (409) doesn't sink the batch; response reports per-page status
-9. Tag charset validation on input (same as Phase 16 SEC-02)
-10. Admin-only RBAC (editor/reader → 403)
-11. Audit log entries for all three operations
-12. Graph store incrementally updated after each operation (TM-05)
-13. Graph store rebuild from disk reproduces identical adjacency after mutations
-14. `go test ./internal/graph/... -race` clean after tag mutations
-
-### Key Design Decisions
-
-- **Reuse `SetTagsFrontmatter`** — The byte-stable YAML frontmatter builder from Phase 11. Only the `tags:` region changes. No new write implementation.
-- **Reuse batched `EnqueueCommit` with `[]fileWrite` payload** — The Phase 12 pattern. N pages → 1 commit.
-- **Preview endpoint returns the set of changes without applying** — Consistent with Phase 12 approve flow.
-- **Tag normalization on input** — Trim + lowercase before lookup. Prevents "Ops" and "ops" from being different tags.
-- **Conflict: rename to existing tag = merge** — If renaming "deploy" to "ops" and some pages already have "ops", the operation is effectively a merge: "deploy" pages get "ops", "ops" pages keep "ops".
-- **Graph store: incremental update** — After the batched commit lands, update `page_tags` in the same request handler (not an async job). The rebuild path is the invariant; incremental update is a performance optimization.
-
-### Key Files
-
-- `internal/server/handlers_tags.go` — New tag management endpoints
-- `internal/okf/emit.go` — `SetTagsFrontmatter` (existing, reuse)
-- `internal/gitstore/commit.go` — Batched `EnqueueCommit` (existing, reuse)
-- `internal/graph/rebuild.go` — Graph rebuild (existing, verify consistency)
-- `internal/graph/query.go` — Graph store incremental update after tag mutation
-- `internal/graph/extract.go` — `pageTags` extractor (existing, reuse for verification)
-
-### Dependencies
-
-- Phase 11 (Per-Page LLM Tag Suggestion) — `SetTagsFrontmatter` byte-stable builder
-- Phase 12 (Bulk Sweep) — batched commit pattern
-- Phase 16 (Security Hardening) — tag charset validation (SEC-02)
+| #  | Phase | Goal | Requirements | Depends on |
+|----|-------|------|--------------|------------|
+| 21 | Inline `#tag` Parser + Badge Render | Body `#tag` renders as a badge on both CM6 surfaces; byte-stable; false-positive corpus | ED-02a | — |
+| 22 | Model-B Materialization + Tag UI | On save, reconcile body `#tags` ↔ frontmatter (add+remove); replace chip field with badge bar | ED-02b, ED-02c | 21 |
+| 23 | LLM Tag Suggestions | Agent suggests tags into frontmatter, de-duped vs the union | ED-03a | 22 |
+| 24 | LLM-Generated Description | Drop the Description field; agent generates on demand, review→approve, autosave-safe | ED-01a, ED-01b | — |
+| 25 | Code Syntax Highlighting | Language-aware highlighting on both surfaces, code-split + bundle-budgeted | ED-04a | — |
+| 26 | Mermaid Diagrams | ` ```mermaid ` renders sandboxed + lazy; build-asserted out of main bundle | ED-05a | 25 |
+| 27 | Page Templates | New pages seed from `Templates/` files with `{{…}}` vars + robust frontmatter merge | ED-06a | — |
 
 ---
 
-## Phase 20: Tag Admin UI
+## Phase 21: Inline `#tag` Parser + Badge Render
 
-**Goal:** Admin-only tag management surface in the existing admin panel with tag list, rename/merge/delete dialogs, preview, approve flow, and error handling.
+**Goal:** A `@lezer/markdown` `Hashtag` inline parser + a badge decoration render `#tag` on the
+live + read surfaces, decoration-only (byte-stable). This is the *pure, demoable* foundation
+Phase 22 builds on — no frontmatter writes here. The known correctness landmine (which `#` is a
+tag) is pinned by a fixture corpus in this phase.
 
-**Requirements:** TM-04
+**Requirements:** ED-02a.
 
-### Context
+**Success criteria (observable):**
+1. Typing `#deploy` shows a "deploy" badge in live preview and read mode; the saved `.md` still contains the literal `#deploy` (byte-stable round-trip holds — `TestGoldenRoundTrip` + corpus).
+2. `#` inside fenced code, inline code, an ATX heading, a URL fragment (`/#frag`), `#1984`, `\#esc`, and mid-word `foo#bar` does NOT badge; `#abc` and `#a/b` (nested) DO badge. All fixture-pinned in `livePreview.test.ts`.
+3. Source mode and the active editing line show the raw `#tag`; the badge DOM is `createElement`+`textContent` only.
 
-Phase 19 provides the backend endpoints. This phase builds the React UI that exposes them to admins. The existing admin panel (`/app/admin`) already hosts user management and tag sweep controls — tag management is a natural third section.
-
-### Success Criteria
-
-1. "Tag Management" section in `/app/admin` with tag list (name + page count)
-2. Tag list is searchable/filterable
-3. "Rename" action per tag → dialog with new name input + preview of affected pages
-4. "Merge" action per tag → dialog with target tag picker + preview of affected pages
-5. "Delete" action per tag → confirmation dialog showing affected page count
-6. Preview shows paginated affected-page list with current tags
-7. Approve button with loading/progress state (mirrors Phase 15 UX improvement)
-8. Success/error feedback after operation completes
-9. Error states: network failure toast, per-page 409 listing, server validation error
-10. Tag list refreshes after successful operation
-11. Admin-only: non-admin users don't see the Tag Management section
-12. `npx tsc --noEmit` clean, `npx vitest run` green
-
-### Key Design Decisions
-
-- **Inline in existing admin panel** — Not a separate route. Consistent with user management and tag sweep sections.
-- **Optimistic UI with server confirmation** — Show pending state during preview fetch and during approve. On success, refresh tag list. On failure, show error.
-- **Per-page 409 display** — If some pages fail with stale revision, list them explicitly. Don't silently swallow failures.
-- **No tag picker in delete** — Delete operates on a single tag. The dialog shows page count and asks for confirmation.
-
-### Key Files
-
-- `web/src/routes/Admin.tsx` — Add Tag Management section
-- `web/src/components/admin/TagManagement.tsx` — New component
-- `web/src/api/client.ts` — New API client methods for tag endpoints
-- `web/src/components/admin/TagRenameDialog.tsx` — Rename dialog with preview
-- `web/src/components/admin/TagMergeDialog.tsx` — Merge dialog with preview
-- `web/src/components/admin/TagDeleteDialog.tsx` — Delete confirmation dialog
-
-### Dependencies
-
-- Phase 19 (Tag Management Backend) — all three endpoints must exist
-- Phase 15 (UX Improvement) — progress/polling pattern
+**Depends on:** — (builds on the existing CM6 surface).
 
 ---
 
-## Progress
+## Phase 22: Model-B Materialization + Tag UI
 
-| Phase | Milestone | Plans | Status | Completed |
-| ----- | --------- | ----- | ------ | --------- |
-| 0. Skeleton, Auth & Foundations | v0.9.9 | 4/4 | Complete | 2026-06-18 |
-| 1. OKF Pages, Navigation & Hidden Git | v0.9.9 | 5/5 | Complete | 2026-06-19 |
-| 2. Attachments & Text Extraction | v0.9.9 | 4/4 | Complete | 2026-06-20 |
-| 3. Search | v0.9.9 | 4/4 | Complete | 2026-06-20 |
-| 4. Eino Agent | v0.9.9 | 7/7 | Complete | 2026-06-21 |
-| 5. Collaboration | v0.9.9 | 4/4 | Complete | 2026-06-21 |
-| 6. Live-Preview Editor | v0.9.9 | 4/4 | Complete | 2026-06-22 |
-| 7. Obsidian-style File Tree | v0.9.9 | 4/4 | Complete | 2026-06-22 |
-| 8. Derived Link/Tag Store | v1.0 | 3/3 | Complete | 2026-06-23 |
-| 9. Graph Endpoints & Backlinks | v1.0 | 2/2 | Complete | 2026-06-24 |
-| 10. Graph UI | v1.0 | 3/3 | Complete | 2026-06-24 |
-| 11. Per-Page LLM Tag Suggestion | v1.0 | 3/3 | Complete | 2026-06-24 |
-| 12. Bulk Sweep & Batch Review | v1.0 | 3/3 | Complete | 2026-06-24 |
-| 13. Visual UAT | v1.1 | 1/1 | Complete | 2026-06-27 |
-| 14. Documentation | v1.1 | 2/2 | Complete | 2026-06-27 |
-| 15. UX Improvement | v1.1 | 1/1 | Complete | 2026-06-27 |
-| 16. Security Hardening | v1.1 | 3/3 | Complete | 2026-06-27 |
-| 17. Graph Filter Sidebar | v1.1 | 2/2 | Complete | 2026-06-27 |
-| 18. Graph Schema Extension | v1.2 | 1/1 | Complete | 2026-06-28 |
-| **19. Tag Management Backend** | **v1.3** | **0** | **Planned** | — |
-| **20. Tag Admin UI** | **v1.3** | **0** | **Planned** | — |
+**Goal:** On save, reconcile body `#tags` into the canonical frontmatter `tags:` **client-side**
+(reuse the Lezer parse; persist through the normal save — byte-stable on `Emit`; no second Go
+parser). Reconciliation is a diff, not a monotonic union, so removals work. Replace the chip Tags
+field with a minimal badge bar whose ✕ removes only non-inline (LLM/imported) tags. Carries the
+milestone's load-bearing decision; unblocks Phase 23.
+
+**Requirements:** ED-02b (materialize/reconcile on save), ED-02c (badge bar + removal).
+
+**Success criteria (observable):**
+1. Save computes `removedInline = inline(lastSavedBody) − inline(currentBody)`, `tags = (priorFrontmatter − removedInline) ∪ inline(currentBody)` — verified by a golden test doing **add + remove + LLM-tag-persists** in one save.
+2. After saving a body with `#deploy`, the file's frontmatter `tags:` contains `deploy`; the page appears in tag search / graph shared-tag for `deploy` with **no indexer change**.
+3. Deleting `#deploy` from the body and saving removes it from frontmatter; an LLM-applied tag never written inline persists and shows an ✕ in the badge bar; an inline-origin tag has no ✕.
+4. The old chip Tags field is gone; the editor has no regression; round-trip stays byte-stable.
+
+**Depends on:** Phase 21 (the parser + badge surface).
 
 ---
 
-## Execution Order
+## Phase 23: LLM Tag Suggestions
 
-- Phase 19 (Backend) must complete before Phase 20 (UI)
-- Phase 19 can be decomposed into sub-plans: TM-01 (rename) → TM-02 (merge) → TM-03 (delete) → TM-05 (graph store)
+**Goal:** Extend the shipped `SuggestTags` flow so agent suggestions feed the frontmatter-canonical
+tag set — review→approve, landing in frontmatter, de-duped vs the inline+frontmatter union. Never
+injected into prose.
+
+**Requirements:** ED-03a.
+
+**Success criteria (observable):**
+1. "Suggest tags" returns vocabulary-biased, capped suggestions for review; nothing writes until approved.
+2. Approving adds the tag to frontmatter `tags:` (byte-stable); it renders in the badge bar.
+3. A suggestion equal (case-insensitively) to an existing inline `#tag` or frontmatter tag is not offered/added.
+4. A suggestion failing tag-charset validation is rejected server-side.
+
+**Depends on:** Phase 22 (tag model + badge bar).
+
+---
+
+## Phase 24: LLM-Generated Description
+
+**Goal:** Remove the Description field; an editor generates/refreshes the description on demand,
+reviews it, and approves it into byte-stable frontmatter — never auto-runs, and the apply is
+**autosave-safe** (no 409 thrash, no revert).
+
+**Requirements:** ED-01a (remove field), ED-01b (generate on demand).
+
+**Success criteria (observable):**
+1. The editor has no Description input; existing descriptions are untouched; every page still has a `description` frontmatter key (repair unchanged).
+2. "Generate description" returns a ~1-sentence draft for review; editable + regenerable before apply.
+3. Approve writes `description` via byte-stable `okf.SetField` through the revision-checked save.
+4. **Autosave-safe:** approve description → keep typing the body → the next autosave neither 409s into the conflict dialog nor reverts the description (apply reseeds `description` + advances `baseRevision` atomically).
+5. No description is ever written without explicit approval.
+
+**Depends on:** — (independent; the other frontmatter-field deletion + suggest→apply mode).
+
+---
+
+## Phase 25: Code Syntax Highlighting
+
+**Goal:** Language-aware highlighting on both CM6 surfaces via one shared, theme-aware
+`HighlightStyle` and the native `highlightCode` path — languages stay code-split, and the main
+bundle stays within budget.
+
+**Requirements:** ED-04a.
+
+**Success criteria (observable):**
+1. A ` ```go ` block shows highlighted Go tokens in the live editor and read mode; colors follow the dark theme tokens; spans are `textContent`-only.
+2. Languages are code-split; the read widget renders plain then **re-highlights when the language parser resolves** (no static-import of grammars into the main chunk).
+3. The curated set (js/ts, python, go, rust, json, yaml, sql, html, css, bash, markdown, diff) highlights; an unknown language falls back to plain monospace with no error; a ` ```mermaid ` fence is NOT highlighted.
+4. **Bundle budget:** the main editor chunk grows only by the highlight core + style (not the per-language grammars) — checked against the build output.
+
+**Depends on:** — (settles the widget-highlight + lazy-language pattern Phase 26 reuses).
+
+---
+
+## Phase 26: Mermaid Diagrams
+
+**Goal:** ` ```mermaid ` blocks render as diagrams via a lazy-loaded, sandboxed `MermaidWidget`,
+with a safe raw-code fallback. Mermaid is build-asserted out of the main bundle.
+
+**Requirements:** ED-05a.
+
+**Success criteria (observable):**
+1. A valid ` ```mermaid ` flowchart/sequence/class/state/ER renders as an inline SVG on read + live, themed to dark mode.
+2. `mermaid` loads only when a mermaid block is first displayed; an **automated build assertion** confirms `mermaid` is absent from the main editor chunk.
+3. An invalid diagram falls back to the raw fenced code block (no blank, no crash).
+4. Rendering uses `securityLevel:'strict'` and injects SVG without `innerHTML` of page content.
+
+**Depends on:** Phase 25 (shares `widgets.ts`/`livePreview.ts`; heaviest/riskiest).
+
+---
+
+## Phase 27: Page Templates
+
+**Goal:** New pages seed from Obsidian-style templates stored as `.md` files in a `Templates/`
+folder, with `{{title}}`/`{{date}}`/`{{time}}` substitution — files-as-truth, no templating
+engine, no executable templates, and robust frontmatter merge.
+
+**Requirements:** ED-06a.
+
+**Success criteria (observable):**
+1. Templates placed under `Templates/` appear in a picker on new-page (with a blank default).
+2. Choosing a template seeds the new page's frontmatter + body; `{{title}}`/`{{date}}`/`{{time}}` resolve.
+3. **Robust merge:** a template carrying its own `---` frontmatter yields a single valid frontmatter block (no duplicate keys / malformed YAML), then required-field repaired — adversarial test included.
+4. Template reads resolve through the safe path resolver; no `{{…}}` placeholder executes code.
+
+**Depends on:** — (fully independent; could parallelize).
