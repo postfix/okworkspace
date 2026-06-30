@@ -18,9 +18,43 @@ import { assertLazyChunks } from "./vite-plugins/assertLazyChunks";
 // module id like `.../@codemirror/lang-css/dist/index.js`) so the lookahead matches the
 // WHOLE name, not a prefix — a future `lang-cssinjs` / `lang-htmlx` would NOT be silently
 // allowed (it stays forbidden because `cssinjs/` ≠ `css/`).
+// ED-05a / D-03: mermaid is LARGE and loaded only via a dynamic import("mermaid")
+// (lib/cm/mermaid.ts) → its own lazy chunk. These rules PROVE mermaid AND its heavy
+// transitive deps (d3 / dagre / cytoscape / dompurify / katex / …) never get statically
+// pulled into an entry chunk. A single dynamic import splits cleanly under Vite/Rollup;
+// the ONLY thing that breaks laziness is a stray static `import "mermaid"` reachable from
+// entry — these regexes catch exactly that, failing `npm run build`. The entry budget is
+// NOT raised: mermaid must not inflate the entry chunk. `[\\/]` matches POSIX + Windows
+// module-id separators.
+//
+// `stylis` and `d3-*` are DELIBERATELY EXCLUDED (research_facts listed them, but
+// `npm ls` shows both are SHARED with other STATICALLY-imported app deps, so they
+// legitimately ride the entry chunk INDEPENDENT of mermaid — the Phase-25 lang-css
+// situation):
+//   • stylis  → also a dep of react-diff-viewer-continued → @emotion/css.
+//   • d3-*    → also a dep of react-force-graph-2d → force-graph (d3-selection/zoom/…).
+// Forbidding them would flag a pre-existing, non-mermaid fact. Every rule KEPT below is
+// mermaid-UNIQUE per `npm ls` (mermaid is the SOLE root that pulls it), so each remains a
+// reliable signal: a stray static mermaid import would drag ALL of these (mermaid itself
+// + its unique renderers dagre-d3-es / cytoscape / @mermaid-js/parser / roughjs / katex /
+// marked / dayjs / dompurify / khroma) into the entry chunk, and any one match fails the build.
+const MERMAID_FORBIDDEN = [
+  /node_modules[\\/]mermaid[\\/]/,
+  /node_modules[\\/]dagre-d3-es[\\/]/,
+  /node_modules[\\/]cytoscape(-[a-z-]+)?[\\/]/,
+  /node_modules[\\/]khroma[\\/]/,
+  /node_modules[\\/]dompurify[\\/]/,
+  /node_modules[\\/]katex[\\/]/,
+  /node_modules[\\/]marked[\\/]/,
+  /node_modules[\\/]dayjs[\\/]/,
+  /node_modules[\\/]roughjs[\\/]/,
+  /node_modules[\\/]@mermaid-js[\\/]parser[\\/]/,
+];
+
 const FORBIDDEN_IN_ENTRY = [
   /node_modules\/@codemirror\/lang-(?!(?:markdown|html|css|javascript)\/)/,
   /node_modules\/@codemirror\/legacy-modes\//,
+  ...MERMAID_FORBIDDEN,
 ];
 
 // Build output goes to internal/web/dist, which the Go binary embeds via

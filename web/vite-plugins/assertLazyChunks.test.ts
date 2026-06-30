@@ -44,6 +44,25 @@ const FORBIDDEN = [
   /node_modules\/@codemirror\/legacy-modes\//,
 ];
 
+// ED-05a / D-03: the mermaid dep rules (mirrors vite.config.ts MERMAID_FORBIDDEN). These
+// prove mermaid + its heavy MERMAID-UNIQUE deps are kept out of every entry chunk.
+// `stylis` (also @emotion/css via react-diff-viewer-continued) and `d3-*` (also
+// react-force-graph-2d via force-graph) are intentionally absent — both legitimately ride
+// the entry chunk via OTHER static deps, so they are not mermaid-leak signals (see the
+// vite.config.ts comment for the `npm ls` provenance).
+const MERMAID_FORBIDDEN = [
+  /node_modules[\\/]mermaid[\\/]/,
+  /node_modules[\\/]dagre-d3-es[\\/]/,
+  /node_modules[\\/]cytoscape(-[a-z-]+)?[\\/]/,
+  /node_modules[\\/]khroma[\\/]/,
+  /node_modules[\\/]dompurify[\\/]/,
+  /node_modules[\\/]katex[\\/]/,
+  /node_modules[\\/]marked[\\/]/,
+  /node_modules[\\/]dayjs[\\/]/,
+  /node_modules[\\/]roughjs[\\/]/,
+  /node_modules[\\/]@mermaid-js[\\/]parser[\\/]/,
+];
+
 describe("assertLazyChunks", () => {
   it("errors when a forbidden grammar lands in an entry chunk", () => {
     const bundle = entryChunk("index.js", [
@@ -174,5 +193,85 @@ describe("assertLazyChunks", () => {
     expect(() =>
       runGenerateBundle(assertLazyChunks({ forbidden: [/mermaid/] }), bundle),
     ).toThrow(/mermaid/);
+  });
+
+  // ─── ED-05a (Phase 26): the mermaid forbidden rules have teeth ───
+  describe("mermaid forbidden rules (ED-05a)", () => {
+    it("errors when mermaid itself leaks into an entry chunk", () => {
+      const bundle = entryChunk("index.js", [
+        "/app/src/main.tsx",
+        "/app/node_modules/mermaid/dist/mermaid.core.mjs",
+      ]);
+      expect(() =>
+        runGenerateBundle(assertLazyChunks({ forbidden: MERMAID_FORBIDDEN }), bundle),
+      ).toThrow(/mermaid.*leaked.*entry chunk/);
+    });
+
+    it("errors when a mermaid-unique transitive dep (dagre-d3-es) leaks into an entry chunk", () => {
+      const bundle = entryChunk("index.js", [
+        "/app/node_modules/dagre-d3-es/src/dagre/index.js",
+      ]);
+      expect(() =>
+        runGenerateBundle(assertLazyChunks({ forbidden: MERMAID_FORBIDDEN }), bundle),
+      ).toThrow(/dagre-d3-es.*leaked/);
+    });
+
+    it("does NOT forbid the SHARED deps (stylis via emotion, d3-* via force-graph)", () => {
+      // These legitimately ride the entry chunk via OTHER static deps — the mermaid rules
+      // must NOT flag them (else the build fails on a pre-existing, non-mermaid fact).
+      for (const id of [
+        "/app/node_modules/stylis/src/Enum.js",
+        "/app/node_modules/d3-selection/src/namespaces.js",
+        "/app/node_modules/d3-shape/src/index.js",
+      ]) {
+        const bundle = entryChunk("index.js", ["/app/src/main.tsx", id]);
+        expect(() =>
+          runGenerateBundle(assertLazyChunks({ forbidden: MERMAID_FORBIDDEN }), bundle),
+        ).not.toThrow();
+      }
+    });
+
+    it("errors for each heavy mermaid dep family in an entry chunk", () => {
+      const leaks = [
+        "/app/node_modules/dagre-d3-es/src/dagre/index.js",
+        "/app/node_modules/cytoscape-cose-bilkent/index.js",
+        "/app/node_modules/dompurify/dist/purify.js",
+        "/app/node_modules/katex/dist/katex.mjs",
+        "/app/node_modules/@mermaid-js/parser/dist/index.js",
+        "/app/node_modules/khroma/dist/index.js",
+      ];
+      for (const id of leaks) {
+        const bundle = entryChunk("index.js", [id]);
+        expect(() =>
+          runGenerateBundle(assertLazyChunks({ forbidden: MERMAID_FORBIDDEN }), bundle),
+        ).toThrow(/leaked into entry chunk/);
+      }
+    });
+
+    it("does NOT error when mermaid + deps live only in NON-entry (lazy) chunks", () => {
+      const bundle: SyntheticBundle = {
+        "index.js": {
+          type: "chunk",
+          isEntry: true,
+          fileName: "index.js",
+          moduleIds: ["/app/src/main.tsx", "/app/src/lib/cm/mermaid.ts"],
+          code: "",
+        },
+        "mermaid.lazy.js": {
+          type: "chunk",
+          isEntry: false, // the dynamic import() chunk — mermaid is SUPPOSED to live here
+          fileName: "mermaid.lazy.js",
+          moduleIds: [
+            "/app/node_modules/mermaid/dist/mermaid.core.mjs",
+            "/app/node_modules/d3-shape/src/index.js",
+            "/app/node_modules/dompurify/dist/purify.js",
+          ],
+          code: "",
+        },
+      };
+      expect(() =>
+        runGenerateBundle(assertLazyChunks({ forbidden: MERMAID_FORBIDDEN }), bundle),
+      ).not.toThrow();
+    });
   });
 });
