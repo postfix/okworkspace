@@ -380,6 +380,23 @@ export default function PageEditor() {
   //      cleanly against the fresh revision — no 409, no revert.
   const reconcileAppliedTags = useCallback(
     async (appliedTags: string[]) => {
+      // The apply ALREADY committed server-side (applyMutation.onSuccess fires only on
+      // a 2xx) — the approved tags are AUTHORITATIVE. Merge them into the LOCAL
+      // frontmatter FIRST, independent of the refresh below, so a transient getPage
+      // failure can never drop an approved tag from the editor (and a later
+      // conflict-Overwrite, which saves frontmatterRef, then preserves them rather than
+      // reverting the server's just-applied tag). setTags rewrites ONLY the tags region
+      // → an unsaved title/description survives.
+      const cur = frontmatterRef.current;
+      const merged = setTags(cur, unionTags(readTags(cur), appliedTags));
+      setFrontmatter(merged);
+      frontmatterRef.current = merged;
+
+      // Learn the post-apply revision so the next autosave saves against it (no false
+      // 409). If this refresh fails we KEEP the merged tags locally and leave
+      // baseRevision as-is; the next save then routes through the revision-checked path
+      // exactly like runSaver's own read-back-failure handling — recoverable, and now
+      // data-safe (the tag is in frontmatterRef, so a conflict-Overwrite preserves it).
       let fresh: Awaited<ReturnType<typeof getPage>>;
       try {
         fresh = await getPage(path);
@@ -389,12 +406,11 @@ export default function PageEditor() {
         );
         return;
       }
-      const cur = frontmatterRef.current;
-      const merged = setTags(cur, unionTags(readTags(cur), appliedTags));
-      setFrontmatter(merged);
-      frontmatterRef.current = merged;
       baseRevision.current = fresh.revision; // advance past the apply write → no false 409
       lastSavedFrontmatter.current = fresh.frontmatter; // what the server now holds
+      // If the local merge diverges from the server bytes (unsaved edits, or an
+      // indent/format difference), schedule one autosave so the editor converges
+      // cleanly against the fresh revision — no 409, no revert.
       if (merged !== fresh.frontmatter) scheduleAutosave();
     },
     [path, scheduleAutosave],
