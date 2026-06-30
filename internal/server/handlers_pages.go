@@ -19,11 +19,29 @@ type pageResponse struct {
 	Revision    string `json:"revision"`
 }
 
-// createPageRequest is the POST /pages body (title-only create, D-12). Folder is
-// the selected destination folder (empty = repo root).
+// createPageRequest is the POST /pages body. Folder is the selected destination
+// folder (empty = repo root). Frontmatter/Body are OPTIONAL template seed content
+// (ED-06a): when either is non-empty the page is seeded from a template (the
+// client has already substituted {{title}}/{{date}}/{{time}}); when both are
+// empty it is the unchanged title-only blank create (D-12). The seed is CONTENT
+// only — the server re-parses+repairs it; a template PATH is never trusted.
 type createPageRequest struct {
-	Folder string `json:"folder"`
-	Title  string `json:"title"`
+	Folder      string `json:"folder"`
+	Title       string `json:"title"`
+	Frontmatter string `json:"frontmatter,omitempty"`
+	Body        string `json:"body,omitempty"`
+}
+
+// templateInfoResponse mirrors pages.TemplateInfo for the GET /templates list.
+type templateInfoResponse struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// listTemplatesResponse wraps the templates list under a `templates` key so the
+// payload shape can grow without breaking clients.
+type listTemplatesResponse struct {
+	Templates []templateInfoResponse `json:"templates"`
 }
 
 // createPageResponse returns the created page's path so the SPA can navigate to
@@ -157,8 +175,31 @@ func (h *authHandlers) handleGetPage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, pageResponse(page))
 }
 
-// handleCreatePage creates a page from a title (editor only). Returns 201 with
-// the new page's path.
+// handleListTemplates returns the flat *.md templates under Templates/ (D-02),
+// available to any authenticated user (the picker is editor-only, but a
+// template's content is non-secret). Returns 200 with {templates: [{name, path}]};
+// an empty list when there is no Templates/ folder.
+func (h *authHandlers) handleListTemplates(w http.ResponseWriter, r *http.Request) {
+	if h.pages == nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	infos, err := h.pages.ListTemplates(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
+		return
+	}
+	out := make([]templateInfoResponse, 0, len(infos))
+	for _, ti := range infos {
+		out = append(out, templateInfoResponse{Name: ti.Name, Path: ti.Path})
+	}
+	writeJSON(w, http.StatusOK, listTemplatesResponse{Templates: out})
+}
+
+// handleCreatePage creates a page (editor only). With no template seed it is the
+// title-only blank create (D-12); when the body carries template Frontmatter/Body
+// it seeds from that content via CreateFromTemplate (the robust server-side okf
+// merge, ED-06a/D-04). Returns 201 with the new page's path.
 func (h *authHandlers) handleCreatePage(w http.ResponseWriter, r *http.Request) {
 	if h.pages == nil {
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")
@@ -169,10 +210,26 @@ func (h *authHandlers) handleCreatePage(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Invalid request.")
 		return
 	}
-	path, err := h.pages.Create(r.Context(), req.Folder, req.Title, h.actorUsername(r.Context()))
+	user := h.actorUsername(r.Context())
+	var (
+		path string
+		err  error
+	)
+	if req.Frontmatter != "" || req.Body != "" {
+		// Template-seeded create (ED-06a): the server re-parses + repairs the
+		// submitted content into ONE valid frontmatter block; a malformed or
+		// duplicate-key template fails closed with a clean 400.
+		path, err = h.pages.CreateFromTemplate(r.Context(), req.Folder, req.Title, req.Frontmatter, req.Body, user)
+	} else {
+		path, err = h.pages.Create(r.Context(), req.Folder, req.Title, user)
+	}
 	if err != nil {
 		if errors.Is(err, pages.ErrTitleRequired) {
 			writeError(w, http.StatusBadRequest, "Give your page a title to create it.")
+			return
+		}
+		if errors.Is(err, pages.ErrTemplateInvalid) {
+			writeError(w, http.StatusBadRequest, "We couldn't create the page from that template — its formatting is invalid.")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "Something went wrong. Check your connection and try again.")

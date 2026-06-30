@@ -170,6 +170,12 @@ func New(deps Deps) (http.Handler, error) {
 			// path), so no cleanPathParam is needed.
 			authed.Get("/search", h.handleSearch)
 
+			// Page templates list (ED-06a) — any-authed read (same authority as
+			// page reads; the create picker that consumes it is editor-only, and a
+			// template's content is non-secret). Returns the flat Templates/*.md
+			// files; empty when there is no Templates/ folder.
+			authed.Get("/templates", h.handleListTemplates)
+
 			// Derived link/tag graph reads — available to ANY authenticated user
 			// (the same any-authed read model as /tree + /search, NOT editor/admin
 			// gated). All three are mounted here in the authed read group. path and

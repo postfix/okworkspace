@@ -96,6 +96,22 @@ type Doc struct {
 // fenceMarker is the three-dash frontmatter delimiter.
 var fenceMarker = []byte("---")
 
+// ValidateFrontmatter strictly decodes the document's frontmatter region into a
+// generic map and returns the decode error if it is not well-formed — notably
+// REJECTING duplicate top-level keys, which the faithful yaml.Node model in
+// Parse deliberately accepts (and would otherwise re-Emit verbatim as a corrupt
+// duplicate-key page). Callers that admit UNTRUSTED frontmatter — e.g. a
+// hand-authored template merged into a new page (ED-06a) — use this to fail
+// closed with a clean error instead of producing a two-`title:` page. A document
+// with no (or empty) frontmatter region is valid (Repair promotes it).
+func ValidateFrontmatter(d *Doc) error {
+	if len(bytes.TrimSpace(d.RawFront)) == 0 {
+		return nil
+	}
+	var probe map[string]any
+	return yaml.Unmarshal(d.RawFront, &probe)
+}
+
 // Parse splits src into an opaque body and (optionally) a frontmatter region.
 // A frontmatter fence is recognized ONLY at byte offset 0: a leading "---"
 // followed by an end-of-line (LF or CRLF). A "---" anywhere else — including
