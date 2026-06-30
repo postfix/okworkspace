@@ -21,6 +21,7 @@ vi.mock("../api/client", async (importOriginal) => {
     ...actual,
     me: vi.fn(),
     listUsers: vi.fn(),
+    listTags: vi.fn(),
     startTagSweep: vi.fn(),
   };
 });
@@ -56,6 +57,7 @@ function renderAdmin() {
 describe("Admin — Tag suggestions sweep-start (TAG-05)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(client.listTags).mockResolvedValue([]);
   });
 
   it("renders the sweep section heading + scope toggle + start button", async () => {
@@ -145,5 +147,33 @@ describe("Admin — Tag suggestions sweep-start (TAG-05)", () => {
     expect(alert.textContent).toBe("Couldn’t start the sweep. Try again.");
     // Hidden-infra discipline: no job/queue/worker/index/LLM vocabulary.
     expect(alert.textContent).not.toMatch(/job|queue|worker|index|llm|sweep failed/i);
+  });
+});
+
+describe("Admin — Tag management section (TM-04)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(client.listTags).mockResolvedValue([]);
+  });
+
+  it("renders the Tag management section heading + description", async () => {
+    renderAdmin();
+    expect(
+      await screen.findByRole("heading", { name: /tag management/i }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/preview before applying/i),
+    ).toBeTruthy();
+  });
+
+  it("renders the tag list when tags exist", async () => {
+    vi.mocked(client.listTags).mockResolvedValue([
+      { tag: "ops", count: 3 },
+      { tag: "docs", count: 7 },
+    ]);
+    renderAdmin();
+
+    expect(await screen.findByText("ops")).toBeTruthy();
+    expect(screen.getByText("docs")).toBeTruthy();
   });
 });

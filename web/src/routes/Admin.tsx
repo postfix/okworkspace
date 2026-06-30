@@ -20,6 +20,7 @@ import {
 import Table, { type Column } from "../components/Table";
 import RoleBadge from "../components/RoleBadge";
 import Dialog from "../components/Dialog";
+import TagManagement from "../components/admin/TagManagement";
 import "./Admin.css";
 
 const USERS_KEY = ["admin", "users"];
@@ -364,6 +365,14 @@ export default function Admin() {
         )}
       </section>
 
+      <section className="admin-section">
+        <h2 className="admin-section-heading">Tag management</h2>
+        <p className="admin-muted">
+          Rename, merge, or delete a tag across every page. Each operation shows
+          a preview before applying — nothing changes until you approve.
+        </p>
+        <TagManagement />
+      </section>
       {isLoading ? (
         <p className="admin-muted">Loading…</p>
       ) : users.length === 0 ? (

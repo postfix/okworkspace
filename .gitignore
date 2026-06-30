@@ -45,3 +45,7 @@ web/*.tsbuildinfo
 # Go's //go:embed cannot traverse "..", so vite builds here)
 internal/web/dist/*
 !internal/web/dist/.gitkeep
+# Local UAT / browser-automation artifacts (not part of the repo)
+/log/
+/rod-cli.yaml
+/rod/

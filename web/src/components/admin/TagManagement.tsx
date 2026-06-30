@@ -1,8 +1,7 @@
 // TagManagement (TM-04 / v1.3) — workspace-wide tag management surface.
-// TagManageLink: a small inline link for the page editor (opens as dialog).
-// TagManagement: the full tag table with rename/merge/delete dialogs.
-// Every destructive operation follows the preview→approve contract.
-import { useState } from "react";
+// Renders the tag table with rename/merge/delete dialogs, embedded in the
+// Admin panel. Every destructive operation follows the preview→approve contract.
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2 } from "lucide-react";
 import {
@@ -26,8 +25,7 @@ export default function TagManagement() {
   });
 
   return (
-    <section className="tagmgmt">
-      <h2 className="tagmgmt-heading">Tag Management</h2>
+    <div className="tagmgmt">
       {isLoading && <p className="tagmgmt-status"><Loader2 size={14} className="spinner" /> Loading tags…</p>}
       {isError && <p className="tagmgmt-status tagmgmt-error">Couldn't load tags.</p>}
       {!isLoading && !isError && tags.length === 0 && (
@@ -36,7 +34,7 @@ export default function TagManagement() {
       {!isLoading && !isError && tags.length > 0 && (
         <TagTable tags={tags} onDone={() => queryClient.invalidateQueries({ queryKey: TAGS_KEY })} />
       )}
-    </section>
+    </div>
   );
 }
 
@@ -44,9 +42,22 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
   const [renameTarget, setRenameTarget] = useState<TagEntry | null>(null);
   const [mergeSource, setMergeSource] = useState<TagEntry | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TagEntry | null>(null);
+  const [query, setQuery] = useState("");
+
+  const filtered = query.trim()
+    ? tags.filter((t) => t.tag.includes(query.trim().toLowerCase()))
+    : tags;
 
   return (
     <>
+      <input
+        type="text"
+        className="input tagmgmt-search"
+        placeholder="Filter tags…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        aria-label="Filter tags"
+      />
       <table className="tagmgmt-table">
         <thead>
           <tr>
@@ -56,17 +67,21 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
           </tr>
         </thead>
         <tbody>
-          {tags.map((t) => (
-            <tr key={t.tag}>
-              <td><code>{t.tag}</code></td>
-              <td className="tagmgmt-count-col">{t.count}</td>
-              <td className="tagmgmt-actions-col">
-                <button className="btn btn-sm btn-ghost" onClick={() => setRenameTarget(t)} title="Rename"><Pencil size={14} /></button>
-                <button className="btn btn-sm btn-ghost" onClick={() => setMergeSource(t)} title="Merge"><GitMerge size={14} /></button>
-                <button className="btn btn-sm btn-ghost" onClick={() => setDeleteTarget(t)} title="Delete"><Trash2 size={14} /></button>
-              </td>
-            </tr>
-          ))}
+          {filtered.length === 0 ? (
+            <tr><td className="tagmgmt-empty-row" colSpan={3}>No tags match “{query}”.</td></tr>
+          ) : (
+            filtered.map((t) => (
+              <tr key={t.tag}>
+                <td><code>{t.tag}</code></td>
+                <td className="tagmgmt-count-col">{t.count}</td>
+                <td className="tagmgmt-actions-col">
+                  <button className="btn btn-sm btn-ghost" onClick={() => setRenameTarget(t)} title="Rename"><Pencil size={14} /></button>
+                  <button className="btn btn-sm btn-ghost" onClick={() => setMergeSource(t)} title="Merge"><GitMerge size={14} /></button>
+                  <button className="btn btn-sm btn-ghost" onClick={() => setDeleteTarget(t)} title="Delete"><Trash2 size={14} /></button>
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
 
@@ -242,10 +257,11 @@ function DeleteDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () => 
     }
   };
 
-  // Auto-preview on open
-  if (!preview && !error) {
+  // Auto-preview on open — runs once when the dialog mounts.
+  useEffect(() => {
     handlePreview();
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Dialog open title={`Delete tag "${tag.tag}"`} confirmLabel="Delete" cancelLabel="Cancel"
@@ -262,27 +278,5 @@ function DeleteDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () => 
         {error && <p className="tagmgmt-error"><AlertTriangle size={14} /> {error}</p>}
       </div>
     </Dialog>
-  );
-}
-
-// TagManageLink is a small inline link that opens the full TagManagement as a
-// dialog. Placed next to TagSuggest in the page editor so workspace-wide tag
-// ops are reachable where users actually work with tags.
-export function TagManageLink() {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button type="button" className="tagmgmt-link" onClick={() => setOpen(true)}>
-        Manage workspace tags
-      </button>
-      {open && (
-        <Dialog open title="Manage workspace tags" confirmLabel="Close" cancelLabel=""
-          onCancel={() => setOpen(false)}
-          onConfirm={() => setOpen(false)}
-        >
-          <TagManagement />
-        </Dialog>
-      )}
-    </>
   );
 }
