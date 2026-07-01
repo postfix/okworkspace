@@ -14,7 +14,7 @@ import ForceGraph2D, {
 // running force engine.
 //
 // It deliberately does NOT compute classification / edge-filtering / highlight
-// itself — the parent (GraphView / LocalGraphPanel in Wave 2) feeds already-
+// itself — the parent (GraphView) feeds already-
 // shaped data + draw callbacks built from the pure helpers (model/filter/
 // highlight). That keeps the canvas a dumb renderer and the logic unit-tested.
 //

@@ -64,7 +64,7 @@ type authHandlers struct {
 	// (fire-and-forget). Optional: when nil the graph reindex returns a 500.
 	graphJobs graphEnqueuer
 	// graph is the derived link/tag adjacency store backing the authed graph READ
-	// endpoints (/graph, /graph/local, /graph/backlinks). Optional: when nil those
+	// endpoints (/graph, /graph/backlinks). Optional: when nil those
 	// reads return a 500 with the generic copy, following the same
 	// optional-dependency pattern as search.
 	graph *graph.Store

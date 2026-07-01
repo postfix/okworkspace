@@ -24,13 +24,6 @@ const (
 	popularTagMinPages = 8
 )
 
-// depthMin / depthMax bound the local-graph traversal so a local payload can
-// never explode: depth<1 clamps up to 1, depth>3 clamps down to 3.
-const (
-	depthMin = 1
-	depthMax = 3
-)
-
 // GraphNode is one node in a lean graph payload: a page, a tag, or an attachment.
 // It carries an id, a human label, and a type, along with optional aliases+tags
 // (from frontmatter) and an exists flag. Never includes a body, frontmatter, or
@@ -53,8 +46,8 @@ type GraphEdge struct {
 	Type   string `json:"type"` // "link" | "tag"
 }
 
-// GraphData is the lean bipartite typed-edge payload returned by GraphData /
-// Neighborhood. Nodes/Edges are always non-nil so an empty workspace marshals as
+// GraphData is the lean bipartite typed-edge payload returned by GraphData.
+// Nodes/Edges are always non-nil so an empty workspace marshals as
 // [] (not null), matching the search empty-result convention.
 type GraphData struct {
 	Nodes []GraphNode `json:"nodes"`
@@ -200,68 +193,6 @@ func (s *Store) GraphData(ctx context.Context) (GraphData, error) {
 	return g, nil
 }
 
-// Neighborhood returns the seed page plus the pages reachable within depth hops
-// over link edges (BOTH directions), as the same lean node/edge shape (link edges
-// where both endpoints are in the set; tag nodes/edges for the in-set pages, still
-// popular-tag capped). The seed node is always present even with no edges. depth
-// is clamped into [depthMin, depthMax].
-func (s *Store) Neighborhood(ctx context.Context, pagePath string, depth int) (GraphData, error) {
-	g := GraphData{Nodes: []GraphNode{}, Edges: []GraphEdge{}}
-	if s.db == nil {
-		return g, nil
-	}
-	if depth < depthMin {
-		depth = depthMin
-	}
-	if depth > depthMax {
-		depth = depthMax
-	}
-
-	// BFS over undirected link adjacency up to depth hops.
-	visited := map[string]struct{}{pagePath: {}}
-	frontier := []string{pagePath}
-	for hop := 0; hop < depth && len(frontier) > 0; hop++ {
-		var next []string
-		for _, cur := range frontier {
-			neighbors, err := s.linkNeighbors(ctx, cur)
-			if err != nil {
-				return g, err
-			}
-			for _, nb := range neighbors {
-				if _, seen := visited[nb]; !seen {
-					visited[nb] = struct{}{}
-					next = append(next, nb)
-				}
-			}
-		}
-		frontier = next
-	}
-
-	for _, p := range sortedKeys(visited) {
-		title, aliases, tags := s.readPageMeta(p)
-		g.Nodes = append(g.Nodes, GraphNode{
-			ID: p, Label: title, Type: "page",
-			Aliases: aliases, Tags: tags,
-			Exists: s.inLiveSet(p),
-		})
-	}
-
-	linkEdges, err := s.linkEdges(ctx, visited)
-	if err != nil {
-		return g, err
-	}
-	g.Edges = append(g.Edges, linkEdges...)
-
-	tagNodes, tagEdges, err := s.tagNodesAndEdges(ctx, visited)
-	if err != nil {
-		return g, err
-	}
-	g.Nodes = append(g.Nodes, tagNodes...)
-	g.Edges = append(g.Edges, tagEdges...)
-
-	return g, nil
-}
-
 // Backlinks returns every page linking TO pagePath (reverse page_links query),
 // each with its resolved title (best-effort, basename fallback). Always returns a
 // non-nil slice.
@@ -371,27 +302,6 @@ func (s *Store) linkEdges(ctx context.Context, restrict map[string]struct{}) ([]
 		edges = append(edges, GraphEdge{Source: src, Target: dst, Type: "link"})
 	}
 	return edges, rows.Err()
-}
-
-// linkNeighbors returns every page directly link-adjacent to pagePath (in OR out).
-func (s *Store) linkNeighbors(ctx context.Context, pagePath string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT dst_path FROM page_links WHERE src_path=?
-		 UNION
-		 SELECT src_path FROM page_links WHERE dst_path=?`, pagePath, pagePath)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var out []string
-	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
 }
 
 // tagNodesAndEdges computes the surviving (non-popular) tag nodes and the

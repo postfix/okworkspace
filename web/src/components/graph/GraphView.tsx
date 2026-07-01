@@ -89,13 +89,7 @@ function labelZoomThreshold(v: number): number {
   return 0.5 + v * 4;
 }
 
-interface GraphViewProps {
-  // activePath, when supplied (the local-graph use later), accents that one page
-  // node. The global /app/graph view has no single active page → undefined.
-  activePath?: string;
-}
-
-export default function GraphView({ activePath }: GraphViewProps) {
+export default function GraphView() {
   const navigate = useNavigate();
   const { data, isLoading, isError } = useGraph();
 
@@ -234,7 +228,6 @@ export default function GraphView({ activePath }: GraphViewProps) {
       const borderSubtle = readVar("--color-border", "rgba(255,255,255,0.06)");
       const text = readVar("--color-text", "#eef1f7");
 
-      const isActive = activePath != null && id === activePath;
       const orphan = isOrphan(id, degrees, type);
       const hovered = hoverRef.current;
       const dim = hovered != null && !highlight.nodes.has(id);
@@ -249,10 +242,8 @@ export default function GraphView({ activePath }: GraphViewProps) {
         ctx.fill();
       }
 
-      // Step 2: solid node dot. Page nodes use the teal --graph-node-color; active
-      // pages get a slight radius boost; orphans are the same hue at ~30% alpha;
-      // tags stay faint diamonds.
-      const activeR = isActive ? r * 1.18 : r;
+      // Step 2: solid node dot. Page nodes use the teal --graph-node-color;
+      // orphans are the same hue at ~30% alpha; tags stay faint diamonds.
       let fill: string;
       if (type === "tag") {
         fill = faint;
@@ -271,7 +262,7 @@ export default function GraphView({ activePath }: GraphViewProps) {
         ctx.lineTo((node.x ?? 0) - r, node.y ?? 0);
         ctx.closePath();
       } else {
-        ctx.arc(node.x ?? 0, node.y ?? 0, activeR, 0, 2 * Math.PI);
+        ctx.arc(node.x ?? 0, node.y ?? 0, r, 0, 2 * Math.PI);
       }
       ctx.fillStyle = fill;
       ctx.fill();
@@ -293,10 +284,10 @@ export default function GraphView({ activePath }: GraphViewProps) {
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         ctx.fillStyle = dim ? withAlpha(text, DIM_ALPHA * 2) : text;
-        ctx.fillText(meta.label, node.x ?? 0, (node.y ?? 0) + activeR + 1.5 / globalScale);
+        ctx.fillText(meta.label, node.x ?? 0, (node.y ?? 0) + r + 1.5 / globalScale);
       }
     },
-    [nodeMeta, radiusFor, degrees, activePath, highlight, textFadeThreshold, filterNodeSize],
+    [nodeMeta, radiusFor, degrees, highlight, textFadeThreshold, filterNodeSize],
   );
 
   // Edge color by type: link edges are blue (references), tag edges are green,

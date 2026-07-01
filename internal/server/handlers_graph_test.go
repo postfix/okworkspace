@@ -186,12 +186,6 @@ func TestGraphReadEndpoints(t *testing.T) {
 		t.Fatalf("graph payload leaks body/frontmatter: %s", rec.Body.String())
 	}
 
-	// GET /graph/local?path=a.md&depth=1 → neighborhood.
-	rec = authedGet(t, f.handler, "/api/v1/graph/local?path=a.md&depth=1", cookies)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /graph/local = %d, body=%s", rec.Code, rec.Body.String())
-	}
-
 	// GET /graph/backlinks?path=b.md → a.md links to b.md.
 	rec = authedGet(t, f.handler, "/api/v1/graph/backlinks?path=b.md", cookies)
 	if rec.Code != http.StatusOK {
@@ -212,17 +206,16 @@ func TestGraphReadEndpoints(t *testing.T) {
 	}
 }
 
-// TestGraphReadMissingPath: /graph/local and /graph/backlinks without a path
-// return 400 with generic copy.
+// TestGraphReadMissingPath: /graph/backlinks without a path returns 400 with
+// generic copy.
 func TestGraphReadMissingPath(t *testing.T) {
 	f := newGraphServer(t)
 	cookies := loginGraphEditor(t, f)
 
-	for _, url := range []string{"/api/v1/graph/local", "/api/v1/graph/backlinks"} {
-		rec := authedGet(t, f.handler, url, cookies)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("GET %s (no path) = %d, want 400 (body=%s)", url, rec.Code, rec.Body.String())
-		}
+	const url = "/api/v1/graph/backlinks"
+	rec := authedGet(t, f.handler, url, cookies)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("GET %s (no path) = %d, want 400 (body=%s)", url, rec.Code, rec.Body.String())
 	}
 }
 

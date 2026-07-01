@@ -57,7 +57,7 @@ type Deps struct {
 	// handler is registered on it), not a second store/worker.
 	GraphJobs graphEnqueuer
 	// Graph is the derived link/tag adjacency store backing the authed graph READ
-	// endpoints (GET /graph, /graph/local, /graph/backlinks). Optional; when nil
+	// endpoints (GET /graph, /graph/backlinks). Optional; when nil
 	// those reads return a 500 with the generic copy. In main.go this is the SAME
 	// graphStore already constructed for the KindGraph maintenance handler — it is
 	// reused for the reads, not a second store.
@@ -178,14 +178,13 @@ func New(deps Deps) (http.Handler, error) {
 
 			// Derived link/tag graph reads — available to ANY authenticated user
 			// (the same any-authed read model as /tree + /search, NOT editor/admin
-			// gated). All three are mounted here in the authed read group. path and
-			// depth are QUERY params (not path segments); backlinks is a query-param
-			// read (NOT a /pages/{path}/backlinks route) precisely to avoid the
-			// /pages/* sibling-wildcard conflict (chi cannot host a sibling wildcard
-			// next to the /pages/* catch-all). The payload is lean (ids+labels+typed
-			// edges, no page bodies) and built only from the cache tables.
+			// gated). Both are mounted here in the authed read group. path is a QUERY
+			// param (not a path segment); backlinks is a query-param read (NOT a
+			// /pages/{path}/backlinks route) precisely to avoid the /pages/*
+			// sibling-wildcard conflict (chi cannot host a sibling wildcard next to
+			// the /pages/* catch-all). The payload is lean (ids+labels+typed edges,
+			// no page bodies) and built only from the cache tables.
 			authed.Get("/graph", h.handleGraph)
-			authed.Get("/graph/local", h.handleGraphLocal)
 			authed.Get("/graph/backlinks", h.handleGraphBacklinks)
 
 			// Agent Ask (AGNT-01) — any authenticated user may ask a question

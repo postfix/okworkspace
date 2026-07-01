@@ -274,7 +274,7 @@ export interface GraphEdge {
   type: "link" | "tag";
 }
 
-// GraphData is the whole graph payload returned by /graph and /graph/local.
+// GraphData is the whole-workspace graph payload returned by /graph.
 export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
@@ -287,23 +287,6 @@ export async function getGraph(): Promise<GraphData> {
   const res = await fetch("/api/v1/graph", { credentials: "same-origin" });
   if (!res.ok) {
     throw new Error("Couldn't load the graph.");
-  }
-  return (await res.json()) as GraphData;
-}
-
-// getLocalGraph fetches the neighborhood around `path` to `depth` hops (a GET —
-// no CSRF needed). depth is clamped server-side to [1,3]. The path is URL-encoded
-// into the query string. Throws the same generic copy on failure.
-export async function getLocalGraph(
-  path: string,
-  depth: number,
-): Promise<GraphData> {
-  const res = await fetch(
-    `/api/v1/graph/local?path=${encodeURIComponent(path)}&depth=${depth}`,
-    { credentials: "same-origin" },
-  );
-  if (!res.ok) {
-    throw new Error("Couldn't load the local graph.");
   }
   return (await res.json()) as GraphData;
 }
