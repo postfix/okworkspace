@@ -5,7 +5,7 @@ phase: 21, 22, 25, 26, 28
 milestone: v1.5
 status: verified
 confidence: direct_read
-grounding: direct file read (SMTC daemon offline this session — no semantic/blast-radius certs)
+grounding: direct file read + SMTC Structural-tier queries (find_declarations/find_name_occurrences, daemon live 2026-07-01). Semantic call-graph tier (blast_radius/change_impact) COLD this session — cross-file index empty (file_count 0, built 2026-06-17); needs a daemon reindex against this root (daemon-ops, not agent-reachable).
 head: f03cffc
 ---
 
@@ -193,8 +193,31 @@ proves they never leak into an entry chunk.
     additive (it only tells the parser which nested fences to lazy-highlight) and does NOT
     change the parsed construct set.
 
-## Blast radius (direct-read estimate; SMTC blast_radius unavailable this session)
+## Blast radius
 
+### SMTC-grounded dependency edges (Structural tier — `find_name_occurrences`/`find_declarations`, daemon live 2026-07-01)
+
+> Tier note: these are REAL cross-file (+ cross-language) import/call-target edges resolved by the
+> SMTC structural index against this workspace — stronger than grep (context-classified). The
+> semantic call-graph `blast_radius`/`change_impact` (transitive callers ranked by distance) is
+> COLD this session (empty cross-file index, built 2026-06-17); those return empty until the daemon
+> is reindexed against this root. So the edges below are the DIRECT dependency ring, SMTC-verified;
+> transitive-closure ranking is not yet available.
+
+The CM6 editor surface converges on **`web/src/lib/cm/mode.ts`** (the extension-composition hub):
+- `theme.ts` exports `theme` (:28) + `sourceTheme` (:134) → imported ONLY by `mode.ts:18`. **The v1.5
+  margin→padding height-oracle change (theme.ts) has a single production consumer: `mode.ts`.**
+- `livePreview.ts` `livePreview`/`livePreviewExtension` → `mode.ts:17` + `LivePreviewEditor.tsx:14`
+  (`cleanRender`). `markdown.ts` `markdownExtension` → `mode.ts:16`.
+- `mode.ts` exports `liveExtensions`/`sourceExtensions`/`setMode`/`modeCompartment`/`toggleKeymap`
+  → the editor wiring + `mode.test.ts` / `markdown.test.ts` (the composed extension arrays are the
+  editor's entry surface).
+- **Cross-cutting (highest fan-out): `hashtag.ts` `inlineTagsFromBody`** → 3 production consumers —
+  `PropertiesPanel.tsx:57` (tag union), `TagSuggest.tsx:138` (suggest merge), `tag-reconcile.ts:52`
+  (save reconcile). This is the tag surface the v1.5 regression fix depends on; `inlineTagSpansFromBody`
+  additionally feeds the Go parity corpus (see the cross-language ripple below + `MAP-tag-rewrite-subsystem.md`).
+
+### Direct-read observations (retained; complement the edges above)
 - `livePreview.ts` `buildDecorations` / the `cleanRender` facet → affects BOTH `LivePreviewEditor`
   edit-Live AND `PageView` read mode simultaneously. Highest-fan-out file in the subsystem.
 - `widgets.ts` widget DOM → the security invariant surface; a change here is a security-review
