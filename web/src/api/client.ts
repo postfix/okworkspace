@@ -1352,6 +1352,9 @@ export interface TagPreviewPage {
   page_path: string;
   current_tags: string[];
   new_tags: string[];
+  // body_affected: the page's body #tags will also be rewritten (TR-05), so the
+  // admin sees prose will change — not just the frontmatter tags:.
+  body_affected?: boolean;
 }
 
 export interface TagPreview {

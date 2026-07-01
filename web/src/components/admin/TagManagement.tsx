@@ -144,11 +144,17 @@ function RenameDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () => 
         {preview && (
           <div className="tagmgmt-preview">
             <p>{preview.total_affected} page(s) affected:</p>
+            {preview.affected_pages.some((p) => p.body_affected) && (
+              <p className="tagmgmt-body-note">
+                {preview.affected_pages.filter((p) => p.body_affected).length} page(s) also have body #tags that will be rewritten.
+              </p>
+            )}
             <ul className="tagmgmt-preview-list">
               {preview.affected_pages.slice(0, 20).map((p) => (
                 <li key={p.page_path}>
                   <code>{p.page_path}</code>
                   <span className="tagmgmt-tag-change">{p.current_tags.join(", ")} → {p.new_tags.join(", ")}</span>
+                  {p.body_affected && <span className="tagmgmt-body-badge">prose</span>}
                 </li>
               ))}
               {preview.total_affected > 20 && <li>…and {preview.total_affected - 20} more</li>}
@@ -211,11 +217,17 @@ function MergeDialog({ source, allTags, onClose, onDone }: { source: TagEntry; a
         {preview && (
           <div className="tagmgmt-preview">
             <p>{preview.total_affected} page(s) affected:</p>
+            {preview.affected_pages.some((p) => p.body_affected) && (
+              <p className="tagmgmt-body-note">
+                {preview.affected_pages.filter((p) => p.body_affected).length} page(s) also have body #tags that will be rewritten.
+              </p>
+            )}
             <ul className="tagmgmt-preview-list">
               {preview.affected_pages.slice(0, 20).map((p) => (
                 <li key={p.page_path}>
                   <code>{p.page_path}</code>
                   <span className="tagmgmt-tag-change">{p.current_tags.join(", ")} → {p.new_tags.join(", ")}</span>
+                  {p.body_affected && <span className="tagmgmt-body-badge">prose</span>}
                 </li>
               ))}
               {preview.total_affected > 20 && <li>…and {preview.total_affected - 20} more</li>}
