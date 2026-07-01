@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Annotation, Compartment, EditorState } from "@codemirror/state";
-import { EditorView, keymap, placeholder } from "@codemirror/view";
+import { EditorView, drawSelection, keymap, placeholder } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 
 import {
@@ -146,6 +146,15 @@ export default function LivePreviewEditor({
           // Editability lives in a compartment so it can be reconfigured at runtime
           // (here it is non-editable; read mode never toggles, so it stays put).
           editableCompartment.of(editableExtFor(readOnly)),
+          // drawSelection renders CM6's OWN selection + cursor layers instead of the
+          // browser's native selection. Native selection fights the live-preview
+          // decorations (hidden markers, #tag badges, image/table/code widgets,
+          // atomic ranges) and produces janky drag-select + wrong-text copy; the CM
+          // layer maps selection to document offsets, so drag + Cmd-C are robust even
+          // over rendered constructs. lineWrapping wraps long lines to the pane width
+          // (no horizontal scroll), matching prose expectations in read + edit.
+          drawSelection(),
+          EditorView.lineWrapping,
           nav,
           selectionListener,
           headingAnchors,
@@ -163,6 +172,8 @@ export default function LivePreviewEditor({
           // flip this surface to genuinely non-editable (COLL-02) without rebuilding
           // the view. Starts editable in Edit mode; the readOnly effect reconfigures.
           editableCompartment.of(editableExtFor(readOnly)),
+          drawSelection(),
+          EditorView.lineWrapping,
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           toggleKeymap,

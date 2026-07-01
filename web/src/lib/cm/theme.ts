@@ -37,15 +37,18 @@ export const theme = EditorView.theme({
     lineHeight: "var(--line-height-body)",
   },
   ".cm-content": {
-    // Fill the available width (editor + read view both use this surface) rather
-    // than a narrow centered prose column.
+    // The centered doc column (.pageeditor / .pageview max-width) governs the
+    // reading measure now, so the content fills its column. Generous vertical
+    // padding gives the Obsidian "document breathing room" feel (small at top,
+    // roomy at the bottom so the last lines are never jammed against the edge).
     maxWidth: "100%",
+    padding: "var(--space-sm) 0 var(--space-3xl)",
     caretColor: "var(--color-text)",
     minHeight: "var(--editor-min-height)",
   },
   // NOTE: the accent focus ring lives in LivePreviewEditor.css (the project's
   // focus-ring convention is a literal accent outline in CSS — tokens.css
-  // `:focus-visible`, controls.css, SearchPalette.css; there is no ring-width
+  // `:focus-visible`, controls.css; there is no ring-width
   // token). Keeping it out of this JS theme object keeps every value here a pure
   // token reference, matching the tokens-only contract.
 
@@ -76,23 +79,30 @@ export const theme = EditorView.theme({
 
   // Heading lines — sizes/weights/line-heights AND vertical rhythm mirror
   // `.markdown-prose h1..h6` so edit Live mode matches the read surface.
+  // CRITICAL: the vertical rhythm is `padding`, NOT `margin`. These classes are
+  // LINE decorations on `.cm-line`, and CM6's height oracle measures each line's
+  // offsetHeight — which INCLUDES padding but EXCLUDES margin. A margin here is
+  // invisible to the oracle, so posAtCoords/coordsAtPos drift by the margin below
+  // every heading (with drawSelection this shows as selection landing a row off).
+  // Padding is measured, so coordinates stay exact. Visually identical (headings
+  // have no background/border).
   ".cm-heading-1": {
     fontSize: "var(--font-size-display)",
     fontWeight: "var(--font-weight-semibold)",
     lineHeight: "var(--line-height-display)",
-    margin: "var(--space-xl) 0 var(--space-md)",
+    padding: "var(--space-xl) 0 var(--space-md)",
   },
   ".cm-heading-2": {
     fontSize: "var(--font-size-heading)",
     fontWeight: "var(--font-weight-semibold)",
     lineHeight: "var(--line-height-heading)",
-    margin: "var(--space-lg) 0 var(--space-sm)",
+    padding: "var(--space-lg) 0 var(--space-sm)",
   },
   ".cm-heading-3, .cm-heading-4, .cm-heading-5, .cm-heading-6": {
     fontSize: "var(--font-size-body)",
     fontWeight: "var(--font-weight-semibold)",
     lineHeight: "var(--line-height-label)",
-    margin: "var(--space-md) 0 var(--space-sm)",
+    padding: "var(--space-md) 0 var(--space-sm)",
   },
 
   // Rendered Markdown links — accent text, underline on hover (`.prose-link`).
