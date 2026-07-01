@@ -2,6 +2,8 @@
 // echoes the nosurf CSRF token in the X-CSRF-Token header on every mutating
 // request (SEC-04). The token is fetched from GET /api/v1/csrf and cached.
 
+import { encodePagePath } from "../lib/url";
+
 export interface Me {
   username: string;
   display_name: string;
@@ -308,7 +310,9 @@ export async function getLocalGraph(
 
 // getPage fetches a single page by its repo-relative path (a GET).
 export async function getPage(path: string): Promise<Page> {
-  const res = await fetch(`/api/v1/pages/${path}`, { credentials: "same-origin" });
+  const res = await fetch(`/api/v1/pages/${encodePagePath(path)}`, {
+    credentials: "same-origin",
+  });
   if (res.status === 404) {
     const err = new Error(
       "This page no longer exists. It may have been moved or deleted.",
@@ -362,7 +366,7 @@ export async function savePage(
   path: string,
   payload: { body: string; frontmatter: string; base_revision: string },
 ): Promise<void> {
-  await mutate<void>(`/api/v1/pages/${path}`, payload, "PUT");
+  await mutate<void>(`/api/v1/pages/${encodePagePath(path)}`, payload, "PUT");
 }
 
 // --- Soft locks (COLL-02) ---
@@ -390,14 +394,16 @@ export async function acquireLock(
   path: string,
   conn: string,
 ): Promise<AcquireLockResult> {
-  return mutate<AcquireLockResult>(`/api/v1/pages/${path}/lock`, { conn });
+  return mutate<AcquireLockResult>(`/api/v1/pages/${encodePagePath(path)}/lock`, {
+    conn,
+  });
 }
 
 // forceLock unconditionally takes over the soft lock for this connection (the
 // "Force edit" affordance). It is take-over-ONLY — it never saves and never alters
 // base_revision; a subsequent save still revision-checks (the load-bearing rule).
 export async function forceLock(path: string, conn: string): Promise<void> {
-  await mutate<void>(`/api/v1/pages/${path}/lock/force`, { conn });
+  await mutate<void>(`/api/v1/pages/${encodePagePath(path)}/lock/force`, { conn });
 }
 
 // releaseLock best-effort releases the soft lock on unmount / leaving Edit. The
@@ -405,7 +411,7 @@ export async function forceLock(path: string, conn: string): Promise<void> {
 // the backstop — so callers SWALLOW errors at the call site (a failed release is
 // reaped by the TTL).
 export async function releaseLock(path: string, conn: string): Promise<void> {
-  await mutate<void>(`/api/v1/pages/${path}/lock/release`, { conn });
+  await mutate<void>(`/api/v1/pages/${encodePagePath(path)}/lock/release`, { conn });
 }
 
 // createFolder creates a folder (seeded with a blank index.md, NAV-03).
@@ -420,7 +426,7 @@ export async function renamePage(
   path: string,
   newTitle: string,
 ): Promise<{ path: string }> {
-  return mutate<{ path: string }>(`/api/v1/pages/${path}/rename`, {
+  return mutate<{ path: string }>(`/api/v1/pages/${encodePagePath(path)}/rename`, {
     new_title: newTitle,
   });
 }
@@ -432,7 +438,7 @@ export async function movePage(
   path: string,
   newParent: string,
 ): Promise<{ path: string }> {
-  return mutate<{ path: string }>(`/api/v1/pages/${path}/rename`, {
+  return mutate<{ path: string }>(`/api/v1/pages/${encodePagePath(path)}/rename`, {
     new_parent: newParent,
   });
 }
@@ -446,9 +452,10 @@ export async function renameFolder(
   dir: string,
   newName: string,
 ): Promise<{ path: string }> {
-  return mutate<{ path: string }>(`/api/v1/pages/${dir}/rename-folder`, {
-    new_name: newName,
-  });
+  return mutate<{ path: string }>(
+    `/api/v1/pages/${encodePagePath(dir)}/rename-folder`,
+    { new_name: newName },
+  );
 }
 
 // moveFolder relocates a folder subtree into newParent ("" = root) in ONE commit,
@@ -458,9 +465,10 @@ export async function moveFolder(
   dir: string,
   newParent: string,
 ): Promise<{ path: string }> {
-  return mutate<{ path: string }>(`/api/v1/pages/${dir}/move-folder`, {
-    new_parent: newParent,
-  });
+  return mutate<{ path: string }>(
+    `/api/v1/pages/${encodePagePath(dir)}/move-folder`,
+    { new_parent: newParent },
+  );
 }
 
 // --- Trash: delete-to-trash & restore (PAGE-06/07) ---
@@ -483,7 +491,7 @@ export interface TrashEntry {
 // deletePage moves a page to trash (PAGE-06). Delete is recoverable — the page
 // moves to Trash and can be restored anytime; nothing is permanently removed.
 export async function deletePage(path: string): Promise<void> {
-  await mutate<void>(`/api/v1/pages/${path}`, undefined, "DELETE");
+  await mutate<void>(`/api/v1/pages/${encodePagePath(path)}`, undefined, "DELETE");
 }
 
 // listTrash fetches the deleted pages (a GET). The user sees title, who deleted
@@ -509,7 +517,10 @@ export async function restoreFromTrash(id: number): Promise<{ path: string }> {
 // restored as a unit from Trash; nothing is permanently removed. Dispatched on the
 // /pages/* POST catch-all by the "/delete-folder" suffix.
 export async function deleteFolder(dir: string): Promise<void> {
-  await mutate<void>(`/api/v1/pages/${dir}/delete-folder`, undefined);
+  await mutate<void>(
+    `/api/v1/pages/${encodePagePath(dir)}/delete-folder`,
+    undefined,
+  );
 }
 
 // restoreFolderGroup restores a folder-delete as a unit (TREE-05), index.md first.
@@ -542,7 +553,7 @@ export interface HistoryEntry {
 // getHistory fetches a page's version history (a GET, newest-first). Available
 // to any authenticated user.
 export async function getHistory(path: string): Promise<HistoryEntry[]> {
-  const res = await fetch(`/api/v1/pages/${path}/history`, {
+  const res = await fetch(`/api/v1/pages/${encodePagePath(path)}/history`, {
     credentials: "same-origin",
   });
   if (!res.ok) {
@@ -557,9 +568,10 @@ export async function viewVersion(
   path: string,
   version: string,
 ): Promise<Page> {
-  const res = await fetch(`/api/v1/pages/${path}/version/${version}`, {
-    credentials: "same-origin",
-  });
+  const res = await fetch(
+    `/api/v1/pages/${encodePagePath(path)}/version/${version}`,
+    { credentials: "same-origin" },
+  );
   if (!res.ok) {
     throw new Error("Couldn't load that version — try again.");
   }
@@ -573,7 +585,9 @@ export async function restoreVersion(
   path: string,
   version: string,
 ): Promise<{ path: string }> {
-  return mutate<{ path: string }>(`/api/v1/pages/${path}/restore`, { version });
+  return mutate<{ path: string }>(`/api/v1/pages/${encodePagePath(path)}/restore`, {
+    version,
+  });
 }
 
 // --- Attachments (ATT-01/02/03/09, SEC-02) ---
@@ -667,7 +681,7 @@ export function subscribePresence(
   onState?: (state: PresenceState) => void,
 ): () => void {
   const es = new EventSource(
-    `/api/v1/pages/${path}/presence?conn=${encodeURIComponent(conn)}`,
+    `/api/v1/pages/${encodePagePath(path)}/presence?conn=${encodeURIComponent(conn)}`,
   );
   es.onopen = () => {
     onState?.("open");
@@ -1107,7 +1121,7 @@ export function isPreviewableImage(mimeType: string): boolean {
 export async function listAttachments(
   pagePath: string,
 ): Promise<AttachmentMeta[]> {
-  const res = await fetch(`/api/v1/attachments/${pagePath}`, {
+  const res = await fetch(`/api/v1/attachments/${encodePagePath(pagePath)}`, {
     credentials: "same-origin",
   });
   if (!res.ok) {
