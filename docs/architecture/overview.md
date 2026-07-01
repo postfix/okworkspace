@@ -110,6 +110,8 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
 | Jobs | `internal/jobs` | Single-drain async job worker |
 | Store | `internal/store` | SQLite connection management, migrations |
 
+**Navrail search (v1.5 reading-shell fold-in).** The in-place file-tree filter (narrow-the-tree-by-title) has been removed. The navrail's search field now REPLACES the tree with full-text results (`web/src/components/search/NavSearchResults.tsx`, grouped Pages / Headings / Attachments) whenever the query is non-empty, and returns to the tree when the query is cleared. ⌘K focuses the field. See [Key Architectural Decisions](#key-architectural-decisions).
+
 ## Key Architectural Decisions
 
 - **SQLite is never the source of truth.** All wiki content is plain files. The graph cache (`page_links`, `page_tags`) and tag staging (`tag_suggestions`) are derived data: deleting and rebuilding from files reproduces identical rows.
@@ -117,3 +119,4 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
 - **Fire-and-forget for derived caches.** Page mutations enqueue graph/index rebuild jobs asynchronously. The jobs worker serializes them through a single drain goroutine.
 - **Hidden infrastructure.** Error responses to clients use generic messages ("The graph is unavailable."). Internal details (Git, SQLite, index, jobs) are logged server-side only.
 - **Generic error copies on all server-facing failures.** No Git/SQLite/LLM vocabulary reaches the client response body.
+- **Navrail full-text search replaces the in-place tree filter (v1.5).** One find surface: full-text search beats a title-prefix tree filter for a growing wiki. The narrow-the-tree-by-title control was removed in the reading-shell fold-in; re-introduction is tracked as a Future requirement ("In-place file-tree filter") in `.planning/REQUIREMENTS.md`.

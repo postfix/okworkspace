@@ -1,6 +1,6 @@
 # Graph Subsystem
 
-The graph subsystem maintains a **derived link/tag adjacency cache** for the workspace -- a rebuildable SQLite store (`page_links`, `page_tags`, `graph_meta`) that powers the global graph view, local (neighborhood) graph, and backlinks panel. It is NEVER the source of truth: deleting both tables and running `RebuildGraph` reproduces byte-identical rows from the on-disk `.md` files.
+The graph subsystem maintains a **derived link/tag adjacency cache** for the workspace -- a rebuildable SQLite store (`page_links`, `page_tags`, `graph_meta`) that powers the global graph view and backlinks panel (the per-page local/neighborhood graph was removed in v1.5 -- see below). It is NEVER the source of truth: deleting both tables and running `RebuildGraph` reproduces byte-identical rows from the on-disk `.md` files.
 
 **Package:** `internal/graph/`
 
@@ -8,7 +8,7 @@ The graph subsystem maintains a **derived link/tag adjacency cache** for the wor
 - [`internal/graph/store.go`](../../internal/graph/store.go) -- Store, DriftCheck, SQLite table access
 - [`internal/graph/extract.go`](../../internal/graph/extract.go) -- link extraction, tag reading from parsed Markdown
 - [`internal/graph/rebuild.go`](../../internal/graph/rebuild.go) -- from-files rebuild, skip rules
-- [`internal/graph/query.go`](../../internal/graph/query.go) -- GraphData, Neighborhood, Backlinks, Vocabulary queries
+- [`internal/graph/query.go`](../../internal/graph/query.go) -- GraphData, Backlinks, Vocabulary queries
 - [`internal/graph/graphjob.go`](../../internal/graph/graphjob.go) -- async job handler (KindGraph), upsert/delete per page
 
 ---
@@ -134,12 +134,14 @@ Returns the whole derived graph as a lean JSON payload:
 
 No page bodies are read -- the only file touch is title resolution (frontmatter title, basename fallback).
 
-### `Neighborhood(ctx, pagePath, depth)` -- Local Graph
+### `Neighborhood(ctx, pagePath, depth)` -- Local Graph *(REMOVED in v1.5)*
 
-BFS traversal from the seed page over undirected link edges, clamped to `[1, 3]` hops. Returns:
-- The seed page + all reachable pages
-- Link edges where both endpoints are in the reachable set
-- Tag nodes/edges for the in-set pages (popular-tag-capped)
+The per-page local graph was removed end-to-end in the v1.5 reading-shell fold-in:
+the `Neighborhood(ctx, pagePath, depth)` query method, the `GET /graph/local`
+route + handler, and the client `LocalGraphPanel` / `DepthControl` components are
+all gone. The global graph (`GraphData` / `GET /graph`, surfaced at the SPA route
+`/app/graph`) is RETAINED. Re-introduction is tracked as a Future requirement
+("Re-introduce a per-page local graph") in `.planning/REQUIREMENTS.md`.
 
 ### `Backlinks(ctx, pagePath)` -- Backlinks Panel
 
@@ -177,7 +179,7 @@ See [`docs/api/graph.md`](../api/graph.md) for full endpoint contracts.
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|
 | `/api/v1/graph` | GET | Any authenticated | Global graph data |
-| `/api/v1/graph/local?path=X&depth=N` | GET | Any authenticated | Local neighborhood graph |
+| `/api/v1/graph/local` | — | — | *REMOVED in v1.5 (per-page local graph); see the Neighborhood note above* |
 | `/api/v1/graph/backlinks?path=X` | GET | Any authenticated | Pages linking TO a page |
 | `/api/v1/admin/graph/reindex` | POST | Admin | Rebuild graph from files |
 

@@ -113,6 +113,8 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 | v1.0: derived graph/tag store is a SQLite cache, never source of truth | Preserve files-as-truth; deleting + rebuilding from `.md` reproduces byte-identical adjacency | ✓ Good — `-race`-clean rebuild parity proven; admin reindex backstop |
 | v1.0: byte-stable `okf.SetTags` via `yaml.Marshal`, model output re-validated server-side | Only the `tags` region changes; never trust LLM output or client tag list at the write | ✓ Good — security review confirmed no YAML/frontmatter injection vector |
 | v1.0: `react-force-graph-2d` (Canvas-only), lockfile guard that `three` is absent | One new frontend dep; keep the initial editor bundle lean (graph code-splits) | ✓ Good — three.js provably absent; graph in its own lazy chunk |
+| v1.5: in-place tree-filter removed; navrail search replaces the tree | One find surface; full-text > title-prefix for a growing wiki | Removed in the reading-shell fold-in; Future re-intro tracked (REQUIREMENTS.md "In-place file-tree filter") |
+| v1.5: per-page local graph removed; global `/app/graph` retained | Local neighborhood underused vs its route+handler+panel weight | `/graph/local` + `Neighborhood` + `LocalGraphPanel`/`DepthControl` removed end-to-end; Future re-intro tracked (REQUIREMENTS.md "Re-introduce a per-page local graph") |
 
 ## Evolution
 
