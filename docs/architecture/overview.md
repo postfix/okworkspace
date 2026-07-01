@@ -62,7 +62,7 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
 1. Browser requests `/app/page/docs/getting-started`
 2. Go handler (`handleGetPageOrHistory`) reads page from `repo.Repo` (safe-path resolver)
 3. The Markdown body is returned along with YAML frontmatter metadata
-4. SPA renders the body via CodeMirror 6 (read-only mode) or the live-preview editor
+4. SPA renders the body via the CM6 live-preview surface -- the same component in read-only mode (PageView) or editable mode (PageEditor); see [editor-subsystem.md](editor-subsystem.md)
 
 ### Write Path (page save)
 1. Browser sends PUT `/api/v1/pages/*` with the full page content
@@ -101,7 +101,8 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
 | Pages | `internal/pages` | Page CRUD, byte-stable Markdown round-trip, tag apply |
 | Graph | `internal/graph` | Derived link/tag adjacency cache, rebuild, query layer |
 | Tagsweep | `internal/tagsweep` | Bulk tag sweep staging, pending queue, target enumeration, sweep progress tracking |
-| Agent | `internal/agent` | Eino orchestration: ask, summarize, rewrite, draft, suggest-tags |
+| Agent | `internal/agent` | Eino orchestration: ask, summarize, rewrite, draft, suggest-tags, generate-description |
+| Editor | `web/src/lib/cm` | CM6 live-preview surface (edit + read); decoration pipeline, syntax highlight, mermaid, hashtags (see [editor-subsystem.md](editor-subsystem.md)) |
 | Search | `internal/search` | Bleve full-text index |
 | Auth | `internal/auth` | Session management, RBAC, Argon2id |
 | Server | `internal/server` | HTTP handlers, chi router, DI wiring |

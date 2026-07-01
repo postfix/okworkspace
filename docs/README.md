@@ -2,13 +2,16 @@
 
 **OKF Workspace** is a lightweight, self-hosted, OKF-native internal wiki for small teams (~5 people), built for the agent era. Human-readable Markdown files with YAML frontmatter are the source of truth, Git provides hidden version history, and a CloudWeGo Eino agent can read, search, summarize, and propose edits that a human approves before they are applied.
 
-This directory contains contributor-facing architecture documentation for the v1.0 release, focusing on the graph and tag subsystems.
+This directory contains contributor-facing architecture documentation, covering the graph,
+tag, and editor subsystems and their HTTP contracts.
 
 ## Quick Links
 
 - [Architecture Overview](architecture/overview.md) -- system architecture, data flow, component diagram
+- [Editor Subsystem](architecture/editor-subsystem.md) -- the CM6 live-preview surface, decoration pipeline, syntax highlight, mermaid, hashtags
 - [Graph Subsystem](architecture/graph-subsystem.md) -- derived link/tag adjacency store, rebuild, query layer
 - [Tag Subsystem](architecture/tag-subsystem.md) -- LLM tag suggestion, bulk sweep, review queue, byte-stable apply
+- [API: Authoring](api/authoring.md) -- page templates, page create, LLM-generated description endpoint contracts
 - [API: Graph](api/graph.md) -- GraphData, Neighborhood, Backlinks endpoint contracts
 - [API: Tagsweep](api/tagsweep.md) -- Tag suggestion, bulk sweep, review queue endpoint contracts
 
@@ -18,6 +21,7 @@ This directory contains contributor-facing architecture documentation for the v1
 |-------|-----------|---------|
 | Backend | Go 1.26, chi v5 | Single static binary, HTTP router |
 | Frontend | React 19 + Vite 8 + TypeScript 6 | SPA, embedded via `//go:embed` |
+| Editor | CodeMirror 6 + `@lezer/markdown` | Hand-built live-preview Markdown surface (edit + read); syntax highlight + mermaid loaded as lazy chunks |
 | Markdown | Goldmark v1.8 + YAML v3 | Markdown render, frontmatter parse/emit |
 | Search | Bleve v2.6 | Full-text search index (pure Go) |
 | Agent | CloudWeGo Eino v0.9.9 | LLM orchestration (provider-agnostic) |
