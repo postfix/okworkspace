@@ -279,6 +279,16 @@ func (h *authHandlers) handleTagRename(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid tag name: "+err.Error())
 		return
 	}
+	// SEC-v1.5-F01: the target is written to BOTH the body (splice-safe →
+	// ValidateInlineTag) AND the frontmatter tags: key (charset-safe →
+	// ValidateTagCharset). The frontmatter charset forbids '/', which the body
+	// grammar permits, so a nested target like "a/b" passes the inline gate but
+	// would fail at the frontmatter write. Require the INTERSECTION here so such a
+	// target is a clean 400 at the gate, not a 500 at apply.
+	if err := okf.ValidateTagCharset(newName); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid tag name: "+err.Error())
+		return
+	}
 
 	// Case-only rename → no-op.
 	if oldName == newName {
@@ -360,6 +370,13 @@ func (h *authHandlers) handleTagMerge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := okf.ValidateInlineTag(target); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid tag name: "+err.Error())
+		return
+	}
+	// SEC-v1.5-F01: target must satisfy BOTH the body-splice (ValidateInlineTag)
+	// and frontmatter-charset (ValidateTagCharset) invariants — see handleTagRename.
+	// A nested target like "a/b" is a clean 400 here, not a 500 at the frontmatter write.
+	if err := okf.ValidateTagCharset(target); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid tag name: "+err.Error())
 		return
 	}

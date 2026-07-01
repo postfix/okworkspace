@@ -295,6 +295,23 @@ func TestTagRename_InlineGrammarGate(t *testing.T) {
 	}
 }
 
+// TestTagRename_FrontmatterCharsetGate proves the rename ENDPOINT rejects a
+// target that is body-splice-safe (passes ValidateInlineTag) but NOT
+// frontmatter-storable — a nested tag like "a/b" whose '/' the frontmatter
+// charset (^[a-zA-Z0-9_ -]+$) forbids. Before SEC-v1.5-F01 this passed the
+// inline gate (preview 200) then 500'd at the frontmatter write on apply; the
+// added ValidateTagCharset gate makes it a clean 400 at the gate instead.
+func TestTagRename_FrontmatterCharsetGate(t *testing.T) {
+	f := newTagAdminServer(t)
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/rename",
+		map[string]string{"old_name": "x", "new_name": "a/b"}, admin)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("rename new_name=%q: got %d, want 400", "a/b", rec.Code)
+	}
+}
+
 // --- Merge tests ---
 
 func TestTagMerge_PreviewThenApply(t *testing.T) {
@@ -364,6 +381,22 @@ func TestTagMerge_InlineGrammarGate(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("merge target=%q: got %d, want 400", target, rec.Code)
 		}
+	}
+}
+
+// TestTagMerge_FrontmatterCharsetGate proves the merge ENDPOINT rejects a target
+// that is body-splice-safe (passes ValidateInlineTag) but not frontmatter-storable
+// — a nested tag like "a/b" whose '/' the frontmatter charset forbids. Before
+// SEC-v1.5-F01 this 500'd at the frontmatter write on apply; the added
+// ValidateTagCharset gate makes it a clean 400 at the gate (see rename twin).
+func TestTagMerge_FrontmatterCharsetGate(t *testing.T) {
+	f := newTagAdminServer(t)
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/merge",
+		map[string]string{"source": "ops", "target": "a/b"}, admin)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("merge target=%q: got %d, want 400", "a/b", rec.Code)
 	}
 }
 
