@@ -9,6 +9,7 @@
 package pages
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -44,6 +45,21 @@ type TagApplyItem struct {
 	PagePath     string
 	Tags         []string
 	BaseRevision string
+	// SkipFrontmatter, when true, leaves the page's frontmatter region
+	// byte-identical (Tags is ignored) and ONLY a body rewrite is applied — the
+	// body-only affected-page case (TR-03): the tag is in the body, not the
+	// frontmatter, so touching the tags region would churn bytes (or add a spurious
+	// `tags: []`). Defaults false so every existing caller writes frontmatter as
+	// before.
+	SkipFrontmatter bool
+	// BodyOld/BodyNew drive a server-side body #tag rewrite (okf.RewriteHashtags)
+	// in the SAME write as the frontmatter change (TR-03 body channel). BodyOld==""
+	// means no body rewrite (the pre-Phase-29 behavior: doc.Body emitted verbatim).
+	// BodyNew=="" is a delete. The batch recomputes the new body from its OWN
+	// freshly-read body (TOCTOU-safe) — these fields are the op INTENT, not a
+	// precomputed body.
+	BodyOld string
+	BodyNew string
 }
 
 // TagApplyResult is one page's outcome: its path and one of the TagApply*
@@ -126,17 +142,40 @@ func (s *Service) ApplyTagsBatch(ctx context.Context, items []TagApplyItem, acto
 			return nil, fmt.Errorf("pages: batch parse %q: %w", it.PagePath, err)
 		}
 
-		// Build the new frontmatter region byte-stably via the SAME helper the
-		// per-page apply uses (okf.SetTags owns the tags edit), then run it through
-		// the SAME assemble → Repair → Emit pipeline Save uses so the written bytes
-		// are byte-identical to a normal save (only the tags lines differ).
-		newFront, err := SetTagsFrontmatter(string(doc.RawFront), string(doc.Body), it.Tags)
-		if err != nil {
-			return nil, fmt.Errorf("pages: batch set tags %q: %w", it.PagePath, err)
+		// Body channel (TR-03): rewrite the page's body #tags from the batch's OWN
+		// freshly-read body (TOCTOU-safe) when the op carries a body-rewrite intent.
+		// okf.RewriteHashtags is region-aware + byte-stable — only matched #tag bytes
+		// change; a no-match body is returned byte-identical.
+		bodyStr := string(doc.Body)
+		if it.BodyOld != "" {
+			newBody, _ := okf.RewriteHashtags(doc.Body, it.BodyOld, it.BodyNew)
+			bodyStr = string(newBody)
 		}
-		out, err := s.emitForWrite(newFront, string(doc.Body))
+
+		// Frontmatter region: normally rewritten byte-stably via the SAME helper the
+		// per-page apply uses (okf.SetTags owns the tags edit). For a body-only
+		// affected page (SkipFrontmatter) the tags region is left byte-identical —
+		// only the body changes — so a page whose tag lives only in prose is not
+		// given a spurious `tags:` key.
+		front := string(doc.RawFront)
+		if !it.SkipFrontmatter {
+			newFront, ferr := SetTagsFrontmatter(string(doc.RawFront), bodyStr, it.Tags)
+			if ferr != nil {
+				return nil, fmt.Errorf("pages: batch set tags %q: %w", it.PagePath, ferr)
+			}
+			front = newFront
+		}
+		out, err := s.emitForWrite(front, bodyStr)
 		if err != nil {
 			return nil, fmt.Errorf("pages: batch emit %q: %w", it.PagePath, err)
+		}
+
+		// No-op guard (TR-03): if NEITHER frontmatter NOR body changed, skip the
+		// write entirely (never stage byte-identical output). The page is still
+		// reported applied (its state already matches the desired result).
+		if bytes.Equal(out, raw) {
+			results[idx].Status = TagApplyApplied
+			continue
 		}
 
 		// Validate the path through the resolver before staging it into the commit

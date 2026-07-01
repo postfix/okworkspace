@@ -61,6 +61,9 @@ type tagPreviewPage struct {
 	PagePath    string   `json:"page_path"`
 	CurrentTags []string `json:"current_tags"`
 	NewTags     []string `json:"new_tags"`
+	// BodyAffected reports that the page's BODY #tags will also be rewritten (not
+	// just the frontmatter tags:) — TR-05, so the admin sees prose will change.
+	BodyAffected bool `json:"body_affected"`
 }
 
 type tagApplyResponse struct {
@@ -189,12 +192,21 @@ func containsNormalized(tags []string, want string) bool {
 }
 
 // buildTagApplyItems reads each page via pages.Get, computes the new tag list,
-// and builds TagApplyItem entries for ApplyTagsBatch. Pages whose tags don't
-// change are skipped (no-op, not an error).
+// and builds TagApplyItem entries for ApplyTagsBatch. bodyOld/bodyNew carry the
+// op's BODY-rewrite intent (rename: old→new; merge: source→target; delete:
+// tag→""; bodyOld=="" disables the body channel). A page is included when its
+// frontmatter tag set changes OR its body #tags will change (the widened
+// predicate, TR-03) — so a body-only page (tag only in prose, frontmatter
+// unchanged) is no longer dropped. For a body-only page SkipFrontmatter keeps the
+// tags region byte-identical; only the body is rewritten. The authoritative body
+// rewrite happens in the batch from ITS freshly-read body (TOCTOU-safe) — here we
+// compute bodyWillChange from the handler's read only to decide inclusion + mark
+// the preview.
 func (h *authHandlers) buildTagApplyItems(
 	ctx context.Context,
 	pagePaths []string,
 	compute func(current []string) ([]string, bool),
+	bodyOld, bodyNew string,
 ) ([]pages.TagApplyItem, []tagPreviewPage, error) {
 	items := make([]pages.TagApplyItem, 0, len(pagePaths))
 	preview := make([]tagPreviewPage, 0, len(pagePaths))
@@ -213,16 +225,26 @@ func (h *authHandlers) buildTagApplyItems(
 			currentTags = []string{}
 		}
 		newTags, changed := compute(currentTags)
+
+		bodyWillChange := false
+		if bodyOld != "" {
+			_, bodyWillChange = okf.RewriteHashtags([]byte(pg.Body), bodyOld, bodyNew)
+		}
+
 		preview = append(preview, tagPreviewPage{
-			PagePath:    p,
-			CurrentTags: currentTags,
-			NewTags:     newTags,
+			PagePath:     p,
+			CurrentTags:  currentTags,
+			NewTags:      newTags,
+			BodyAffected: bodyWillChange,
 		})
-		if changed {
+		if changed || bodyWillChange {
 			items = append(items, pages.TagApplyItem{
-				PagePath:     p,
-				Tags:         newTags,
-				BaseRevision: pg.Revision,
+				PagePath:        p,
+				Tags:            newTags,
+				BaseRevision:    pg.Revision,
+				SkipFrontmatter: !changed, // body-only page: leave tags region as-is
+				BodyOld:         bodyOld,
+				BodyNew:         bodyNew,
 			})
 		}
 	}
@@ -253,7 +275,7 @@ func (h *authHandlers) handleTagRename(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Tag name must not be empty.")
 		return
 	}
-	if err := okf.ValidateTagCharset(newName); err != nil {
+	if err := okf.ValidateInlineTag(newName); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid tag name: "+err.Error())
 		return
 	}
@@ -269,16 +291,22 @@ func (h *authHandlers) handleTagRename(w http.ResponseWriter, r *http.Request) {
 	actor := h.actorFromSession(r)
 	ctx := r.Context()
 
-	pagePaths, err := h.graph.PagesByTag(ctx, oldName)
+	fmPaths, err := h.graph.PagesByTag(ctx, oldName)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to list affected pages.")
 		return
 	}
+	bodyPaths, err := h.pages.PagesWithBodyTag(ctx, oldName)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list affected pages.")
+		return
+	}
+	pagePaths := uniqueStrings(append(fmPaths, bodyPaths...))
 
 	computeFn := func(current []string) ([]string, bool) {
 		return computeRenameTags(current, oldName, newName)
 	}
-	items, preview, err := h.buildTagApplyItems(ctx, pagePaths, computeFn)
+	items, preview, err := h.buildTagApplyItems(ctx, pagePaths, computeFn, oldName, newName)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -331,18 +359,31 @@ func (h *authHandlers) handleTagMerge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Source and target tags must differ.")
 		return
 	}
+	if err := okf.ValidateInlineTag(target); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid tag name: "+err.Error())
+		return
+	}
 
 	actor := h.actorFromSession(r)
 	ctx := r.Context()
 
+	// Frontmatter source + target pages (target pages may need a frontmatter merge)
+	// unioned with body pages carrying #source in prose (their #source→#target body
+	// rewrite). Body pages for #target are NOT enumerated — the merge only rewrites
+	// #source, and adding #target to a page that merely mentions it would be wrong.
 	sourcePaths, _ := h.graph.PagesByTag(ctx, source)
 	targetPaths, _ := h.graph.PagesByTag(ctx, target)
-	allPaths := uniqueStrings(append(sourcePaths, targetPaths...))
+	bodySourcePaths, err := h.pages.PagesWithBodyTag(ctx, source)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list affected pages.")
+		return
+	}
+	allPaths := uniqueStrings(append(append(sourcePaths, targetPaths...), bodySourcePaths...))
 
 	computeFn := func(current []string) ([]string, bool) {
 		return computeMergeTags(current, source, target)
 	}
-	items, preview, err := h.buildTagApplyItems(ctx, allPaths, computeFn)
+	items, preview, err := h.buildTagApplyItems(ctx, allPaths, computeFn, source, target)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -394,16 +435,23 @@ func (h *authHandlers) handleTagDelete(w http.ResponseWriter, r *http.Request) {
 	actor := h.actorFromSession(r)
 	ctx := r.Context()
 
-	pagePaths, err := h.graph.PagesByTag(ctx, tag)
+	fmPaths, err := h.graph.PagesByTag(ctx, tag)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to list affected pages.")
 		return
 	}
+	bodyPaths, err := h.pages.PagesWithBodyTag(ctx, tag)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list affected pages.")
+		return
+	}
+	pagePaths := uniqueStrings(append(fmPaths, bodyPaths...))
 
 	computeFn := func(current []string) ([]string, bool) {
 		return computeDeleteTags(current, tag)
 	}
-	items, preview, err := h.buildTagApplyItems(ctx, pagePaths, computeFn)
+	// Delete: body #tag removed (new==""); no new-token validation needed.
+	items, preview, err := h.buildTagApplyItems(ctx, pagePaths, computeFn, tag, "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
