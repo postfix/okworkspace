@@ -148,3 +148,60 @@ export function inlineTagsFromBody(body: string): string[] {
   } while (cur.next());
   return [...out];
 }
+
+// InlineTagSpan is one recognized Hashtag node's byte-offset span in a body: the
+// UTF-8 byte offset of the leading `#` (from), the exclusive byte offset just
+// past the tag body (to), and the lower-cased name (without the `#`). Offsets are
+// BYTE offsets — converted from the Lezer parser's UTF-16 code-unit positions —
+// so the Go scanner (which is byte-native) can be compared span-for-span.
+export interface InlineTagSpan {
+  from: number;
+  to: number;
+  name: string;
+}
+
+// inlineTagSpansFromBody runs the SAME `tagParser` as inlineTagsFromBody and
+// returns each Hashtag node as a BYTE-offset span, in source order (NOT de-duped
+// — every occurrence is a byte the Go rewriter must splice). It is the parity
+// test's source of truth: the byte spans the Go FindHashtags scanner must match.
+export function inlineTagSpansFromBody(body: string): InlineTagSpan[] {
+  const tree = tagParser.parse(body);
+  const out: InlineTagSpan[] = [];
+  const cur = tree.cursor();
+  // Precompute a UTF-16-index → UTF-8-byte-offset map so a Lezer position (a
+  // UTF-16 code-unit index into the JS string) becomes a byte offset.
+  const byteAt = utf16ToByteOffsets(body);
+  do {
+    if (cur.name === "Hashtag") {
+      out.push({
+        from: byteAt[cur.from],
+        to: byteAt[cur.to],
+        name: body.slice(cur.from + 1, cur.to).toLowerCase(),
+      });
+    }
+  } while (cur.next());
+  out.sort((a, b) => a.from - b.from);
+  return out;
+}
+
+// utf16ToByteOffsets returns an array `m` of length body.length+1 where m[i] is
+// the UTF-8 byte offset of the character at UTF-16 index i. Handles surrogate
+// pairs (a 2-unit astral char maps its trailing unit to the same byte start as
+// the whole char is 4 bytes; the map is still monotone and correct at code-point
+// boundaries, which is where Hashtag nodes always begin/end).
+function utf16ToByteOffsets(body: string): number[] {
+  const m = new Array<number>(body.length + 1);
+  const enc = new TextEncoder();
+  let byte = 0;
+  let i = 0;
+  while (i < body.length) {
+    m[i] = byte;
+    const cp = body.codePointAt(i)!;
+    const units = cp > 0xffff ? 2 : 1;
+    byte += enc.encode(String.fromCodePoint(cp)).length;
+    if (units === 2) m[i + 1] = byte; // trailing surrogate maps to end of char
+    i += units;
+  }
+  m[body.length] = byte;
+  return m;
+}

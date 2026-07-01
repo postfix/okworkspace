@@ -1,0 +1,515 @@
+[
+  {
+    "name": "after-whitespace",
+    "body": "see #deploy",
+    "spans": [
+      {
+        "from": 4,
+        "to": 11,
+        "name": "deploy"
+      }
+    ]
+  },
+  {
+    "name": "start-of-string",
+    "body": "#deploy here",
+    "spans": [
+      {
+        "from": 0,
+        "to": 7,
+        "name": "deploy"
+      }
+    ]
+  },
+  {
+    "name": "nested-slash",
+    "body": "#a/b",
+    "spans": [
+      {
+        "from": 0,
+        "to": 4,
+        "name": "a/b"
+      }
+    ]
+  },
+  {
+    "name": "multiple-dedupe-case",
+    "body": "#Deploy and #deploy",
+    "spans": [
+      {
+        "from": 0,
+        "to": 7,
+        "name": "deploy"
+      },
+      {
+        "from": 12,
+        "to": 19,
+        "name": "deploy"
+      }
+    ]
+  },
+  {
+    "name": "hex-like",
+    "body": "#abc #fff",
+    "spans": [
+      {
+        "from": 0,
+        "to": 4,
+        "name": "abc"
+      },
+      {
+        "from": 5,
+        "to": 9,
+        "name": "fff"
+      }
+    ]
+  },
+  {
+    "name": "underscore-dash-body",
+    "body": "#a_b-c",
+    "spans": [
+      {
+        "from": 0,
+        "to": 6,
+        "name": "a_b-c"
+      }
+    ]
+  },
+  {
+    "name": "all-digit",
+    "body": "#1984",
+    "spans": []
+  },
+  {
+    "name": "mid-word",
+    "body": "foo#bar",
+    "spans": []
+  },
+  {
+    "name": "after-slash-frag",
+    "body": "a/#frag",
+    "spans": []
+  },
+  {
+    "name": "escaped-hash",
+    "body": "\\#esc",
+    "spans": []
+  },
+  {
+    "name": "bare-hash",
+    "body": "#",
+    "spans": []
+  },
+  {
+    "name": "atx-heading-shape",
+    "body": "# Heading",
+    "spans": []
+  },
+  {
+    "name": "digits-and-slashes",
+    "body": "#12/34",
+    "spans": []
+  },
+  {
+    "name": "leading-slash-body",
+    "body": "#/a",
+    "spans": [
+      {
+        "from": 0,
+        "to": 3,
+        "name": "/a"
+      }
+    ]
+  },
+  {
+    "name": "single-dash",
+    "body": "#-1",
+    "spans": [
+      {
+        "from": 0,
+        "to": 3,
+        "name": "-1"
+      }
+    ]
+  },
+  {
+    "name": "bare-underscore",
+    "body": "#_",
+    "spans": [
+      {
+        "from": 0,
+        "to": 2,
+        "name": "_"
+      }
+    ]
+  },
+  {
+    "name": "bare-dash",
+    "body": "#-",
+    "spans": [
+      {
+        "from": 0,
+        "to": 2,
+        "name": "-"
+      }
+    ]
+  },
+  {
+    "name": "consecutive-slashes",
+    "body": "#a//b",
+    "spans": [
+      {
+        "from": 0,
+        "to": 5,
+        "name": "a//b"
+      }
+    ]
+  },
+  {
+    "name": "single-trailing-slash",
+    "body": "#a/",
+    "spans": [
+      {
+        "from": 0,
+        "to": 2,
+        "name": "a"
+      }
+    ]
+  },
+  {
+    "name": "multi-trailing-slash",
+    "body": "#A/B/",
+    "spans": [
+      {
+        "from": 0,
+        "to": 4,
+        "name": "a/b"
+      }
+    ]
+  },
+  {
+    "name": "deep-nested",
+    "body": "#a/b/c",
+    "spans": [
+      {
+        "from": 0,
+        "to": 6,
+        "name": "a/b/c"
+      }
+    ]
+  },
+  {
+    "name": "all-slash",
+    "body": "#///",
+    "spans": []
+  },
+  {
+    "name": "trailing-punct-dot",
+    "body": "#tag.",
+    "spans": [
+      {
+        "from": 0,
+        "to": 4,
+        "name": "tag"
+      }
+    ]
+  },
+  {
+    "name": "trailing-punct-comma",
+    "body": "#tag,",
+    "spans": [
+      {
+        "from": 0,
+        "to": 4,
+        "name": "tag"
+      }
+    ]
+  },
+  {
+    "name": "trailing-punct-bang",
+    "body": "#tag!",
+    "spans": [
+      {
+        "from": 0,
+        "to": 4,
+        "name": "tag"
+      }
+    ]
+  },
+  {
+    "name": "inner-dot",
+    "body": "#a.b",
+    "spans": [
+      {
+        "from": 0,
+        "to": 2,
+        "name": "a"
+      }
+    ]
+  },
+  {
+    "name": "hex-0xff",
+    "body": "#0xFF",
+    "spans": [
+      {
+        "from": 0,
+        "to": 5,
+        "name": "0xff"
+      }
+    ]
+  },
+  {
+    "name": "after-paren",
+    "body": "(#tag)",
+    "spans": []
+  },
+  {
+    "name": "after-comma",
+    "body": ",#tag",
+    "spans": []
+  },
+  {
+    "name": "after-dquote",
+    "body": "\"#tag",
+    "spans": []
+  },
+  {
+    "name": "after-emdash",
+    "body": "a —#tag",
+    "spans": []
+  },
+  {
+    "name": "emdash-start",
+    "body": "—#tag",
+    "spans": []
+  },
+  {
+    "name": "triple-hash-word",
+    "body": "###tag",
+    "spans": []
+  },
+  {
+    "name": "after-list-dot",
+    "body": "1.#tag",
+    "spans": []
+  },
+  {
+    "name": "after-midline-tab",
+    "body": "a\t#deploy",
+    "spans": [
+      {
+        "from": 2,
+        "to": 9,
+        "name": "deploy"
+      }
+    ]
+  },
+  {
+    "name": "after-soft-break",
+    "body": "a\n#deploy",
+    "spans": [
+      {
+        "from": 2,
+        "to": 9,
+        "name": "deploy"
+      }
+    ]
+  },
+  {
+    "name": "non-ascii-body-terminates",
+    "body": "#café",
+    "spans": [
+      {
+        "from": 0,
+        "to": 4,
+        "name": "caf"
+      }
+    ]
+  },
+  {
+    "name": "non-ascii-before-hash",
+    "body": "é#tag",
+    "spans": []
+  },
+  {
+    "name": "emoji-before-hash",
+    "body": "😀#tag",
+    "spans": []
+  },
+  {
+    "name": "emoji-space-then-tag",
+    "body": "😀 #deploy",
+    "spans": [
+      {
+        "from": 5,
+        "to": 12,
+        "name": "deploy"
+      }
+    ]
+  },
+  {
+    "name": "indented-code-tab",
+    "body": "\t#deploy",
+    "spans": []
+  },
+  {
+    "name": "fenced-block",
+    "body": "```\n#x\n```",
+    "spans": []
+  },
+  {
+    "name": "inline-code-span",
+    "body": "`x #code`",
+    "spans": []
+  },
+  {
+    "name": "after-inline-code",
+    "body": "`x`#tag",
+    "spans": []
+  },
+  {
+    "name": "indented-code-after-blank",
+    "body": "para\n\n    #deploy\n\nmore #ops here",
+    "spans": [
+      {
+        "from": 24,
+        "to": 28,
+        "name": "ops"
+      }
+    ]
+  },
+  {
+    "name": "html-block-div",
+    "body": "<div>\n#notag inside html\n</div>\n\n#realtag after",
+    "spans": [
+      {
+        "from": 33,
+        "to": 41,
+        "name": "realtag"
+      }
+    ]
+  },
+  {
+    "name": "gfm-table",
+    "body": "| a | b |\n| - | - |\n| #alpha | #beta |\n",
+    "spans": [
+      {
+        "from": 22,
+        "to": 28,
+        "name": "alpha"
+      },
+      {
+        "from": 31,
+        "to": 36,
+        "name": "beta"
+      }
+    ]
+  },
+  {
+    "name": "lazy-blockquote-continuation",
+    "body": "> quote #one\ncontinues #two\n",
+    "spans": [
+      {
+        "from": 8,
+        "to": 12,
+        "name": "one"
+      },
+      {
+        "from": 23,
+        "to": 27,
+        "name": "two"
+      }
+    ]
+  },
+  {
+    "name": "blockquote-marker-abut",
+    "body": ">#deploy",
+    "spans": [
+      {
+        "from": 1,
+        "to": 8,
+        "name": "deploy"
+      }
+    ]
+  },
+  {
+    "name": "blockquote-space-then-tag",
+    "body": "> #deploy",
+    "spans": [
+      {
+        "from": 2,
+        "to": 9,
+        "name": "deploy"
+      }
+    ]
+  },
+  {
+    "name": "fenced-then-live",
+    "body": "```js\nconst x = '#nope';\n```\n\nafter #yes tag",
+    "spans": [
+      {
+        "from": 36,
+        "to": 40,
+        "name": "yes"
+      }
+    ]
+  },
+  {
+    "name": "heading-with-inline-tag",
+    "body": "## Release #v2rc\n\nbody #ship",
+    "spans": [
+      {
+        "from": 11,
+        "to": 16,
+        "name": "v2rc"
+      },
+      {
+        "from": 23,
+        "to": 28,
+        "name": "ship"
+      }
+    ]
+  },
+  {
+    "name": "multi-tag-paragraph",
+    "body": "tags: #ops and #devops and #ops again",
+    "spans": [
+      {
+        "from": 6,
+        "to": 10,
+        "name": "ops"
+      },
+      {
+        "from": 15,
+        "to": 22,
+        "name": "devops"
+      },
+      {
+        "from": 27,
+        "to": 31,
+        "name": "ops"
+      }
+    ]
+  },
+  {
+    "name": "delete-context-line",
+    "body": "see #ops here\nfoo #ops.\n#ops\n",
+    "spans": [
+      {
+        "from": 4,
+        "to": 8,
+        "name": "ops"
+      },
+      {
+        "from": 18,
+        "to": 22,
+        "name": "ops"
+      },
+      {
+        "from": 24,
+        "to": 28,
+        "name": "ops"
+      }
+    ]
+  }
+]
