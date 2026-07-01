@@ -1,5 +1,28 @@
 # Milestones
 
+## v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure (Shipped: 2026-07-01)
+
+**Phases completed:** 3 phases (28–30), an assess-and-fix milestone
+**Git range:** `95ca67d..HEAD` — 22 commits on 2026-07-01
+**Audit:** [`milestones/v1.5-MILESTONE-AUDIT.md`](milestones/v1.5-MILESTONE-AUDIT.md) — COMPLETE (all 3 intents met against code reality; central drift risk retired with a CI-enforced offset-parity gate)
+
+**Key accomplishments:**
+
+- **Reading-shell fold-in (Phase 28, RS-01…04):** committed a ~65-file uncommitted Obsidian-parity refactor as a verified-before-committed baseline — reading column as a document (Breadcrumb + PropertiesPanel + DocStatusBar; TagBadgeBar retired), ⌘K modal search → inline navrail full-text search (NavSearchResults + navSearch), per-page local graph removed end-to-end (global `/app/graph` retained), CM6 selection/coordinate fix (heading margin→padding height-oracle + drawSelection + lineWrapping) as its own revertable commit. Nav-search test gap closed; scope reductions documented with future re-intro paths; CM6 change confirmed in a real browser (deterministic posAtCoords↔coordsAtPos round-trip).
+- **Tag-regression fix, server-authoritative (Phase 29, TR-01…06):** a NEW code-region-aware `okf.RewriteHashtags` body-`#tag` rewrite primitive (modeled on `okf.RewriteLinks`), pinned to the TS Lezer grammar by an **offset-level, single-sourced, CI-enforced parity test** (independently confirmed to fail on drift). `okf.ValidateInlineTag` validator; rename/merge/delete now rewrite body `#tags` + frontmatter in one byte-stable batched commit (body-only pages included; TOCTOU-safe body channel); body-inclusive enumeration in the pages service (`PagesWithBodyTag`, SEC-01-resolver-gated, graph layer's no-body invariant intact); TR-06 stale-body detect+report (`DetectStaleBodyTags`); preview surfaces body-rewrite scope. Closes the confirmed regression where v1.4's inline-`#tag` materialization silently reverted v1.3 tag ops.
+- **v1.3 closure (Phase 30, TC-01…03):** the closure v1.3 Tag Management never received — independent qa verification of TM-01…05 + the integrated fix (30-VERIFICATION.md, PASSED), independent security review of the tag-admin + body-rewrite + enumeration surface (v1.5-SECURITY-REVIEW.md, SHIP, 0 critical/high), and planning-doc reconciliation (v1.3 shipped `9de5077`, closed retroactively in v1.5 — no longer "deferred"; archive annotated).
+
+**Quality gates at close:**
+
+- Each phase independently verified by a different role than built it (engineer→qa; build→security); gaps routed UP to the architect and dispositioned (judge≠doer held throughout). Phase-28 qa PASSED (no coverage loss); Phase-29 qa PASSED (drift-fails-CI confirmed via corpus perturbation); Phase-30 qa PASSED (v1.3 TM-01…05 + holistic).
+- Independent milestone **security review** (`.planning/v1.5-SECURITY-REVIEW.md`) — **SHIP**, 0 critical/high; block-on-high not triggered. 1 LOW fixed (SEC-v1.5-F01 nested-tag target 500→400), 1 LOW tracked (F-02 uncapped JSON body — folded into v1.4-F02), 1 INFO (F-03 govulncheck env panic — zero new Go deps).
+- Final suites at HEAD: `go build/vet/test ./...` — 18 pkgs ok; web **804 tests / 65 files**; `npm run build` clean with `assertLazyChunks` active. `anvil-cc debt query` = debt=0.
+- **Substrate note:** SMTC daemon OFFLINE + native agent-teams spawn unavailable this run — spans delegated via the `task` tool; typed `gate_result` ledger emission inactive (so `measure refusal-rate` reads 0 gates), but the gates genuinely occurred — four verdict-bearing VERIFICATION/SECURITY artifacts on disk, two recording fail→fix→pass loops. Cert tiers capped at Structural/Empirical.
+
+**Known deferred items at close:** SEC-v1.5-F02 / v1.4-F02 (global JSON body `MaxBytesReader` cap), F-01 (pin mermaid deps + CI `npm audit`), `govulncheck` re-run when the Go 1.26 toolchain panic is fixed, the TC-01 LOW (a dedicated rename conflict/dedupe seeded test), and the v1.3-original deferred tag features (bulk multi-tag, metadata, hierarchy, undo, analytics).
+
+---
+
 ## v1.4 Editor Enhancements & Authoring Polish (Shipped: 2026-07-01)
 
 **Phases completed:** 7 phases (21–27), 7 plans

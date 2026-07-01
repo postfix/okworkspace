@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure
-status: Roadmap in progress — defining phases 28–30
-last_updated: "2026-07-01T13:30:00.000Z"
+status: v1.5 COMPLETE — shipped 2026-07-01 (Phases 28–30)
+last_updated: "2026-07-01T20:30:00.000Z"
 last_activity: 2026-07-01
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 3
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-07-01)
 
 ## Current Position
 
-Milestone: v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure
-Phases: 28–30 (being roadmapped); numbering continues from v1.4's last (Phase 27)
-Status: Roadmap in progress
+Milestone: v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure — **COMPLETE (shipped 2026-07-01)**
+Phases: 28 (reading-shell fold-in), 29 (tag-regression fix), 30 (v1.3 closure) — all verified + closed
+Status: v1.5 complete; MILESTONE-AUDIT COMPLETE (milestones/v1.5-MILESTONE-AUDIT.md); security review SHIP (v1.5-SECURITY-REVIEW.md); ready for the next milestone
 Last activity: 2026-07-01
 
 ## Accumulated Context
