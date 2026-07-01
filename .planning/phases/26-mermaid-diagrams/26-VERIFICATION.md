@@ -117,3 +117,89 @@ The engineer dropped `stylis` and `d3-*` from the `assertLazyChunks` `forbidden`
 ---
 
 *Verified 2026-06-30 by qa. Goal-backward against commit range `194128d^..ecc6ff8` + code reality; SMTC unavailable, evidence via Bash/Read + live tsc/vitest/build + npm ls dep-provenance.*
+
+---
+
+## UAT EXECUTION ADDENDUM — real-browser discharge of the two carried UAT items
+
+**Date:** 2026-07-01 · **By:** qa · **Trigger:** v1.4-MILESTONE-AUDIT follow-up #3 ("Phase-26 manual UAT ×2 — confirm in a real browser"). The original verification (2026-06-30) was jsdom-only and explicitly deferred these two checks to a real browser; this addendum discharges them.
+
+**Substrate:** live headless Chromium (real JS engine + real mermaid renderer — the surface jsdom cannot observe) against a freshly-rebuilt binary at HEAD `95ca67d`. Frontend rebuilt from source (`npm run build`, exit 0, `assertLazyChunks` active) → embedded → `go build` → `serve`. Fixtures created via the authenticated API; read-mode render inspected in the SPA (`/app/page/*`, the `LivePreviewEditor` clean surface).
+
+### UAT-1 — concurrent multi-diagram render serialization → **PASS**
+
+- Page with 3 **different** diagram types (`graph`/`sequenceDiagram`/`pie`) rendered as 3 distinct SVGs with the **correct** `aria-roledescription` each (`flowchart-v2`, `sequence`, `pie`), sequential ids `mmd-0/1/2` (the queue signature), **zero cross-contamination**, no garble (visually confirmed). No raw-code fallback.
+- Stronger stress (beyond the prescribed bar): 4 **same-type** flowcharts with distinct labels (Alpha/Beta/Gamma/Delta). Every rendered SVG contained **exactly one** label family — `mmd-0`=Alpha-only, `mmd-1`=Beta-only. The module-level promise queue (mermaid.ts:45,53-69) holds: no interleaving of the shared per-diagram-type DB singleton.
+- Verdict: the serialization fix works; the prescribed criterion (≥2 different-type blocks render correctly, no cross-contamination) is met.
+
+### UAT-2 — embedded `<script>` / inline-handler inertness → **PASS**
+
+Real-JS-engine confirmation that the `securityLevel:'strict'` + DOMPurify + DOMParser-injection chain is inert. Vectors tried, all with the `window.__mermaidPwn` execution sentinel:
+- `<script>window.__mermaidPwn=1</script>` in a node id;
+- `<img src=x onerror=window.__mermaidPwn=2>` in a label;
+- `<b onmouseover=window.__mermaidPwn=8>` in a label **plus a forced `mouseover` dispatched on every SVG descendant**;
+- `click Z "javascript:window.__mermaidPwn=3"` interactivity directive.
+
+Result across all: sentinel **UNSET**, `svg script` = 0, `on*` attrs = 0, `javascript:` hrefs = 0. Malicious content **fails closed** at mermaid's strict parser → the inert textContent-only raw-code fallback (CodeBlockWidget, Phase-25-verified); benign diagrams render to clean handler-free SVG. No embedded script or handler ever executes.
+
+### FINDING (NEW — beyond the prescribed UATs; render *completeness*, not correctness/security)
+
+```yaml
+finding:
+  record_author: qa
+  id: F-26-UAT-render-completeness
+  phase: "26"
+  severity: medium
+  status: open
+  remediation_owner: architect
+  title: Read-mode mermaid blocks outside the initial CM6 parse/viewport window do not render until a doc/selection change
+  summary: >
+    In read mode (LivePreviewEditor / clean), a `mermaid` fence that lies outside the initial
+    synchronous parse+viewport window does NOT render to SVG on load or on scroll — it shows either
+    the literal raw fence source (```mermaid / graph TD / ... visible as plain cm-lines, NO decoration)
+    or, when decorated-but-off-initial-viewport, stays stuck on the raw-<pre> code fallback. It renders
+    only after ANY doc/selection change forces codeBlockField to recompute.
+  evidence:
+    - "PROVEN root cause: codeBlockField.update recomputes ONLY on `tr.docChanged || tr.selection` (livePreview.ts:557-559); buildCodeBlockDecorations iterates syntaxTree(state) captured at field-create (livePreview.ts:555-556). CM6's Lezer parser only parses a bounded prefix synchronously; blocks past that prefix are absent from the tree → no Decoration emitted. Background parse-completion + viewport scroll emit transactions with neither docChanged nor selection → the field never recomputes."
+    - "Repro A (below parse budget, long page): page = heading + mermaid(TOP) + 60 filler paragraphs + mermaid(BOTTOM). At the true bottom after 5s settle: BOTTOM block shows literal `mermaid`/`graph TD`/`BOT[BottomNode]`/``` as plain cm-lines, 0 .cm-md-mermaid widgets, rawFenceVisible=true."
+    - "Fix-by-interaction PROVEN: clicking the raw `BottomNode` line (selection change → recompute over the now-complete syntaxTree) flipped it: raw:false, widgets:1, rendered SVG:1."
+    - "Repro B (in-budget but below initial viewport, short page): 4 same-type flowcharts — mmd-0/mmd-1 rendered at load; Gamma/Delta first-materialize on gentle scroll as raw-<pre> fallback and stay unrendered at rest (async SVG-swap not completed on scroll-materialized widgets; note MermaidWidget.destroyed (widgets.ts:318) is never reset in toDOM (widgets.ts:269))."
+    - "Scope: shared codeBlockField also governs Phase-25 CodeBlockWidget + (mirrored) tableField. In this UAT a below-fold ```go block and a markdown table on the same 60-paragraph layout DID render (they landed inside the parse budget); a code/table block PAST the budget failing is [INFERENCE] from the shared recompute condition, NOT directly reproduced. Mermaid is worst-hit because a diagram is expected where a below-fold ```go still shows readable code."
+  impact: >
+    Graceful, never unsafe (raw source shown, never blank/garbled/executable) and self-heals on any
+    interaction — but on long or multi-diagram pages a reader sees raw `mermaid` source instead of the
+    diagram until they click/scroll-edit. Qualifies truth #1 ("renders inline SVG in READ mode"): holds
+    for blocks within the initial parse+viewport window; below-window blocks need an interaction. The
+    original jsdom verification could not observe this (mocked import, no viewport/parse virtualization).
+  routing: >
+    Routed UP to architect (per QA ethos — gaps do not go to the engineer). Disposition (small
+    gap-closure phase vs backlog) is the architect's call. Likely fix shape: recompute codeBlockField on
+    parser progress (e.g. a ViewPlugin watching syntaxTreeAvailable / ensureSyntaxTree, or an update on
+    the language parse effect) and/or reset MermaidWidget.destroyed at toDOM. Fix is the engineer's span.
+```
+
+### UAT gate
+
+```yaml
+gate_result:
+  record_author: qa
+  id: GR-26-UAT
+  phase: "26"
+  verdict: pass_with_debt
+  basis: >
+    Both prescribed carried UAT items PASS in a real browser: concurrent multi-diagram serialization
+    renders correctly with zero cross-contamination (UAT-1), and embedded script/inline-handler content
+    is inert across every vector incl. a forced mouseover (UAT-2, sentinel UNSET). One new MEDIUM finding
+    (F-26-UAT-render-completeness) surfaced beyond the prescribed bar — a read-mode render-completeness
+    gap for blocks outside the initial parse/viewport window; graceful and self-healing on interaction,
+    routed UP to the architect. This does not refute the original 9-truth pass (correctness/security/
+    isolation all held); it qualifies truth #1's read-mode coverage.
+  remediation_owner: architect
+  evidence:
+    - "Real Chromium at HEAD 95ca67d (frontend rebuilt from source, embedded, go build, serve); read-mode SPA render inspected."
+    - "UAT-1: 3 different-type SVGs correct+isolated; 4 same-type flowcharts exactly-one-label-family each."
+    - "UAT-2: __mermaidPwn UNSET across <script>/img-onerror/b-onmouseover(+forced hover)/click-javascript:; 0 svg script, 0 on* attrs, 0 javascript: hrefs."
+    - "Finding F-26-UAT-render-completeness with proven root cause (livePreview.ts:555-559) + fix-by-interaction repro."
+```
+
+*UAT executed 2026-07-01 by qa. Real headless Chromium (live JS + real mermaid renderer) against HEAD `95ca67d`; fixtures via authenticated API; read-mode render inspected in the SPA. The two carried Phase-26 UAT items are discharged PASS; one new MEDIUM render-completeness finding routed UP to the architect.*
