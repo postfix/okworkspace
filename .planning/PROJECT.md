@@ -10,11 +10,11 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 ## Current State
 
-**Shipped: v1.2 Graph Schema Extension (2026-06-28).** Phase 18 extended the backend `GraphNode` struct with `Aliases`, `Tags`, `Exists`, and `type: "attachment"` — activating the 3 inert Phase 17 filter toggles (Attachments, Existing files only, search by aliases/tags). All 12 GF-02 criteria met.
+**Shipped: v1.4 Editor Enhancements & Authoring Polish (2026-07-01).** Phases 21–27 — inline `#tag` badges (frontmatter-canonical materialization), LLM tag suggestions, LLM-generated description, code syntax highlighting, mermaid diagrams, page templates. Audited + security-reviewed (SHIP).
 
-**Current milestone: v1.4 Editor Enhancements & Authoring Polish** — make the page editor a richer, lower-friction authoring surface: the agent generates the page description (no manual field), tags become first-class (inline `#tag` rendered as badges + LLM suggestions; the manual Tags field is dropped), fenced code gets language-aware syntax highlighting, ` ```mermaid ` blocks render as diagrams, and Obsidian-style page templates speed up new pages. Builds on the CM6 live-preview surface shipped just prior (the `cleanRender` read facet + `CodeBlockWidget`).
+**Current milestone: v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure** — an assess-and-fix milestone. (1) Fix a confirmed cross-milestone regression: v1.4's inline-`#tag` materialization silently broke v1.3's workspace tag rename/merge/delete (they rewrite frontmatter only, so body `#tags` re-materialize the old tag on the next client save) — fixed server-authoritatively via a new code-region-aware `okf.RewriteHashtags` body-rewrite primitive, pinned to the Lezer grammar by a shared parity test. (2) Fold in the large uncommitted Obsidian-parity reading-shell refactor (Properties panel + Breadcrumb + DocStatusBar; inline nav search; per-page local-graph removed). (3) Formally close v1.3 Tag Management, which shipped as working code (commit `9de5077`) *outside the GSD workflow* — no independent qa verification, no security review, no milestone audit.
 
-**Deferred: v1.3 Tag Management UX** — admin-only workspace-wide tag rename/merge/delete with a preview→approve safety contract. Roadmapped (Phases 19–20) but not built; planning archived to `.planning/milestones/v1.3-{REQUIREMENTS,ROADMAP}.md`. Resume before or after v1.4.
+**Correction to the record:** v1.3 Tag Management UX was previously described here as "deferred / not built." It was in fact **built and committed** (`9de5077`, 2026-06-28) — backend endpoints + admin UI — but never GSD-verified. v1.5 closes that gap.
 
 ## Requirements
 
@@ -41,23 +41,25 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 - ✓ **UX improvement** — v1.1 — non-blocking bulk-approve progress indicator with polling status endpoint
 - ✓ **Security hardening** — v1.1 — admin sweep fan-out cap, tag charset server-side validation, govulncheck triaged (0 reachable vulns)
 - ✓ **Graph schema extension** — v1.2 — extended backend GraphNode with aliases, tags, exists, and attachment type; activated 3 inert Phase 17 filter toggles
+- ✓ **Tag Management UX** — v1.3 (built `9de5077`; regression-fixed + verified + security-reviewed in v1.5) — admin-only workspace-wide tag rename / merge / delete with preview→approve; admin UI; derived-graph consistency
+- ✓ **Editor enhancements & authoring polish** — v1.4 — inline `#tag` badges (frontmatter-canonical), LLM tag suggestions, LLM-generated description, code syntax highlighting, mermaid diagrams, page templates
 
 ### Active
 
-<!-- v1.4 Editor Enhancements & Authoring Polish (detailed REQ-IDs in REQUIREMENTS.md) -->
+<!-- v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure (detailed REQ-IDs in REQUIREMENTS.md) -->
 
-- **ED-01: LLM-generated description** — remove the manual Description field; the agent generates/refreshes the page description (review→apply, byte-stable frontmatter, no silent writes).
-- **ED-02: Inline `#tag` badges** — author `#tag` tokens in the page body, rendered as labeled badges (Obsidian-style) on the read/live surface; replaces the manual Tags field while staying byte-stable in the source.
-- **ED-03: LLM tag suggestions** — the agent suggests tags (extends v1.0 auto-tagging) feeding the same tag/badge model; suggest→approve, no silent writes.
-- **ED-04: Code syntax highlighting** — fenced code blocks render with language-aware highlighting on the read/live-preview CM6 surface.
-- **ED-05: Mermaid diagrams** — ` ```mermaid ` fenced blocks render as diagrams (read/live surface), with a safe fallback to the raw code on parse error.
-- **ED-06: Page templates** — Obsidian-style insertable page templates for new pages.
+- **RS-01…04: Reading-shell refactor fold-in** — commit the Obsidian-parity reading shell (Properties panel + Breadcrumb + DocStatusBar; inline nav search; local-graph removed) as a verified baseline; close the search-redesign test gap; document the intentional scope reductions; smoke the CM6 selection/coordinate change.
+- **TR-01…05: Tag-regression fix (server-authoritative)** — a code-region-aware `okf.RewriteHashtags` body-rewrite primitive (modeled on `okf.RewriteLinks`), pinned to the Lezer grammar by a shared parity test; rename/merge/delete rewrite body `#tags` + frontmatter in one byte-stable commit; body-inclusive affected-set enumeration; preview surfaces body scope.
+- **TC-01…03: v1.3 closure** — independent qa verification of the shipped tag-admin surface + the fix; security review of the tag-admin + body-rewrite surface (ASVS L1, block-on-high); reconcile planning docs to reality.
 
 ### Deferred / Queued
 
-<!-- v1.3 Tag Management UX — roadmapped (Phases 19–20), not built; planning archived to .planning/milestones/v1.3-* -->
+<!-- v1.5 Future items + v1.4-carried follow-ups (detailed in REQUIREMENTS.md) -->
 
-- **TM-01…05: Tag Management UX (v1.3, deferred)** — admin tag rename / merge / delete + admin UI + derived-graph consistency, all preview→approve. Resume before or after v1.4; full spec in `.planning/milestones/v1.3-REQUIREMENTS.md`.
+- **Per-page local graph** — removed in the v1.5 reading-shell refactor (global `/app/graph` retained); re-introduce if missed.
+- **In-place file-tree filter** — replaced by full-text nav search in v1.5; re-introduce if the tree-prune model proves better for quick nav.
+- **v1.4-carried follow-ups** — F-02 (global JSON body `MaxBytesReader` cap), F-01 (pin mermaid deps + `npm audit` in CI), 2 Phase-26 manual UAT items, `govulncheck` re-run when the Go 1.26 toolchain panic is fixed.
+- **v1.3-original deferred tag features** — bulk multi-tag ops, tag color/description metadata, tag hierarchy, dedicated undo, tag usage analytics.
 
 ### Out of Scope
 
@@ -130,4 +132,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-30 — v1.4 milestone (Editor Enhancements & Authoring Polish) started; v1.3 (Tag Management UX) deferred*
+*Last updated: 2026-07-01 — v1.5 milestone (Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure) started; corrected the record that v1.3 Tag Management shipped (`9de5077`) rather than being deferred*
