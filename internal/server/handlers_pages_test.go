@@ -166,6 +166,30 @@ func TestCreatePageRBAC(t *testing.T) {
 	}
 }
 
+// TestCreatePageJSONBodyCap proves the global JSON-body cap (F-02): a POST to a
+// mutating /api/v1 route with a body over maxJSONBodyBytes (10 MiB) is rejected
+// with 413 (Request Entity Too Large) BEFORE the handler decodes it — an authed
+// user cannot stream an unbounded JSON body to pin server memory. The multipart
+// attachment routes are exempt (their own, larger cap applies) and are not
+// exercised here.
+func TestCreatePageJSONBodyCap(t *testing.T) {
+	f := newPageServer(t)
+	editorCookies := loginEditor(t, f)
+
+	// A body whose marshaled JSON exceeds the 10 MiB cap. The 11 MiB "body"
+	// field alone puts Content-Length past the cap, so the middleware 413s on
+	// the fast path before the create handler runs.
+	oversize := make([]byte, 11<<20)
+	for i := range oversize {
+		oversize[i] = 'a'
+	}
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/pages",
+		map[string]string{"folder": "", "title": "Too Big", "body": string(oversize)}, editorCookies)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("over-cap create = %d, want 413 (body=%s)", rec.Code, rec.Body.String())
+	}
+}
+
 func TestGetPage(t *testing.T) {
 	f := newPageServer(t)
 	editorCookies := loginEditor(t, f)

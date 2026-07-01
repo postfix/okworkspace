@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -309,6 +310,43 @@ func TestTagRename_FrontmatterCharsetGate(t *testing.T) {
 		map[string]string{"old_name": "x", "new_name": "a/b"}, admin)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("rename new_name=%q: got %d, want 400", "a/b", rec.Code)
+	}
+}
+
+// TestTagRename_DedupesWhenBothTagsPresent proves the rename conflict/dedupe
+// branch (TC-01): a page carrying BOTH the old AND the new tag must collapse to a
+// SINGLE new tag after rename — never a duplicate. Two orderings are seeded to
+// exercise both dedupe paths in computeRenameTags: [devops, ops] hits the
+// containsNormalized(out, newName) guard (handlers_tags_admin.go:132 — the new
+// name is already emitted before the old-name entry is reached, so the rename
+// drops rather than re-appends), and [ops, devops] hits the trailing else-branch
+// skip. Both pages MUST end with exactly one "devops" tag on disk. (The merge
+// twin of this dedupe is already covered; rename was the untested gap.)
+func TestTagRename_DedupesWhenBothTagsPresent(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "newfirst.md", []string{"devops", "ops"}) // new before old → :132 guard
+	f.seedPage(t, "oldfirst.md", []string{"ops", "devops"}) // old before new → else-branch skip
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/rename",
+		map[string]string{"old_name": "ops", "new_name": "devops"}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("apply rename: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// The batch commit is awaited inside ApplyTagsBatch, so the rewritten pages
+	// are on disk once the apply returns. "devops" appears ONLY in the tags region
+	// of the seeded content (title is the path, body is "body"), so a count of 1
+	// is exactly the single-deduped-tag assertion; a failed dedupe would leave 2
+	// (the renamed ops→devops PLUS the original devops).
+	for _, path := range []string{"newfirst.md", "oldfirst.md"} {
+		raw, err := f.repo.Read(path)
+		if err != nil {
+			t.Fatalf("read %q: %v", path, err)
+		}
+		if n := strings.Count(string(raw), "devops"); n != 1 {
+			t.Errorf("page %q has %d 'devops' occurrences after rename, want 1 (deduped); content:\n%s", path, n, raw)
+		}
 	}
 }
 

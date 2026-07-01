@@ -119,6 +119,11 @@ func New(deps Deps) (http.Handler, error) {
 
 	// API surface.
 	r.Route("/api/v1", func(api chi.Router) {
+		// Cap JSON write bodies (F-02): mutating methods that carry a non-multipart
+		// body are hard-capped at maxJSONBodyBytes, 413 on exceed. Mounted here so
+		// every JSON write route inherits it (no per-handler drift); multipart
+		// upload routes are skipped and keep their own storage.max_upload_mb cap.
+		api.Use(limitJSONBody)
 		api.Get("/csrf", h.handleCSRF)
 		api.Get("/health", health.handleHealth)
 		api.Route("/auth", func(a chi.Router) {
