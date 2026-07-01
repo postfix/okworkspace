@@ -12,8 +12,9 @@ tag, and editor subsystems and their HTTP contracts.
 - [Graph Subsystem](architecture/graph-subsystem.md) -- derived link/tag adjacency store, rebuild, query layer
 - [Tag Subsystem](architecture/tag-subsystem.md) -- LLM tag suggestion, bulk sweep, review queue, byte-stable apply
 - [API: Authoring](api/authoring.md) -- page templates, page create, LLM-generated description endpoint contracts
-- [API: Graph](api/graph.md) -- GraphData, Neighborhood, Backlinks endpoint contracts
-- [API: Tagsweep](api/tagsweep.md) -- Tag suggestion, bulk sweep, review queue endpoint contracts
+- [API: Graph](api/graph.md) -- global graph (GraphData), Backlinks endpoint contracts (the per-page local graph was removed in v1.5)
+- [API: Tagsweep](api/tagsweep.md) -- tag suggestion, bulk sweep, review queue endpoint contracts
+- [API: Tag Admin](api/tag-admin.md) -- workspace-wide rename/merge/delete (frontmatter + body), tag vocabulary
 
 ## Tech Stack
 

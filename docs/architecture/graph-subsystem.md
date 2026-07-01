@@ -151,6 +151,12 @@ Reverse page_links query: returns every page linking TO `pagePath`, each with it
 
 Returns the DISTINCT sorted set of all tags currently in the cache. Used by the agent's tag suggestion to bias toward existing tags (TAG-04).
 
+### `PagesByTag(ctx, tag)` -- Frontmatter-Tag Membership
+
+Returns the paths of every page whose FRONTMATTER `tags:` includes the (normalized) tag, from the `page_tags` cache. Used by the workspace-wide tag admin ops (rename/merge/delete) to enumerate frontmatter-affected pages.
+
+**Body-only tags are invisible here.** `page_tags` is a frontmatter-only cache, so a page carrying `#tag` ONLY in its body is absent from `PagesByTag`. The v1.5 tag-rewrite ops therefore UNION this with `pages.PagesWithBodyTag(tag)` -- which DOES read bodies. That body scan deliberately lives in the **pages service** (`internal/pages/tagscan.go`), NOT here, to preserve this layer's "reads NO bodies -- only path enumeration" invariant (`query.go:256`). See [tag-subsystem.md](tag-subsystem.md#body-inclusive-affected-set-enumeration-internalpagestagscango).
+
 ---
 
 ## Async Job (`internal/graph/graphjob.go`)

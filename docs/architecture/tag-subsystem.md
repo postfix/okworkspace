@@ -5,19 +5,25 @@ The tag subsystem implements an approval-gated LLM tag-suggestion pipeline: the 
 **Packages:**
 - `internal/agent/` -- `SuggestTags` mode (LLM call, validation, retry)
 - `internal/tagsweep/` -- Bulk sweep staging, pending queue, target enumeration
-- `internal/pages/` -- `ApplyTagsBatch` (byte-stable tag write, single commit)
-- `internal/okf/` -- `SetTags` (structural frontmatter editor)
-- `internal/server/` -- `handlers_tagsweep.go` (HTTP endpoints)
+- `internal/pages/` -- `ApplyTagsBatch` (byte-stable frontmatter+body tag write, single commit), `PagesWithBodyTag` / `DetectStaleBodyTags` (body-inclusive enumeration)
+- `internal/okf/` -- `SetTags` (structural frontmatter editor), `FindHashtags` / `RewriteHashtags` (region-aware body `#tag` rewrite), `ValidateInlineTag` (body-splice gate)
+- `internal/server/` -- `handlers_tagsweep.go` (suggest/sweep/approve), `handlers_tags_admin.go` (rename/merge/delete admin ops)
 
 **Source files:**
 - [`internal/agent/suggesttags.go`](../../internal/agent/suggesttags.go) -- SuggestTags mode, validateTags, parseTagArray
 - [`internal/agent/prompts.go`](../../internal/agent/prompts.go) -- suggest-tags system prompt
 - [`internal/tagsweep/store.go`](../../internal/tagsweep/store.go) -- Store, SweepStatus, PendingApprovalCount, StagePending, ListPending, Targets
 - [`internal/tagsweep/job.go`](../../internal/tagsweep/job.go) -- KindTagSuggest job handler
-- [`internal/pages/batch.go`](../../internal/pages/batch.go) -- ApplyTagsBatch, TagApplyItem, TagApplyResult
-- [`internal/okf/repair.go`](../../internal/okf/repair.go) -- SetTags (byte-stable frontmatter editor), ValidateTagCharset (charset gate)
+- [`internal/pages/batch.go`](../../internal/pages/batch.go) -- ApplyTagsBatch, TagApplyItem (BodyOld/BodyNew/SkipFrontmatter), TagApplyResult
+- [`internal/pages/tagscan.go`](../../internal/pages/tagscan.go) -- PagesWithBodyTag, DetectStaleBodyTags (FindHashtags-based body scan through the SEC-01 resolver)
+- [`internal/okf/hashtag.go`](../../internal/okf/hashtag.go) -- FindHashtags (the single body-`#tag` recognizer), RewriteHashtags (byte-stable region-aware body rewrite)
+- [`internal/okf/validate.go`](../../internal/okf/validate.go) -- ValidateInlineTag (body-splice grammar gate)
+- [`internal/okf/repair.go`](../../internal/okf/repair.go) -- SetTags (byte-stable frontmatter editor), ValidateTagCharset (frontmatter charset gate)
+- [`internal/server/handlers_tags_admin.go`](../../internal/server/handlers_tags_admin.go) -- rename/merge/delete/list handlers, preview `body_affected`, the SEC-v1.5-F01 intersection gate
 - [`internal/config/config.go`](../../internal/config/config.go) -- SweepConfig (max_concurrent_jobs)
 - [`internal/okf/charset_test.go`](../../internal/okf/charset_test.go) -- charset validation test suite
+- [`internal/okf/hashtag_test.go`](../../internal/okf/hashtag_test.go) + [`internal/okf/testdata/hashtag_corpus.json`](../../internal/okf/testdata/hashtag_corpus.json) -- Lezer↔Go offset-parity corpus (TR-02, CI-enforced)
+- [`internal/okf/validate_test.go`](../../internal/okf/validate_test.go) -- ValidateInlineTag grammar-subset corpus + charset-non-loosening guard
 
 ---
 
@@ -196,17 +202,15 @@ Tags are written through the same byte-stable pipeline as any page edit:
 
 ### `ApplyTagsBatch(ctx, items, actor)`
 
-Batched approval for the review queue (Pitfall 6: one commit for N pages, not one-per-page):
+Batched apply for BOTH the review queue AND the admin rename/merge/delete ops (Pitfall 6: one commit for N pages, not one-per-page). It does NOT call `pages.Save` per page -- it stages every applied page into one `commitPayload` and enqueues a SINGLE commit through the same single-writer worker `Save` uses (`EnqueueCommit`), under `lockMutation` (serializes against namespace mutations so a concurrent rename cannot move a page mid-batch):
 
-1. For each item, reads the server-staged `base_revision` from `tag_suggestions` (T-12-07: NOT from the client)
-2. Reads the current file revision, checks against staged base revision
-3. Calls `okf.SetTags` to update the frontmatter in memory
-4. Runs all pages through `pages.Save` in one batch commit
-5. Returns per-page outcomes:
-   - `applied` -- tags written successfully
-   - `stale` -- base revision moved (concurrent edit); page skipped but does not sink the batch
-   - `notfound` -- page no longer exists on disk
-6. The handler resolves only the applied pages' pending rows; stale/notfound rows stay pending for re-run
+1. For each `TagApplyItem`: `Exists` check (missing → `notfound`), then compares the item's `BaseRevision` against the current committed `Revision` (moved → `stale`, excluded, batch continues). NOTE: `BaseRevision` is supplied BY THE CALLER, already server-sourced -- the sweep-approve handler stages it from `tag_suggestions` (T-12-07), the admin handlers read it fresh via `pages.Get`. The batch trusts the field, it does not re-read the queue.
+2. Reads + parses the current page bytes (TOCTOU-safe: the body it rewrites is its OWN fresh read, not the handler's).
+3. **Body channel (v1.5, TR-03):** when `BodyOld != ""`, rewrites the body `#tags` via `okf.RewriteHashtags(doc.Body, BodyOld, BodyNew)` -- region-aware, byte-stable. `BodyOld == ""` disables it (the pre-v1.5 behavior: body emitted verbatim).
+4. **Frontmatter region:** unless `SkipFrontmatter` is set, rewrites the tags region byte-stably via `SetTagsFrontmatter` → `okf.SetTags`. For a body-only affected page (`SkipFrontmatter`) the tags region stays byte-identical -- only the body changes, so a page whose tag lives only in prose is not given a spurious `tags:` key.
+5. **No-op guard:** if the emitted bytes equal the read bytes (neither frontmatter nor body changed), the write is skipped entirely but the page is still reported `applied`.
+6. Stages the write; after the ONE commit lands, marks every staged page `applied` and enqueues fire-and-forget index + graph upserts.
+7. Per-page outcomes (`applied` / `stale` / `notfound`) are returned in input order; a `stale`/`notfound` page never sinks the batch. A non-nil error is returned ONLY for an infrastructure failure (read/emit/commit-enqueue) that prevents committing at all.
 
 ### `handleApproveTagSuggestions`
 
@@ -228,9 +232,111 @@ The single-page approve endpoint (used during per-page editing, not the bulk que
 
 ---
 
+## Workspace-Wide Tag Management (v1.3 admin ops + v1.5 server-authoritative body rewrite)
+
+The admin tag-management endpoints rename, merge, and delete a tag across the WHOLE
+workspace. They ride the same `SetTagsFrontmatter` builder + `ApplyTagsBatch` single-commit
+path as the review queue. Each op follows a **preview → approve** contract: `preview=true`
+returns the affected-page set without writing; `preview=false` applies through the batch.
+
+**The v1.5 regression fix (Phase 29, TR-01..06) made these ops server-authoritative for the
+page BODY, not just the frontmatter `tags:` key.** Before v1.5 a rename/merge/delete rewrote
+only the frontmatter, leaving the inline `#tag` in the page body stale; because the editor
+re-materializes body `#tags` into frontmatter on the next save (ED-02b), the "renamed" tag
+silently came back. The fix rewrites the body `#tags` AND the frontmatter in the SAME
+byte-stable batched commit, and widens the affected-set enumeration to include pages that
+carry the tag ONLY in their body.
+
+### `okf.FindHashtags(body)` -- the single body-`#tag` recognizer (`internal/okf/hashtag.go`)
+
+A conservative, code-region-aware BYTE scanner (NOT a Markdown parser) that returns every
+inline `#tag` occurrence with byte offsets, the server-side counterpart to `links.go`'s
+`FindLinks`. It is the ONE recognizer reused by BOTH `RewriteHashtags` and the pages-service
+enumeration (`tagscan.go`), so there is never a "second `#tag` parser". It recognizes a
+`#tag` exactly where the canonical TS Lezer grammar (`web/src/lib/cm/hashtag.ts`) emits a
+`Hashtag` inline node, and SKIPS every region the Lezer parse excludes:
+
+- fenced code blocks (```` ``` ````/`~~~`) and inline code spans (backtick runs)
+- indented (4-space/tab) code blocks and HTML blocks (CommonMark type-1/type-6)
+- `\#` escapes (the backslash consumes the next byte)
+- the ATX-heading leading `#` run (a HeaderMark, not inline content)
+
+A `#` abutting a blockquote marker (`>#tag`) is a valid start boundary exactly as the Lezer
+`cx.offset` rule makes it. **Discipline: skip-when-uncertain.** When a region cannot be
+confidently classified the `#` is left UNCHANGED -- a missed rewrite leaves a stale tag that
+self-heals on the next correct op; an over-eager rewrite corrupts a code region. The bias is
+hard toward under-rewriting.
+
+**Offset-parity contract (TR-02, CI-enforced).** `FindHashtags` is pinned offset-for-offset
+to the Lezer grammar by a single-sourced corpus: `web/src/lib/cm/hashtag.parity.test.ts` runs
+the REAL Lezer parser (`inlineTagSpansFromBody`, sharing `tagParserExtensions` with the render
++ materializer) over the shared fixtures and regenerates `internal/okf/testdata/hashtag_corpus.json`;
+`internal/okf/hashtag_test.go` loads that JSON and asserts BYTE `from`/`to` spans (not merely
+tag-name sets). A grammar change not committed to the JSON fails the TS side; a Go scanner that
+finds a different span fails the Go side. Drift fails CI on either side.
+
+### `okf.RewriteHashtags(body, old, new)` -- byte-stable body rewrite
+
+Rewrites body `#tag` occurrences whose (case-insensitive) name equals `old`: a rename/merge
+splices `#`+`new`; a delete (`new == ""`) removes the `#`+token. Returns the edited body and a
+changed flag; on no match the ORIGINAL slice is returned byte-identical. Only matched `#tag`
+spans are touched -- prose, code regions, and other tags are preserved exactly. Two locked rules:
+
+- **D-03a (delete whitespace):** removing a token collapses exactly ONE adjacent space, and
+  ONLY when the token was space-bounded on BOTH sides (` #ops ` → ` `); otherwise whitespace is
+  untouched and a newline is NEVER merged across.
+- **D-03b (merge adjacent-duplicate):** a merge yielding `#b #b` leaves both tokens as-is (no
+  dedupe -- the frontmatter reconcile dedupes the set).
+
+### `okf.ValidateInlineTag(tag)` -- the body-splice gate (`internal/okf/validate.go`)
+
+Validates a BARE tag name (no leading `#`) against the inline-`#tag` grammar SUBSET the Lezer
+body grammar can represent, so a rename/merge TARGET can be spliced into a body as `#`+name and
+round-trip as the SAME tag the editor would badge. Rules mirror `hashtag.ts`: non-empty; body
+alphabet only `[A-Za-z0-9_/-]`; ≥1 non-digit `[A-Za-z_-]` (so `1984` and `12/34` are rejected --
+`/` is a separator, not a qualifying non-digit); no leading/trailing/doubled slash.
+
+**It is STRICTER than and DISTINCT from `ValidateTagCharset`.** `ValidateTagCharset`
+(`^[a-zA-Z0-9_ -]+$`) permits a space and an all-digit token but FORBIDS `/` -- the exact inverse
+of what body injection needs. `ValidateTagCharset` keeps its frontmatter-charset / SEC-02
+HTML-metachar role unchanged; `ValidateInlineTag` is an ADDITIONAL gate for a token entering PROSE.
+
+**SEC-v1.5-F01 intersection gate.** A rename/merge target is written to BOTH the body (via
+`RewriteHashtags`, `/`-safe) AND the frontmatter `tags:` key (via `SetTags`, `/`-forbidden). A
+nested target like `a/b` passes `ValidateInlineTag` but would 500 at the frontmatter write, so
+`handleTagRename` / `handleTagMerge` require the INTERSECTION -- both `ValidateInlineTag` AND
+`ValidateTagCharset` -- making such a target a clean **400 at the gate, not a 500 at apply**.
+
+### Body-inclusive affected-set enumeration (`internal/pages/tagscan.go`)
+
+- **`PagesWithBodyTag(ctx, tag)`** returns every live page whose BODY carries `#tag` (region-aware,
+  via `FindHashtags`), reading each body through the SEC-01 resolver (`repo.Tree()` + `repo.Read`).
+  It is the TR-04 blind-spot closer: a page carrying `#tag` ONLY in its body is absent from the
+  frontmatter-only `page_tags` cache (invisible to `graph.PagesByTag`), so the rename/merge/delete
+  affected set unions `graph.PagesByTag(tag)` with `PagesWithBodyTag(tag)`. It deliberately lives in
+  the PAGES service, NOT `internal/graph/query.go`, whose "reads NO bodies -- only path enumeration"
+  invariant must hold.
+- **`DetectStaleBodyTags(ctx)`** (TR-06) is a bounded one-shot DETECT+REPORT scan flagging every live
+  page whose body `#tag` disagrees with its frontmatter (a body `#tag` whose frontmatter counterpart
+  is absent -- the signature of a pre-fix rename/delete that rewrote frontmatter but left the body
+  stale). It NEVER writes and has **no HTTP/CLI caller** -- it is a read-only report method (the
+  ROADMAP "for all pages including never-reopened" over-claim was honestly softened to "for all FUTURE
+  operations" + this surfaced historical set). Covered by `TestDetectStaleBodyTags`.
+
+### Preview `body_affected` scope (TR-05)
+
+`buildTagApplyItems` includes a page when its frontmatter tag set changes OR its body `#tags` will
+change (the widened predicate). For a body-only page it sets `SkipFrontmatter` (leave the tags region
+byte-identical) and marks `BodyAffected` in the preview. The preview response carries a per-page
+`body_affected` boolean; the admin UI (`TagManagement.tsx`) surfaces "N page(s) also have body #tags
+that will be rewritten" + a `prose` badge, so the admin sees prose will change, not just frontmatter.
+See [`docs/api/tag-admin.md`](../api/tag-admin.md) for the full contract.
+
+---
+
 ## HTTP Endpoints
 
-See [`docs/api/tagsweep.md`](../api/tagsweep.md) for full endpoint contracts.
+See [`docs/api/tagsweep.md`](../api/tagsweep.md) (suggest/sweep/approve) and [`docs/api/tag-admin.md`](../api/tag-admin.md) (rename/merge/delete) for full endpoint contracts.
 
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|
@@ -240,6 +346,10 @@ See [`docs/api/tagsweep.md`](../api/tagsweep.md) for full endpoint contracts.
 | `/api/v1/admin/tags/sweep/status` | GET | Admin | Sweep job progress + pending approval count |
 | `/api/v1/admin/tags/suggestions` | GET | Admin | List pending suggestions |
 | `/api/v1/admin/tags/approve` | POST | Admin | Batched approval |
+| `/api/v1/admin/tags` | GET | Admin | Workspace tag vocabulary + per-tag page counts |
+| `/api/v1/admin/tags/rename` | POST | Admin | Rename a tag workspace-wide (frontmatter + body), preview/apply |
+| `/api/v1/admin/tags/merge` | POST | Admin | Merge a source tag into a target, preview/apply |
+| `/api/v1/admin/tags/delete` | POST | Admin | Delete a tag workspace-wide (frontmatter + body), preview/apply |
 
 ---
 
@@ -252,3 +362,4 @@ See [`docs/api/tagsweep.md`](../api/tagsweep.md) for full endpoint contracts.
 5. **Retry budget.** The LLM suggest mode has a hard retry cap (3 attempts). Garbage/prose output never reaches the queue.
 6. **Serial rate-limiter.** The single-drain jobs worker naturally serializes LLM calls (one at a time). No parallel LLM caller.
 7. **Audit trail.** Every sweep start and batch approval is recorded in the audit log with non-secret counts (scope, applied, stale, notfound, skipped).
+8. **Body rewrite is region-aware + byte-stable (v1.5).** Rename/merge/delete rewrite body `#tags` only where `okf.FindHashtags` recognizes them (fenced/inline/indented/HTML/escaped `#` excluded), offset-pinned to the Lezer grammar by a CI-enforced parity corpus. Only matched `#tag` byte spans change; a no-match body is returned byte-identical. The rename/merge target passes the INTERSECTION of `ValidateInlineTag` (body-splice-safe) and `ValidateTagCharset` (frontmatter-storable) -- a frontmatter-incompatible target (`a/b`) is a clean 400, not a 500 (SEC-v1.5-F01).

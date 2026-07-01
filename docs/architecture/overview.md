@@ -73,7 +73,7 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
    - `KindGraph` (graph): re-extract the page's outbound links and tags
 
 ### Graph Read Path
-1. Browser requests `/api/v1/graph` (global graph) or `/api/v1/graph/local?path=X&depth=2`
+1. Browser requests `/api/v1/graph` (global graph, surfaced at the SPA route `/app/graph`). The per-page local graph (`/graph/local`) was **removed in v1.5**; see [graph-subsystem.md](graph-subsystem.md).
 2. Handler reads from the derived SQLite cache tables (`page_links`, `page_tags`) -- no Markdown files are touched in the request path except for title resolution
 3. Returns a lean JSON payload: nodes (page + tag ids/labels) and typed edges (link + tag)
 
@@ -91,6 +91,11 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
 5. Admin reviews the pending queue at `GET /admin/tags/suggestions`
 6. Admin approves selected pages via `POST /admin/tags/approve`
 7. The batch apply writes all approved tags in a single Git commit, then resolves the pending rows
+
+### Workspace-Wide Tag Management (v1.3 admin ops + v1.5 body rewrite)
+1. Admin previews/applies a rename, merge, or delete via `POST /api/v1/admin/tags/{rename,merge,delete}`
+2. The affected-page set unions the frontmatter-tag pages (`graph.PagesByTag`) with pages carrying the tag in their BODY (`pages.PagesWithBodyTag`) -- so a body-only page is not missed (v1.5, TR-04)
+3. Each affected page's frontmatter `tags:` AND body `#tags` are rewritten byte-stably (`okf.SetTags` + `okf.RewriteHashtags`) in ONE batched commit (`pages.ApplyTagsBatch`) -- the fix that made these ops server-authoritative for the body, not just the frontmatter (v1.5); see [tag-subsystem.md](tag-subsystem.md)
 
 ## Component Map
 

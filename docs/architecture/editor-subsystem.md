@@ -10,7 +10,10 @@ through Live⇄Source and through save.
 
 **Source:** `web/src/lib/cm/*`, hosted by `web/src/components/LivePreviewEditor.tsx` and
 mounted read-only by `web/src/routes/PageView.tsx`. Build guard:
-`web/vite-plugins/assertLazyChunks.ts` (wired in `web/vite.config.ts`).
+`web/vite-plugins/assertLazyChunks.ts` (wired in `web/vite.config.ts`). In v1.5 the reading
+column around this surface became a document (Breadcrumb + PropertiesPanel + DocStatusBar,
+TagBadgeBar retired) and the CM6 host gained `drawSelection()` + `EditorView.lineWrapping` —
+see [Reading shell + selection/coordinate accuracy (v1.5)](#reading-shell--selectioncoordinate-accuracy-v15).
 
 ---
 
@@ -24,8 +27,8 @@ mounted read-only by `web/src/routes/PageView.tsx`. Build guard:
 | [`widgets.ts`](../../web/src/lib/cm/widgets.ts) | The `WidgetType` family: `ImageWidget`, `BulletWidget`, `CodeBlockWidget`, `MermaidWidget`, `HashtagWidget`, `TableWidget`. Home of the no-`innerHTML` security invariant. |
 | [`highlight.ts`](../../web/src/lib/cm/highlight.ts) | The one shared `codeHighlightStyle` + the curated `codeLanguages` (each grammar dynamic-`import()`ed → lazy chunk). |
 | [`mermaid.ts`](../../web/src/lib/cm/mermaid.ts) | `renderMermaid` — lazy `import("mermaid")`, strict sandbox, serialized render queue. |
-| [`hashtag.ts`](../../web/src/lib/cm/hashtag.ts) | The `#tag` grammar (`hashtagExtension`), the shared `tagParserExtensions` array, and `inlineTagsFromBody` (materializer). |
-| [`theme.ts`](../../web/src/lib/cm/theme.ts) | The CM6 theme — every value a design token (`var(--…)`); no hex/px. |
+| [`hashtag.ts`](../../web/src/lib/cm/hashtag.ts) | The `#tag` grammar (`hashtagExtension`), the shared `tagParserExtensions` array, `inlineTagsFromBody` (materializer), and `inlineTagSpansFromBody` (the byte-offset span source that generates the Lezer↔Go parity corpus — see [Inline hashtags](#inline-hashtags)). |
+| [`theme.ts`](../../web/src/lib/cm/theme.ts) | The CM6 theme — every value a design token (`var(--…)`); no hex/px. **v1.5:** heading vertical rhythm is `padding`, NOT `margin` — CM6's height oracle measures `offsetHeight` (includes padding, excludes margin), so a margin drifts `posAtCoords`/`coordsAtPos` below every heading (visible as selection landing a row off once `drawSelection` is on). |
 | [`sanitizeSrc.ts`](../../web/src/lib/cm/sanitizeSrc.ts) | `sanitizeImageSrc` — the image-src allowlist. |
 
 ## Edit mode vs read mode — one pipeline, one facet
@@ -121,6 +124,15 @@ marker, an all-digit run, or an escape is excluded the same way in both. (The ol
 string scanner `parseInlineTags` diverged on code regions and is **retired** — do not
 reintroduce a string-scanner tag extractor.)
 
+**Server-side parity (v1.5).** The identical grammar now also has a Go counterpart:
+`okf.FindHashtags` (`internal/okf/hashtag.go`) recognizes the SAME body `#tag` spans
+server-side, so a workspace-wide rename/merge/delete rewrites the body `#tags` where the
+editor would badge them. It is pinned offset-for-offset to this Lezer grammar by a
+single-sourced parity corpus: `hashtag.parity.test.ts` runs the real parser via
+`inlineTagSpansFromBody` and regenerates `internal/okf/testdata/hashtag_corpus.json`; the Go
+test asserts byte `from`/`to` spans against it, so drift fails CI on either side. See
+[tag-subsystem.md](tag-subsystem.md#okffindhashtagsbody----the-single-body-tag-recognizer-internalokfhashtaggo).
+
 ## Security invariants (do not break)
 
 - **No `innerHTML` of page content, ever.** Every widget builds DOM via
@@ -142,3 +154,49 @@ reintroduce a string-scanner tag extractor.)
 pin the byte-stable round-trip, the reveal behavior, the hashtag corpus, and the security
 invariants. `web/vite-plugins/assertLazyChunks.test.ts` covers the build guard. Treat an
 adversarial-suite failure as a possible XSS/round-trip regression, not flakiness.
+
+## Reading shell + selection/coordinate accuracy (v1.5)
+
+The v1.5 reading-shell fold-in reshaped the column AROUND the CM6 surface into a document,
+and hardened the surface's coordinate mapping.
+
+### Reading column as a document
+
+`PageView` (read) and `PageEditor` (edit) now frame the CM6 body with Obsidian-parity chrome
+instead of full-width action rows:
+
+- **`Breadcrumb.tsx`** — the folder trail above the title (`Cooking / Recipes`); each crumb
+  navigates to `folder/index.md`. A top-level page renders nothing.
+- **`PropertiesPanel.tsx`** — the compact metadata table under the title (tags, description,
+  arbitrary scalar frontmatter keys). It **replaces `TagBadgeBar` (retired)** and folds the
+  tag/description verbs into small inline ✨ slots inside the relevant property row. Tags are
+  authored as `#tag` in the body (or via ✨ suggest), so the panel shows them read-only + their
+  ✨ slot; it consumes `inlineTagsFromBody` to mark body-origin tags. Read mode (`readOnly`)
+  shows values only.
+- **`DocStatusBar.tsx`** — the footer strip (backlink count via the shared `useBacklinks`
+  query, word count, character count).
+
+`TagBadgeBar.tsx` is deleted; do not reintroduce it. The other `inlineTagsFromBody`
+consumers are `PropertiesPanel.tsx`, `TagSuggest.tsx`, and the save reconcile
+`lib/tag-reconcile.ts`.
+
+### `drawSelection` + `lineWrapping` + the padding height-oracle fix
+
+`LivePreviewEditor.tsx` adds `drawSelection()` and `EditorView.lineWrapping` to BOTH the read
+and edit configs:
+
+- **`drawSelection()`** renders CM6's OWN selection + cursor layers instead of the browser's
+  native selection. Native selection fights the live-preview decorations (hidden markers, `#tag`
+  badges, image/table/code widgets, atomic ranges) and produces janky drag-select + wrong-text
+  copy; the CM layer maps selection to document offsets, so drag + Cmd-C stay robust over
+  rendered constructs.
+- **`EditorView.lineWrapping`** wraps long lines to the pane width (no horizontal scroll).
+- **The padding fix (`theme.ts`)** is what makes `drawSelection` land correctly: the heading
+  line classes (`.cm-heading-1..6`) switched their vertical rhythm from `margin` to `padding`.
+  These are LINE decorations on `.cm-line`, and CM6's height oracle measures each line's
+  `offsetHeight`, which INCLUDES padding but EXCLUDES margin. A margin is invisible to the
+  oracle, so `posAtCoords`/`coordsAtPos` drift by the margin below every heading — with
+  `drawSelection` on, the selection lands a row off. Padding is measured, so coordinates stay
+  exact; the two are visually identical (headings have no background/border). The `.cm-content`
+  block also moved to a centered doc column governed by the `.pageeditor`/`.pageview` max-width
+  with generous bottom padding.

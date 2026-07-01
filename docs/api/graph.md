@@ -39,40 +39,13 @@ Returns the whole derived graph: every page node, every surviving tag node, link
 
 ---
 
-## `GET /api/v1/graph/local`
+## `GET /api/v1/graph/local` — REMOVED in v1.5
 
-Returns the neighborhood (local graph) around a seed page, up to `depth` hops over link edges.
-
-**Auth:** Any authenticated user.
-
-**Query Parameters:**
-
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `path` | string | (required) | Workspace-relative `.md` path of the seed page |
-| `depth` | integer | `1` | BFS traversal depth, clamped to `[1, 3]` |
-
-**Response `200 OK`:**
-
-```json
-{
-  "nodes": [
-    {"id": "index.md", "label": "Home", "type": "page"},
-    {"id": "docs/getting-started.md", "label": "Getting Started", "type": "page"}
-  ],
-  "edges": [
-    {"source": "index.md", "target": "docs/getting-started.md", "type": "link"}
-  ]
-}
-```
-
-**Errors:**
-- `400` -- "A page is required." (missing path parameter)
-- `500` -- "The graph is unavailable."
-
-**Implementation:** Calls `graph.Store.Neighborhood(ctx, pagePath, depth)`. BFS over undirected link adjacency. Tag nodes/edges for reachable pages are included (popular-tag-capped).
-
-**Source:** [`internal/graph/query.go`](../../internal/graph/query.go) `Neighborhood()`
+The per-page local (neighborhood) graph endpoint was removed end-to-end in the v1.5
+reading-shell fold-in, along with the `graph.Store.Neighborhood` query method and the client
+`LocalGraphPanel` / `DepthControl` components. The global graph (`GET /api/v1/graph`, surfaced
+at the SPA route `/app/graph`) is retained. Re-introduction is tracked as a Future requirement
+in `.planning/REQUIREMENTS.md`. See [graph-subsystem.md](../architecture/graph-subsystem.md).
 
 ---
 

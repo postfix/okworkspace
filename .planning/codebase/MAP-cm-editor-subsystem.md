@@ -1,12 +1,12 @@
 ---
 author: codebase-archaeologist
 responsible: codebase-archaeologist
-phase: 21, 22, 25, 26
-milestone: v1.4
+phase: 21, 22, 25, 26, 28
+milestone: v1.5
 status: verified
 confidence: direct_read
 grounding: direct file read (SMTC daemon offline this session — no semantic/blast-radius certs)
-head: 1ba6d6b
+head: f03cffc
 ---
 
 # Codebase Map: CM6 Live-Preview Editor Subsystem
@@ -19,10 +19,13 @@ string**, and everything rendered (bold, headings, links, images, tables, `#tag`
 badges, syntax-highlighted code, mermaid diagrams) is a **view-layer decoration** —
 never a re-serialization of the doc. That single fact is why the byte-stable
 round-trip holds. Phases 21/22 (hashtags), 25 (syntax highlight), 26 (mermaid) all
-extended this surface; Phase 28+ will touch it again.
+extended this surface; **Phase 28 (v1.5)** touched it again — `drawSelection()` +
+`EditorView.lineWrapping` on the host, and the `theme.ts` heading margin→padding
+height-oracle fix — and reshaped the reading column around it (Breadcrumb +
+PropertiesPanel + DocStatusBar; `TagBadgeBar` retired).
 
 Original surface shipped in **Phase 6** (EDIT-01..04); this map covers the whole
-current state including the v1.4 additions.
+current state including the v1.4 additions and the v1.5 Phase-28 changes.
 
 ### Files
 
@@ -34,8 +37,8 @@ current state including the v1.4 additions.
 | `web/src/lib/cm/widgets.ts` | The `WidgetType` family: `ImageWidget`, `BulletWidget`, `CodeBlockWidget` (async syntax highlight), `MermaidWidget` (async render), `HashtagWidget`, `TableWidget`. Home of the **no-innerHTML / textContent-only** security invariant. |
 | `web/src/lib/cm/highlight.ts` | ED-04a. The ONE shared `codeHighlightStyle` (`HighlightStyle.define`, ~5 `tok-*` roles, class-only → colors are `--syntax-*` CSS vars) + the curated `codeLanguages` (`LanguageDescription[]`, every grammar loaded via dynamic `import()` → lazy chunks). |
 | `web/src/lib/cm/mermaid.ts` | ED-05a. `renderMermaid(code)` — lazy `import("mermaid")`, `securityLevel:'strict'` + `suppressErrorRendering:true`, init-once, **serialized behind a module-level promise `queue`** (mermaid's per-diagram DBs are global + non-reentrant). Returns a DOMPurify-sanitized SVG string; rejects on invalid input. |
-| `web/src/lib/cm/hashtag.ts` | ED-02a/b. `hashtagExtension` (a `@lezer/markdown` `MarkdownConfig` registering a `Hashtag` inline node), `tagParserExtensions` (the SINGLE source of truth: `[Table, Strikethrough, TaskList, Autolink, hashtagExtension]`), and `inlineTagsFromBody(body)` (standalone parser reusing the SAME extension set → materialized tags can never fork from the badges). |
-| `web/src/lib/cm/theme.ts` | The `EditorView.theme` — every value a `var(--…)` token (no hex/px). `theme` (shared) + `sourceTheme` (mono document-wide). Decoration classes (`.cm-strong/.cm-em/.cm-heading-N/.cm-md-link/.cm-hashtag/.cm-inline-code/.cm-code-block`) styled here at UI-SPEC token values → Live mode looks byte-for-byte like read mode. |
+| `web/src/lib/cm/hashtag.ts` | ED-02a/b. `hashtagExtension` (a `@lezer/markdown` `MarkdownConfig` registering a `Hashtag` inline node), `tagParserExtensions` (the SINGLE source of truth: `[Table, Strikethrough, TaskList, Autolink, hashtagExtension]`), `inlineTagsFromBody(body)` (standalone parser reusing the SAME extension set → materialized tags can never fork from the badges), and (v1.5) `inlineTagSpansFromBody(body)` — byte-offset spans (NOT de-duped) that generate the Lezer↔Go parity corpus (`internal/okf/testdata/hashtag_corpus.json`) the server-side `okf.FindHashtags` is pinned against. See `MAP-tag-rewrite-subsystem.md`. |
+| `web/src/lib/cm/theme.ts` | The `EditorView.theme` — every value a `var(--…)` token (no hex/px). `theme` (shared) + `sourceTheme` (mono document-wide). Decoration classes (`.cm-strong/.cm-em/.cm-heading-N/.cm-md-link/.cm-hashtag/.cm-inline-code/.cm-code-block`) styled here at UI-SPEC token values → Live mode looks byte-for-byte like read mode. **v1.5 (Phase 28):** heading line classes use `padding`, NOT `margin`, for vertical rhythm — CM6's height oracle measures `.cm-line` `offsetHeight` (padding included, margin excluded), so a margin drifts `posAtCoords`/`coordsAtPos` below every heading (visible as `drawSelection` landing a row off). `.cm-content` moved to a centered doc column + bottom padding. |
 | `web/src/lib/cm/sanitizeSrc.ts` | `sanitizeImageSrc(src)` — the image-src allowlist (http(s) + app-relative only; blocks `javascript:`/`vbscript:`/executable `data:`/protocol-relative). Gate for `ImageWidget`. |
 | `web/src/lib/cm/headingAnchors.ts` / `linkNav.ts` | github-slugger heading ids (read-mode `#hash` deep-link) and the internal-link DOM click router (resolve `.md` links through react-router). Pre-v1.4; unchanged. |
 | `web/vite-plugins/assertLazyChunks.ts` | The reusable **build-time guard** (Rollup `generateBundle`): fails `npm run build` if any `forbidden` module id leaks into an entry chunk, or the entry exceeds `maxEntryBytes`. Wired in `web/vite.config.ts`. |
@@ -45,8 +48,8 @@ current state including the v1.4 additions.
 - `web/src/components/LivePreviewEditor.tsx` — the ONE CM6 host component. Edit mode
   and read mode are the SAME component with different extension sets:
   - **Edit mode**: `modeCompartment.of(mode === "live" ? liveExtensions : sourceExtensions)`, history, keymaps, `toggleKeymap`, placeholder, `onChange` (fires only on `docChanged`, bytes verbatim — EDIT-03).
-  - **Read mode** (`readOnly`): `cleanRender.of(true)` + `modeCompartment.of(liveExtensions)` + `headingAnchors`, non-editable. **T-06-10: read mode reuses the SAME decoration pipeline as edit Live — there is no second, weaker read renderer.** (`LivePreviewEditor.tsx:138-160`.)
-- `web/src/routes/PageView.tsx` — mounts `LivePreviewEditor` read-only as the unified read surface.
+  - **Read mode** (`readOnly`): `cleanRender.of(true)` + `modeCompartment.of(liveExtensions)` + `headingAnchors`, non-editable. **T-06-10: read mode reuses the SAME decoration pipeline as edit Live — there is no second, weaker read renderer.** (`LivePreviewEditor.tsx:138-160`.) **v1.5:** both configs also add `drawSelection()` (CM6 selection/cursor layers instead of native — robust drag/copy over decorations + atomic ranges) and `EditorView.lineWrapping`.
+- `web/src/routes/PageView.tsx` — mounts `LivePreviewEditor` read-only as the unified read surface. **v1.5 reading shell:** it now frames the surface with `Breadcrumb` (folder trail) + `PropertiesPanel` (metadata table, replaces the retired `TagBadgeBar`) + `DocStatusBar` (backlink/word/char footer); `PageEditor.tsx` mirrors the chrome in edit mode.
 
 ### How edit vs read compose (the `cleanRender` facet)
 
@@ -169,9 +172,12 @@ proves they never leak into an entry chunk.
     `tagParserExtensions` being a single shared array is render⇄materializer agreement.
 
 11. **`inlineTagsFromBody` is NOT dead — it is the materializer.** (HIGH — consumed by
-    `components/TagBadgeBar.tsx:17,30`, `components/TagSuggest.tsx:12,134`, and the save
+    `components/PropertiesPanel.tsx:6,57`, `components/TagSuggest.tsx:12,138`, and the save
     reconcile `lib/tag-reconcile.ts:21,52-53`.) It runs a full (non-incremental) Lezer parse
-    of the whole body on each call; that is intentional and cheap at page scale.
+    of the whole body on each call; that is intentional and cheap at page scale. **v1.5:
+    `TagBadgeBar.tsx` (its old consumer) was DELETED — `PropertiesPanel.tsx` replaced it as
+    the metadata surface.** Its byte-offset sibling `inlineTagSpansFromBody` also feeds the
+    Lezer↔Go parity corpus (`hashtag.parity.test.ts`).
 
 12. **The read surface has NO separate renderer.** (MEDIUM-HIGH — `LivePreviewEditor.tsx:
     138-160`, `PageView.tsx`.) A common wrong assumption is that read mode uses
@@ -202,6 +208,11 @@ proves they never leak into an entry chunk.
 - `hashtag.ts` `tagParserExtensions` → the shared array; a change ripples to the render
   (`markdown.ts`), the materializer (`inlineTagsFromBody`), and the save reconcile
   (`lib/tag-reconcile.ts`). Its corpus is pinned in `hashtag.test.ts` + `livePreview.test.ts`.
+  **v1.5 cross-language ripple:** the grammar is ALSO the source of truth for the server-side
+  `okf.FindHashtags` scanner via `inlineTagSpansFromBody` → `hashtag.parity.test.ts` →
+  `internal/okf/testdata/hashtag_corpus.json`. A grammar change now requires regenerating that
+  corpus (`UPDATE_CORPUS=1 npx vitest run src/lib/cm/hashtag.parity.test.ts`) or CI fails on
+  BOTH sides. See `MAP-tag-rewrite-subsystem.md`.
 - `mermaid.ts` `MERMAID_CONFIG` → security-critical; changing `securityLevel` is a security regression.
 - `assertLazyChunks.ts` / `vite.config.ts` `maxEntryBytes` (1,420,000; measured entry ~1,180,566)
   → re-measure and raise deliberately if the entry legitimately grows; never raise to paper over a
@@ -210,7 +221,8 @@ proves they never leak into an entry chunk.
 ### Test corpus (where the invariants are pinned)
 
 `livePreview.test.ts`, `widgets.test.ts` + `widgets.adversarial.test.ts`,
-`mermaid.test.ts` + `mermaid.adversarial.test.ts`, `hashtag.test.ts`, `highlight.test.ts`,
+`mermaid.test.ts` + `mermaid.adversarial.test.ts`, `hashtag.test.ts`, `hashtag.parity.test.ts`
+(v1.5 Lezer↔Go corpus), `highlight.test.ts`,
 `markdown.test.ts`, `mode.test.ts`, `sanitizeSrc.test.ts`, `assertLazyChunks.test.ts`.
 The adversarial suites are the security-invariant guards — treat a failure there as a
 potential XSS/round-trip regression, not a flaky test.
