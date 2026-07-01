@@ -280,4 +280,28 @@ describe("TagManagement (TM-04)", () => {
 
     await waitFor(() => expect(client.listTags).toHaveBeenCalledTimes(2));
   });
+
+  it("delete: preview with a body_affected page renders the body #tags marker (TR-05)", async () => {
+    vi.mocked(client.listTags).mockResolvedValue(TAGS);
+    vi.mocked(client.deleteTag).mockResolvedValue({
+      tag: "ops",
+      affected_pages: [
+        { page_path: "a.md", current_tags: ["ops"], new_tags: [], body_affected: true },
+      ],
+      total_affected: 1,
+    });
+    const user = userEvent.setup();
+    renderTagManagement();
+
+    await screen.findByRole("table");
+
+    // Open delete for "ops" — auto-preview fires and returns a body_affected page.
+    await user.click(screen.getAllByRole("button", { name: /delete/i })[0]);
+
+    // The delete dialog must surface the SAME body-note marker rename/merge show.
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(/body #tags that will be rewritten/i),
+    ).toBeTruthy();
+  });
 });

@@ -283,7 +283,14 @@ function DeleteDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () => 
     >
       <div className="tagmgmt-dialog-body">
         {preview ? (
-          <p>Remove <strong>{tag.tag}</strong> from all <strong>{preview.total_affected}</strong> page(s). This cannot be undone.</p>
+          <>
+            <p>Remove <strong>{tag.tag}</strong> from all <strong>{preview.total_affected}</strong> page(s). This cannot be undone.</p>
+            {preview.affected_pages.some((p) => p.body_affected) && (
+              <p className="tagmgmt-body-note">
+                {preview.affected_pages.filter((p) => p.body_affected).length} page(s) also have body #tags that will be rewritten.
+              </p>
+            )}
+          </>
         ) : (
           <p><Loader2 size={14} className="spinner" /> Checking affected pages…</p>
         )}

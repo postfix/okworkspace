@@ -274,6 +274,27 @@ func TestTagRename_BadCharset(t *testing.T) {
 	}
 }
 
+// TestTagRename_InlineGrammarGate proves the ENDPOINT enforces the stricter
+// inline-tag grammar (ValidateInlineTag), not merely the legacy charset gate.
+// Each token here is ACCEPTED by the old ValidateTagCharset (^[a-zA-Z0-9_ -]+$)
+// but REJECTED by ValidateInlineTag — so a 400 can only come from the new gate
+// being the active HTTP validator (TR-03).
+func TestTagRename_InlineGrammarGate(t *testing.T) {
+	f := newTagAdminServer(t)
+	admin := f.adminCookies(t)
+
+	for _, newName := range []string{
+		"a b",  // space: legal charset, illegal body alphabet
+		"1984", // all-digit: legal charset, no qualifying non-digit
+	} {
+		rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/rename",
+			map[string]string{"old_name": "x", "new_name": newName}, admin)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("rename new_name=%q: got %d, want 400", newName, rec.Code)
+		}
+	}
+}
+
 // --- Merge tests ---
 
 func TestTagMerge_PreviewThenApply(t *testing.T) {
@@ -323,6 +344,26 @@ func TestTagMerge_SameSourceTarget(t *testing.T) {
 		map[string]string{"source": "ops", "target": "ops"}, admin)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("same source/target merge: got %d, want 400", rec.Code)
+	}
+}
+
+// TestTagMerge_InlineGrammarGate proves the merge ENDPOINT enforces the inline
+// grammar on its target. Merge previously had NO validator-reject handler test;
+// these targets pass the legacy charset gate but fail ValidateInlineTag, so a
+// 400 confirms the new gate is the active HTTP validator on merge too (TR-03).
+func TestTagMerge_InlineGrammarGate(t *testing.T) {
+	f := newTagAdminServer(t)
+	admin := f.adminCookies(t)
+
+	for _, target := range []string{
+		"a b",  // space: legal charset, illegal body alphabet
+		"1984", // all-digit: legal charset, no qualifying non-digit
+	} {
+		rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/merge",
+			map[string]string{"source": "ops", "target": target}, admin)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("merge target=%q: got %d, want 400", target, rec.Code)
+		}
 	}
 }
 
