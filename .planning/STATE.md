@@ -2,15 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Editor Enhancements & Authoring Polish
-status: roadmap_created
-stopped_at: ""
-last_updated: "2026-06-30T10:00:00Z"
-last_activity: 2026-06-30 — v1.4 roadmap created (7 phases, 21–27), red-team revised; ready to build
+status: Roadmap created (red-team revised) — ready to build
+last_updated: "2026-07-01T07:41:03.953Z"
+last_activity: 2026-07-01
 progress:
   total_phases: 7
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 7
+  total_plans: 7
+  completed_plans: 7
 ---
 
 # Project State
@@ -27,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 Milestone: v1.4 Editor Enhancements & Authoring Polish
 Phases: 7 planned (21–27); next = Phase 21 (Inline #tag parser + badge render)
 Status: Roadmap created (red-team revised) — ready to build
-Last activity: 2026-06-30 — v1.4 roadmap approved
+Last activity: 2026-07-01
 
 ## Deferred
 

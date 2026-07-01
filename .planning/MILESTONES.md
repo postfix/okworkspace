@@ -1,5 +1,32 @@
 # Milestones
 
+## v1.4 Editor Enhancements & Authoring Polish (Shipped: 2026-07-01)
+
+**Phases completed:** 7 phases (21–27), 7 plans
+**Git range:** v1.0..HEAD — 91 commits over 2026-06-27 → 2026-07-01
+**Audit:** [`milestones/v1.4-MILESTONE-AUDIT.md`](milestones/v1.4-MILESTONE-AUDIT.md) — passed (7/7 phases qa-verified, every ED-01…ED-06 requirement delivered, security review SHIP)
+
+**Key accomplishments:**
+
+- **Inline `#tag` parser + badge render (Phase 21, ED-02a):** a `@lezer/markdown` `Hashtag` inline parser + a badge decoration rendering `#tag` on the CM6 live-preview surface (a purely additive client-side parser — the server's Goldmark never sees a `#tag`; decoration-only, so stored bytes are unchanged).
+- **Model-B tag materialization + tag UI (Phase 22, ED-02b/02c):** on save, body `#tags` reconcile into the canonical frontmatter `tags:` **client-side** (frontmatter-canonical model); a read-only `TagBadgeBar` shows effective tags. Indent-/quote-hardened tag I/O.
+- **LLM tag suggestions (Phase 23, ED-03a):** the shipped suggest→approve flow re-homed into the live editor with union de-dup over the LIVE body+frontmatter, applied via the server apply-tags path, with an **autosave-safe merge-first reconcile** — the load-bearing pattern (merge approved value into local frontmatter BEFORE the post-apply refresh) that Phase 24 reused.
+- **LLM-generated description (Phase 24, ED-01a/01b):** removed the manual Description input; an on-demand, never-auto agent generator (`GenerateDescription` single-shot read-only mode + generate/apply-description endpoints, editor+CSRF, server re-validation, byte-stable `okf.SetField`, revision-checked 409) with an editable/regenerable review surface and the shared merge-first `reconcileApplied`.
+- **Code syntax highlighting (Phase 25, ED-04a):** ONE shared theme-aware `HighlightStyle` (new `--syntax-*` tokens) drives both CM6 surfaces — the editor via `syntaxHighlighting`, the read `CodeBlockWidget` via `highlightCode` (token spans built `textContent`-only). The 12-language curated set is **code-split**; the read widget renders plain then re-highlights when the lazy grammar resolves. Shipped the reusable `assertLazyChunks` build guard (module-id-level) proving no per-fence grammar reaches the entry chunk.
+- **Mermaid diagrams (Phase 26, ED-05a):** ` ```mermaid ` blocks render as inline SVG on **read + live** (Obsidian-style active-line reveal) via a lazy-loaded, strict-sandboxed `MermaidWidget` (`securityLevel:'strict'` + `suppressErrorRendering`, SVG injected via DOMParser+appendChild — never `innerHTML` of page content), with a raw-code fallback on any parse/render error. `assertLazyChunks` extended to prove mermaid + its heavy dep tree (d3/dagre/cytoscape/katex/…) stay out of the entry chunk.
+- **Page templates (Phase 27, ED-06a):** new pages seed from Obsidian-style `.md` templates in a `Templates/` folder — a list endpoint + a create-page picker (blank default), client-side `{{title}}`/`{{date}}`/`{{time}}` substitution, and a **robust server-side frontmatter merge** via `okf` (single valid block, user title wins, required-field repaired). `okf.ValidateFrontmatter` fail-closes on duplicate-key/malformed YAML.
+- **Close-time fix:** `encodePagePath` now segment-encodes page paths across all client API URLs (`web/src/lib/url.ts`), fixing a pre-existing app-wide raw-interpolation bug for `#`/`?`/`%` filenames.
+
+**Quality gates at close:**
+
+- Every phase ran the engineer's `anvil-code-reviewer` + `anvil-adversarial-tester` gates AND an independent `qa` goal-backward verification — all **passed**, zero gaps. Adversarial highlights: P25 held under 40 attacks (2 defects fixed), P26 49 tests/0 defects, P27 39-case table + `FuzzTemplateMerge` ~279k execs/0 defects.
+- Independent milestone **security review** (`.planning/v1.4-SECURITY-REVIEW.md`) — **SHIP**, no critical/high; 2 LOW findings accept-for-ship (mermaid XSS defense delegated to upstream strict+DOMPurify — verified sound; unbounded `POST/PUT /pages` JSON body — pre-existing, add a global cap).
+- Final suites: `go build/vet/test ./...` green; web **785 tests / 64 files**; `npm run build` clean with the bundle assertion active. Docs + codebase maps refreshed with a doc-verifier pass.
+
+**Known deferred items at close:** F-02 (global JSON body cap — DoS hardening), F-01 (pin mermaid deps + `npm audit` in CI), 2 Phase-26 manual UAT items (concurrent multi-diagram render; embedded-script inertness), a `blast_radius` re-run for the 2 new CM-editor maps when SMTC is back, and the REQUIREMENTS "Future" features (`#tag` in react-markdown, copy-code button, insert-at-cursor templates, description in search cards).
+
+---
+
 ## v1.0 Knowledge Graph & LLM Auto-Tagging (Shipped: 2026-06-24)
 
 **Phases completed:** 5 phases, 14 plans, 34 tasks
@@ -15,6 +42,7 @@
 - **Bulk sweep + batch review queue (Phase 12, TAG-05/06):** an admin bulk untagged-pages sweep that enqueues per-page `KindTagSuggest` jobs on the async worker (writing nothing automatically) into a review queue, approved per page through the SAME byte-stable apply path with batched commits (N pages → 1 commit), per-page stale 409 that doesn't sink the batch.
 
 **Quality gates at close:**
+
 - Independent cross-phase integration check — `integration_ok` (5/5 seams wired, both E2E chains connect; `go build ./...` + `tsc -b` green).
 - Independent v1.0 security review (ASVS L1, block-on-high) — **passed**, zero HIGH/CRITICAL; all declared mitigations (path resolver on graph paths, server-side `ValidateTags`, byte-stable `SetTags`, session RBAC, stale-revision 409) confirmed in code. 3 informational hardening notes only.
 
