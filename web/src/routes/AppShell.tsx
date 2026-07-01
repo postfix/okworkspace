@@ -47,8 +47,8 @@ import ResizeHandle from "../components/ResizeHandle";
 import { usePanelSizes } from "../stores/panelSizes";
 import { useNavrail } from "../stores/navrail";
 import { useTreeFold } from "../stores/treeFold";
-import { useTreeFilter } from "../stores/treeFilter";
-import SearchPalette from "../components/search/SearchPalette";
+import { useNavSearch } from "../stores/navSearch";
+import NavSearchResults from "../components/search/NavSearchResults";
 import PromptBar, {
   type AgentMode,
   type PromptBarStatus,
@@ -57,7 +57,6 @@ import AgentPanel, { type AgentSuggestion } from "../components/AgentPanel";
 import DiffReviewDialog from "../components/DiffReviewDialog";
 import { useAgentPanel } from "../stores/agentPanel";
 import { useAgentContext } from "../stores/agentContext";
-import { useSearchStore } from "../store/searchStore";
 import "./AppShell.css";
 
 // PROMPT_PLACEHOLDER is the chat input hint per active action. Plain ask by
@@ -90,7 +89,8 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   // propose/apply path; readers cannot (RBAC mirror of the server gate).
   const canEdit = data?.role === "editor" || data?.role === "admin";
   const treeRef = useRef<LeftTreeHandle>(null);
-  const setSearchOpen = useSearchStore((s) => s.setOpen);
+  // The navrail search input — ⌘K focuses it (replacing the old modal palette).
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ── Resizable column widths (persisted, drag-driven) ────────────────────────
   // The navrail + assistant widths live in a store and feed the --navrail-width /
@@ -109,10 +109,12 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const treeCollapsed = useTreeFold((s) => s.collapsed);
   const toggleFold = useTreeFold((s) => s.toggle);
 
-  // File-tree filter query (lives in a store so its input sits in the fixed
-  // navrail header while the tree scrolls below).
-  const filterQuery = useTreeFilter((s) => s.query);
-  const setFilterQuery = useTreeFilter((s) => s.setQuery);
+  // Navrail search query (lives in a store so its input sits in the fixed navrail
+  // header while the results/tree scroll below). Non-empty → inline full-text
+  // search results replace the file tree; empty → the tree.
+  const searchQuery = useNavSearch((s) => s.query);
+  const setSearchQuery = useNavSearch((s) => s.setQuery);
+  const searching = searchQuery.trim().length > 0;
 
   // ── Explicit viewport sizing (extension-proof fill) ─────────────────────────
   // position:fixed + inset:0 normally fills the window, but a browser extension
@@ -546,17 +548,25 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     });
   }
 
-  // Global ⌘K / Ctrl K opens the search palette from anywhere.
+  // Global ⌘K / Ctrl-K focuses the navrail search field (opening the sidebar first
+  // if it is hidden). Replaces the old modal palette — search now lives inline in
+  // the navrail. The focus is deferred a tick so the input is mounted when the nav
+  // was just opened.
+  const openNav = useNavrail((s) => s.setOpen);
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
-        setSearchOpen(true);
+        openNav(true);
+        window.setTimeout(() => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        }, 0);
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [setSearchOpen]);
+  }, [openNav]);
 
   async function handleLogout() {
     await logout();
@@ -576,7 +586,6 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         } as CSSProperties
       }
     >
-      <SearchPalette />
       <header className="topbar">
         {/* Left: the file-tree toggle. */}
         <div className="topbar-left">
@@ -595,17 +604,6 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             )}
           </button>
         </div>
-        {/* Center: the global search field, opening the search palette. */}
-        <button
-          type="button"
-          className="topbar-search"
-          onClick={() => setSearchOpen(true)}
-          aria-label="Search workspace (⌘K)"
-        >
-          <Search size={16} aria-hidden="true" className="topbar-search-icon" />
-          <span className="topbar-search-text">Search</span>
-          <kbd className="keycap">⌘K</kbd>
-        </button>
         <div className="topbar-right">
           {repoHealth?.ok && (
             <span className="repo-health" title={repoHealth.detail}>
@@ -693,49 +691,65 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             <div className="navrail-filter">
               <Search size={15} aria-hidden="true" className="navrail-filter-icon" />
               <input
+                ref={searchInputRef}
                 type="text"
                 className="navrail-filter-input"
-                placeholder="Filter files…"
-                value={filterQuery}
-                onChange={(e) => setFilterQuery(e.target.value)}
-                aria-label="Filter files"
+                placeholder="Search…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  // Esc clears the query (returns the tree) and blurs, like a
+                  // quick-switcher dismiss.
+                  if (e.key === "Escape") {
+                    setSearchQuery("");
+                    e.currentTarget.blur();
+                  }
+                }}
+                aria-label="Search workspace"
               />
             </div>
           </div>
 
-          {/* Scrolling body — the file tree (with Trash at its bottom) + recent. */}
+          {/* Scrolling body — inline search results when a query is active,
+              otherwise the file tree (with Trash at its bottom) + recent. */}
           <div className="navrail-body">
-            <LeftTree ref={treeRef} />
-            {/* Tag review — admin-only (TAG-06). The nav row, the route, and the
-                admin sweep section all render only for an admin (client
-                convenience); the server RequireRole(admin) is the real gate. */}
-            {isAdmin && (
-              <button
-                type="button"
-                className={`navrow navrail-trash-row${
-                  location.pathname === "/app/tag-review" ? " navrail-row-active" : ""
-                }`}
-                onClick={() => navigate("/app/tag-review")}
-                aria-current={
-                  location.pathname === "/app/tag-review" ? "page" : undefined
-                }
-              >
-                <ListChecks size={16} aria-hidden="true" className="tree-icon" />
-                <span className="tree-label">Tag review</span>
-              </button>
+            {searching ? (
+              <NavSearchResults />
+            ) : (
+              <>
+                <LeftTree ref={treeRef} />
+                {/* Tag review — admin-only (TAG-06). The nav row, the route, and the
+                    admin sweep section all render only for an admin (client
+                    convenience); the server RequireRole(admin) is the real gate. */}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className={`navrow navrail-trash-row${
+                      location.pathname === "/app/tag-review" ? " navrail-row-active" : ""
+                    }`}
+                    onClick={() => navigate("/app/tag-review")}
+                    aria-current={
+                      location.pathname === "/app/tag-review" ? "page" : undefined
+                    }
+                  >
+                    <ListChecks size={16} aria-hidden="true" className="tree-icon" />
+                    <span className="tree-label">Tag review</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="navrow navrail-trash-row"
+                  onClick={() => navigate("/trash")}
+                >
+                  <Trash2 size={16} aria-hidden="true" className="tree-icon" />
+                  <span className="tree-label">Trash</span>
+                </button>
+                <RecentList />
+              </>
             )}
-            <button
-              type="button"
-              className="navrow navrail-trash-row"
-              onClick={() => navigate("/trash")}
-            >
-              <Trash2 size={16} aria-hidden="true" className="tree-icon" />
-              <span className="tree-label">Trash</span>
-            </button>
-            <RecentList />
           </div>
 
-          {/* Fixed footer — Settings/Admin. Search now lives in the top bar. */}
+          {/* Fixed footer — Settings/Admin. Search lives inline in the navrail (⌘K focuses it). */}
           {isAdmin && (
             <div className="navrail-footer">
               <button

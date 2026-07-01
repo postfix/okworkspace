@@ -6,7 +6,7 @@
  *    attachment-scope Ask, and summarize-attachment to the right client calls.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -34,6 +34,7 @@ import * as client from "../api/client";
 import AppShell from "./AppShell";
 import { useAgentContext } from "../stores/agentContext";
 import { useAgentPanel } from "../stores/agentPanel";
+import { useNavrail } from "../stores/navrail";
 
 function seedMe(role: "admin" | "editor" | "reader" = "editor") {
   vi.mocked(client.me).mockResolvedValue({
@@ -204,5 +205,29 @@ describe("AppShell — agent dispatch (04-07)", () => {
       expect(client.summarizePage).toHaveBeenCalledWith("notes"),
     );
     expect(client.summarizeAttachment).not.toHaveBeenCalled();
+  });
+});
+
+describe("AppShell — ⌘K focuses the navrail search (RS-02, D-07)", () => {
+  it("a ⌘K keydown on document opens the navrail and focuses the search input", async () => {
+    seedMe("editor");
+    // Start with the navrail collapsed to prove the handler both opens it and
+    // focuses the (then-mounted) input.
+    useNavrail.getState().setOpen(false);
+    renderAppShell();
+
+    // Shell is ready once the authenticated display_name renders.
+    await screen.findByRole("button", { name: /Alice Wonderland/i });
+
+    // The handler is registered via document.addEventListener("keydown", …), so a
+    // window-dispatched event would not reach it in jsdom — target document.
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    // openNav(true) mounts the navrail; the deferred setTimeout(…,0) then focuses
+    // the input — wait for both the mount and the focus.
+    await waitFor(() => {
+      const input = screen.getByPlaceholderText("Search…");
+      expect(input).toHaveFocus();
+    });
   });
 });

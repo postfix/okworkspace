@@ -1,0 +1,31 @@
+/* NavSearchResults — inline full-text results in the navrail body (replaces the
+   ⌘K modal palette). Grouped Pages / Headings / Attachments, reusing the
+   SearchResultRow geometry. Token-only. */
+.navsearch-results {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--space-sm);
+}
+
+.navsearch-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.navsearch-group-label {
+  padding: var(--space-sm) var(--space-sm) var(--space-xs);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+/* Quiet single-line loading / empty / error states. */
+.navsearch-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  margin: 0;
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}

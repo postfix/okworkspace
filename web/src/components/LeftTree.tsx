@@ -34,7 +34,6 @@ import {
   type DragKind,
 } from "./hooks/useTreeMutations";
 import { useTreeFold } from "../stores/treeFold";
-import { useTreeFilter } from "../stores/treeFilter";
 import TreeContextMenu, { type TreeContextMenuItem } from "./TreeContextMenu";
 import CreatePageModal from "./CreatePageModal";
 import CreateFolderModal from "./CreateFolderModal";
@@ -114,10 +113,6 @@ const LeftTree = forwardRef<LeftTreeHandle>(function LeftTree(_props, ref) {
   const nodes = data ?? [];
 
   const [menu, setMenu] = useState<MenuState | null>(null);
-  // The filter query lives in a store so its input can sit in the navrail's fixed
-  // header while this (scrolling) tree consumes it. Typing narrows the tree to
-  // matching pages/folders (force-expanded while filtering).
-  const filter = useTreeFilter((s) => s.query);
   const [create, setCreate] = useState<CreateState>(null);
   const [pageAction, setPageAction] = useState<PageActionState>(null);
   const [folderAction, setFolderAction] = useState<FolderActionState>(null);
@@ -258,10 +253,6 @@ const LeftTree = forwardRef<LeftTreeHandle>(function LeftTree(_props, ref) {
     );
   }
 
-  const query = filter.trim().toLowerCase();
-  const filtering = query.length > 0;
-  const visibleNodes = filtering ? filterTree(nodes, query) : nodes;
-
   return (
     <div className="lefttree">
       {moveError && (
@@ -269,29 +260,22 @@ const LeftTree = forwardRef<LeftTreeHandle>(function LeftTree(_props, ref) {
           {moveError}
         </div>
       )}
-      {filtering && visibleNodes.length === 0 ? (
-        <p className="lefttree-status">No files match “{filter.trim()}”.</p>
-      ) : (
-        <ul
-          className="navtree"
-          aria-label="Pages"
-          onContextMenu={
-            canEdit ? (e) => openMenu(e, { kind: "root" }) : undefined
-          }
-        >
-          {visibleNodes.map((node) => (
-            <TreeRow
-              key={node.path}
-              node={node}
-              depth={0}
-              canEdit={canEdit}
-              filtering={filtering}
-              onContext={openMenu}
-              onDropNode={dropNode}
-            />
-          ))}
-        </ul>
-      )}
+      <ul
+        className="navtree"
+        aria-label="Pages"
+        onContextMenu={canEdit ? (e) => openMenu(e, { kind: "root" }) : undefined}
+      >
+        {nodes.map((node) => (
+          <TreeRow
+            key={node.path}
+            node={node}
+            depth={0}
+            canEdit={canEdit}
+            onContext={openMenu}
+            onDropNode={dropNode}
+          />
+        ))}
+      </ul>
 
       {/* The blank nav space below the tree right-clicks / drops to the root.
           It's presentational (aria-hidden); keyboard users reach root-create via
@@ -388,37 +372,6 @@ const LeftTree = forwardRef<LeftTreeHandle>(function LeftTree(_props, ref) {
 });
 
 export default LeftTree;
-
-// filterTree narrows the tree to a query (case-insensitive substring on titles).
-// A page is kept when its title matches; a folder is kept when its own title
-// matches (then it keeps ALL its children) OR any descendant matches (then it
-// keeps only the matching descendants). Returns a NEW tree — the cache is never
-// mutated.
-function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
-  const out: TreeNode[] = [];
-  for (const node of nodes) {
-    const selfMatch = node.title.toLowerCase().includes(q);
-    if (node.type === "folder") {
-      const kids = filterTree(node.children ?? [], q);
-      if (selfMatch || kids.length > 0) {
-        out.push({ ...node, children: selfMatch ? node.children ?? [] : kids });
-      }
-    } else {
-      // Page leaf: keep it when its title matches (showing all attachments) or
-      // when an attachment's filename matches (showing only those attachments).
-      const attMatches = (node.attachments ?? []).filter((a) =>
-        a.title.toLowerCase().includes(q),
-      );
-      if (selfMatch || attMatches.length > 0) {
-        out.push({
-          ...node,
-          attachments: selfMatch ? node.attachments : attMatches,
-        });
-      }
-    }
-  }
-  return out;
-}
 
 // dragInfo reads which kind of node is being dragged from a dataTransfer's type
 // list (set DURING dragstart). Returns null when neither okf drag type is present
@@ -529,14 +482,12 @@ function TreeRow({
   node,
   depth,
   canEdit,
-  filtering,
   onContext,
   onDropNode,
 }: {
   node: TreeNode;
   depth: number;
   canEdit: boolean;
-  filtering: boolean;
   onContext: (e: MouseEvent, target: MenuTarget) => void;
   onDropNode: (kind: DragKind, srcPath: string, destFolder: string) => void;
 }) {
@@ -553,7 +504,6 @@ function TreeRow({
         depth={depth}
         indentStyle={indentStyle}
         canEdit={canEdit}
-        filtering={filtering}
         onContext={onContext}
         onDropNode={onDropNode}
       />
@@ -601,7 +551,6 @@ function FolderRow({
   depth,
   indentStyle,
   canEdit,
-  filtering,
   onContext,
   onDropNode,
 }: {
@@ -609,14 +558,10 @@ function FolderRow({
   depth: number;
   indentStyle: CSSProperties;
   canEdit: boolean;
-  filtering: boolean;
   onContext: (e: MouseEvent, target: MenuTarget) => void;
   onDropNode: (kind: DragKind, srcPath: string, destFolder: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  // While a filter is active, force every surviving folder open so matches are
-  // always visible regardless of the manual collapse state.
-  const open = filtering || expanded;
   const drop = useNodeDropZone(node.path, onDropNode);
 
   // Snap to the global target whenever "collapse all / expand all" fires (the
@@ -666,11 +611,11 @@ function FolderRow({
         <button
           type="button"
           className="tree-caret"
-          aria-label={`${open ? "Collapse" : "Expand"} ${node.title}`}
-          aria-expanded={open}
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${node.title}`}
+          aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
         >
-          {open ? (
+          {expanded ? (
             <ChevronDown size={16} aria-hidden="true" />
           ) : (
             <ChevronRight size={16} aria-hidden="true" />
@@ -679,7 +624,7 @@ function FolderRow({
         <Folder size={16} aria-hidden="true" className="tree-icon" />
         <span className="tree-label">{node.title}</span>
       </div>
-      {open && node.children && node.children.length > 0 && (
+      {expanded && node.children && node.children.length > 0 && (
         <ul className="navtree">
           {node.children.map((child) => (
             <TreeRow
@@ -687,7 +632,6 @@ function FolderRow({
               node={child}
               depth={depth + 1}
               canEdit={canEdit}
-              filtering={filtering}
               onContext={onContext}
               onDropNode={onDropNode}
             />
