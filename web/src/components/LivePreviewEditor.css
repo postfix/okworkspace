@@ -63,7 +63,9 @@
  */
 .livepreview-editor .cm-md-table {
   border-collapse: collapse;
-  margin: var(--space-md) 0;
+  /* No vertical margin: it is invisible to CM6's height oracle (which measures
+   * offsetHeight, excluding margin), so it drifts posAtCoords/coordsAtPos below
+   * this block. The mandatory blank line adjacent to a GFM table supplies the gap. */
 }
 
 .livepreview-editor .cm-md-table th,
@@ -88,16 +90,13 @@
  * by finished prose. Scoped to .livepreview-readonly so the editing surface is
  * untouched. */
 
-/* Cap the reading column to a comfortable measure — long lines on a wide monitor
- * hurt readability (Obsidian's "readable line length"). Anchored to the LEFT (not
- * centred) so the body lines up under the left-aligned page title, while the header
- * actions stay pinned at the far right. Edit mode keeps the full width. */
+/* Read mode fills its centered doc column (the .pageview max-width governs the
+ * measure now), matching edit mode exactly so read and edit are pixel-identical
+ * — same width, same left edge under the title. */
 .livepreview-readonly .cm-content {
-  max-width: var(--prose-max-width);
+  max-width: 100%;
   margin-left: 0;
   margin-right: auto;
-  padding-left: 0;
-  padding-right: var(--space-md);
 }
 
 /* Unordered bullet (BulletWidget replaces the "-"/"*"/"+" ListMark). */
@@ -119,7 +118,11 @@
  * mono block on the code background; the language (data-lang) shows as a small tab. */
 .livepreview-editor .cm-md-codeblock {
   position: relative;
-  margin: var(--space-md) 0;
+  /* margin:0 is EXPLICIT (not omitted): <pre> carries a user-agent `margin: 1em 0`
+   * that would otherwise resurface and, being oracle-invisible, drift selection
+   * coords below the block in read mode. The blank line CommonMark requires around a
+   * fenced block supplies the visual gap. */
+  margin: 0;
   padding: var(--space-md);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -203,7 +206,8 @@
   justify-content: center;
   align-items: center;
   min-height: 2.5rem;
-  margin: 0.5rem 0;
+  /* No vertical margin — oracle-invisible, drifts selection coords below the block.
+   * The blank line adjacent to the ```mermaid fence supplies the gap. */
   padding: 0.75rem;
   border-radius: 6px;
   background: var(--color-code-bg, #1e1e1e);

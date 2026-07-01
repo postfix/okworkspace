@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { okfTitle, readField, setField } from "./frontmatter";
+import {
+  listScalarFields,
+  okfTitle,
+  readField,
+  removeField,
+  setField,
+} from "./frontmatter";
 
 // extractTitleLine pulls the emitted `title:` line and returns the raw text
 // after the colon+space, so we can assert the exact quoting shape setField
@@ -108,5 +114,99 @@ describe("readField/setField escape the field name in RegExp (IN-02)", () => {
     const out = setField(fm, "a.b", "new");
     expect(readField(out, "a.b")).toBe("new");
     expect(out).toContain("axb: keep");
+  });
+});
+
+describe("listScalarFields — inline top-level scalars only, doc order", () => {
+  it("returns inline key/value pairs in document order", () => {
+    const fm = "title: My Page\nauthor: Ada\nstatus: draft\n";
+    expect(listScalarFields(fm)).toEqual([
+      { key: "title", value: "My Page" },
+      { key: "author", value: "Ada" },
+      { key: "status", value: "draft" },
+    ]);
+  });
+
+  it("skips a block-sequence key (multi-line `tags:` list) while keeping its inline neighbours", () => {
+    // `tags:` has no same-line scalar (its value is the indented block below),
+    // so it must NOT surface as a scalar row; the inline keys around it do.
+    const fm = "title: Note\ntags:\n  - alpha\n  - beta\nauthor: Ada\n";
+    expect(listScalarFields(fm)).toEqual([
+      { key: "title", value: "Note" },
+      { key: "author", value: "Ada" },
+    ]);
+  });
+
+  it("skips a key with an empty (block/placeholder) value", () => {
+    // `desc:` with nothing after the colon is a block/empty key, not an inline
+    // scalar — dropping it is what keeps a bare `key:` out of the scalar rows.
+    const fm = "title: Note\ndesc:\nauthor: Ada\n";
+    expect(listScalarFields(fm)).toEqual([
+      { key: "title", value: "Note" },
+      { key: "author", value: "Ada" },
+    ]);
+  });
+
+  it("does not treat an indented (nested) key as a top-level scalar", () => {
+    // The `nested:` line is indented — it belongs to the block above and must be
+    // ignored; only the top-level `parent:`… wait, `parent:` is empty here, so
+    // the only surviving top-level inline scalar is `title`.
+    const fm = "title: Note\nparent:\n  nested: value\n";
+    expect(listScalarFields(fm)).toEqual([{ key: "title", value: "Note" }]);
+  });
+
+  it("keeps only the FIRST occurrence of a duplicate key", () => {
+    const fm = "author: Ada\nauthor: Grace\n";
+    expect(listScalarFields(fm)).toEqual([{ key: "author", value: "Ada" }]);
+  });
+
+  it("strips surrounding quotes from a value", () => {
+    const fm = 'author: "Ada Lovelace"\nlicense: \'MIT\'\n';
+    expect(listScalarFields(fm)).toEqual([
+      { key: "author", value: "Ada Lovelace" },
+      { key: "license", value: "MIT" },
+    ]);
+  });
+
+  it("returns [] for frontmatter with no inline scalars", () => {
+    expect(listScalarFields("tags:\n  - a\n  - b\n")).toEqual([]);
+    expect(listScalarFields("")).toEqual([]);
+  });
+});
+
+describe("removeField — deletes the whole line, byte-stable remainder", () => {
+  it("removes a middle field's line (and its newline), leaving neighbours untouched", () => {
+    const fm = "title: T\nauthor: Ada\nstatus: draft\n";
+    expect(removeField(fm, "author")).toBe("title: T\nstatus: draft\n");
+  });
+
+  it("removes the first field without disturbing the rest", () => {
+    const fm = "author: Ada\ntitle: T\n";
+    expect(removeField(fm, "author")).toBe("title: T\n");
+  });
+
+  it("removes a trailing field with no terminating newline", () => {
+    // The regex's `(?:\r?\n|$)` end-anchor must also match end-of-string so the
+    // last line goes even without a trailing newline.
+    const fm = "title: T\nauthor: Ada";
+    expect(removeField(fm, "author")).toBe("title: T\n");
+  });
+
+  it("is a no-op when the field is absent", () => {
+    const fm = "title: T\nauthor: Ada\n";
+    expect(removeField(fm, "missing")).toBe(fm);
+  });
+
+  it("removes exactly the named literal field, escaping regex metacharacters", () => {
+    // "a.b" must match the literal `a.b:` line, never the sibling `axb:` line.
+    const fm = "a.b: gone\naxb: keep\n";
+    expect(removeField(fm, "a.b")).toBe("axb: keep\n");
+  });
+
+  it("does not delete an arbitrary line for a metacharacter field name", () => {
+    // A `.*` field name must look for a literal `.*:` key, which is absent — so
+    // an unescaped pattern (which would match any line) is the bug guarded here.
+    const fm = "title: T\n";
+    expect(removeField(fm, ".*")).toBe(fm);
   });
 });

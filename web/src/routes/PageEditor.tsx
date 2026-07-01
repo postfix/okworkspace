@@ -13,7 +13,7 @@ import {
   savePage,
   type Page,
 } from "../api/client";
-import { readField, setField } from "../lib/frontmatter";
+import { okfTitle, readField, removeField, setField } from "../lib/frontmatter";
 import { readTags, setTags, unionTags } from "../lib/tag-frontmatter";
 import { reconcileFrontmatterTags } from "../lib/tag-reconcile";
 import { getConnId } from "../lib/connId";
@@ -27,7 +27,9 @@ import LivePreviewEditor from "../components/LivePreviewEditor";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
-import TagBadgeBar from "../components/TagBadgeBar";
+import Breadcrumb from "../components/Breadcrumb";
+import PropertiesPanel from "../components/PropertiesPanel";
+import DocStatusBar from "../components/DocStatusBar";
 import TagSuggest from "../components/TagSuggest";
 import DescriptionGenerate from "../components/DescriptionGenerate";
 import { useEditorMode } from "../stores/editorMode";
@@ -508,6 +510,19 @@ export default function PageEditor() {
     scheduleAutosave();
   }
 
+  // onRemoveField deletes a scalar Property line (Properties panel remove), applied
+  // against the LATEST frontmatter ref so a concurrent autosave never clobbers it —
+  // the same no-stale-closure contract as onFieldChange / onRemoveTag.
+  function onRemoveField(field: string) {
+    setFrontmatter((fm) => {
+      const next = removeField(fm, field);
+      frontmatterRef.current = next;
+      return next;
+    });
+    setSaveState("idle");
+    scheduleAutosave();
+  }
+
   function onSaveClick() {
     if (draftTimer.current) window.clearTimeout(draftTimer.current);
     void runSaver(true);
@@ -675,6 +690,10 @@ export default function PageEditor() {
           single-toggle, an explicit Save, and the switch-to-reading-view book.
           Pinned to the top-right of the editor, above everything else. */}
       <div className="pageeditor-topbar">
+        {/* Presence sits left (margin-right:auto in CSS); Link-to-page joins the
+            chrome controls — both moved OUT of the reading column (Obsidian parity). */}
+        <PresenceIndicator path={path} conn={connId.current} />
+        <LinkPicker fromPath={path} onInsert={insertLink} />
         <AutosaveStatus state={saveState} />
         <button
           type="button"
@@ -779,32 +798,25 @@ export default function PageEditor() {
       )}
 
       <div className="pageeditor-frontmatter">
-        <div className="field">
-          <label className="field-label" htmlFor="fm-title">
-            Title
-          </label>
-          <input
-            id="fm-title"
-            className="input"
-            type="text"
-            value={readField(frontmatter, "title")}
-            onChange={(e) => onFieldChange("title", e.target.value)}
-          />
-        </div>
-        {/* ED-01a — the manual Description input is removed; the `description`
-            frontmatter key is preserved (okf.Repair only ADDS a missing key, never
-            blanks an existing one). The agent generator below is the only editor
-            surface for the description now. */}
-        {/* ED-02c — read-only effective-tag bar. Inline tags are authored as `#tag`
-            in the body (materialized on save by runSaver's reconcile); only non-inline
-            (LLM/imported) tags get an ✕, which does a byte-stable setTags removal off
-            the LATEST frontmatter (frontmatterRef, never a stale render closure). We
-            scheduleAutosave so the removal actually PERSISTS — ED-02c says non-inline
-            tags "remain removable", which a removal that vanished on navigate-away would
-            not honour (the old chip field relied on an accompanying edit to save). */}
-        <TagBadgeBar
+        {/* Document-style header: folder breadcrumb + an inline heading-styled title
+            input (no labeled form box), then the Obsidian-style Properties panel. */}
+        <Breadcrumb path={path} title={okfTitle(frontmatter, path)} />
+        <input
+          className="doc-title-input"
+          type="text"
+          aria-label="Title"
+          placeholder="Untitled"
+          value={readField(frontmatter, "title")}
+          onChange={(e) => onFieldChange("title", e.target.value)}
+        />
+        {/* Properties: tags (chips + compact ✨ suggest), description (value +
+            compact ✨ generate), and arbitrary scalar keys — REPLACES the three
+            full-width action rows that used to shove the body down the page. The
+            LLM verbs are now inline row affordances, not content-column rows. */}
+        <PropertiesPanel
           body={body}
           frontmatter={frontmatter}
+          readOnly={false}
           onRemoveTag={(tag) => {
             const cur = frontmatterRef.current;
             const next = setTags(
@@ -816,39 +828,27 @@ export default function PageEditor() {
             setSaveState("idle");
             scheduleAutosave();
           }}
-        />
-        {/* ED-03a — per-page LLM tag suggestions. Editor-gated by TagSuggest itself.
-            It suggests against the LIVE body+frontmatter (union de-dup), applies via
-            the server apply-tags path, then hands the approved set to
-            reconcileAppliedTags so the apply is autosave-safe (no 409, no revert, no
-            loss of an unsaved title). Approved tags land ONLY in frontmatter. */}
-        <TagSuggest
-          pagePath={path}
-          body={body}
-          frontmatter={frontmatter}
-          onApplied={(tags) => void reconcileAppliedTags(tags)}
-        />
-        {/* ED-01b — per-page LLM description. Editor-gated by DescriptionGenerate
-            itself. Generate (read-only) → review/edit/regenerate → approve via the
-            server apply-description path, then hand the approved text to
-            reconcileAppliedDescription so the apply is autosave-safe (merge-first; no
-            409, no revert). The description lands ONLY in frontmatter. Never auto-runs. */}
-        <DescriptionGenerate
-          pagePath={path}
-          onApplied={(text) => void reconcileAppliedDescription(text)}
+          onSetField={onFieldChange}
+          onRemoveField={onRemoveField}
+          tagSuggestSlot={
+            <TagSuggest
+              pagePath={path}
+              body={body}
+              frontmatter={frontmatter}
+              onApplied={(tags) => void reconcileAppliedTags(tags)}
+              compact
+            />
+          }
+          descriptionGenerateSlot={
+            <DescriptionGenerate
+              pagePath={path}
+              onApplied={(text) => void reconcileAppliedDescription(text)}
+              compact
+            />
+          }
         />
       </div>
 
-      <div className="pageeditor-toolbar">
-        <LinkPicker fromPath={path} onInsert={insertLink} />
-        {/* Quiet "who else is editing" line (COLL-01), left of the flex spacer so
-            the Live/Source mode segment stays right-aligned. It is editor-only
-            (PageEditor IS Edit mode — readers never reach it) and reuses the
-            Plan-02 per-tab connection id so your own presence is excluded and two
-            tabs are distinguishable. The component owns its own subscribe/
-            unsubscribe lifecycle; PageEditor only mounts it. */}
-        <PresenceIndicator path={path} conn={connId.current} />
-      </div>
 
       {readOnly && (
         <p className="pageeditor-readonly-hint" aria-hidden="true">
@@ -870,6 +870,7 @@ export default function PageEditor() {
           readOnly={readOnly}
         />
       </div>
+      <DocStatusBar path={path} body={body} />
 
       <Dialog
         open={attachmentsOpen}

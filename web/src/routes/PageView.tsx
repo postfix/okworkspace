@@ -10,13 +10,15 @@ import { okfTitle } from "../lib/frontmatter";
 import { useRecent } from "../stores/recent";
 import LivePreviewEditor from "../components/LivePreviewEditor";
 import BacklinksPanel from "../components/BacklinksPanel";
-import LocalGraphPanel from "../components/graph/LocalGraphPanel";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PageActionMenu from "../components/PageActionMenu";
 import RenameModal from "../components/RenameModal";
 import MoveDialog from "../components/MoveDialog";
 import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
 import HistoryPanel from "../components/HistoryPanel";
+import Breadcrumb from "../components/Breadcrumb";
+import PropertiesPanel from "../components/PropertiesPanel";
+import DocStatusBar from "../components/DocStatusBar";
 import "./PageView.css";
 
 // PageView is Read mode (/app/page/:path). It renders the committed Markdown on the
@@ -85,7 +87,10 @@ export default function PageView() {
   return (
     <article className="pageview">
       <header className="pageview-header">
-        <h1 className="pageview-title">{title}</h1>
+        <div className="pageview-heading">
+          <Breadcrumb path={path} title={title} />
+          <h1 className="pageview-title">{title}</h1>
+        </div>
         <div className="pageview-actions">
           {canEdit && (
             <button
@@ -119,6 +124,12 @@ export default function PageView() {
           />
         </div>
       </header>
+      {/* Read-only Properties (tags + description + scalar keys) under the title,
+          mirroring the editor's metadata block — Obsidian parity. Renders nothing
+          when the page has no displayable properties. */}
+      {data && (
+        <PropertiesPanel body={body} frontmatter={data.frontmatter} readOnly />
+      )}
       {body.trim() === "" ? (
         <p className="pageview-empty">This page is empty. Select Edit to start writing.</p>
       ) : (
@@ -130,13 +141,8 @@ export default function PageView() {
           readOnly
         />
       )}
+      <DocStatusBar path={path} body={body} />
       <BacklinksPanel path={path} />
-      {/* The right-side per-page local graph dock (GRAPH-03). Additive: it honors
-          its own persisted collapse state (collapsed by default) so the CM6 read
-          surface above is untouched and a reader who never opens it pays no canvas
-          cost. Only mounts on the success branch (the 404/error early-returns
-          above never reach here). */}
-      <LocalGraphPanel path={path} />
       <Dialog
         open={attachmentsOpen}
         title="Attachments"

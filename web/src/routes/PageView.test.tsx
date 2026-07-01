@@ -62,8 +62,11 @@ describe("PageView", () => {
       revision: "abc123",
     });
     renderView("runbooks/deploy.md");
-    // The page title (from frontmatter) appears in the header.
-    expect(await screen.findByText("Deploy Staging")).toBeInTheDocument();
+    // The page title (from frontmatter) appears as the page heading. (The folder
+    // breadcrumb also echoes the title as its current segment, so scope to the h1.)
+    expect(
+      await screen.findByRole("heading", { name: "Deploy Staging", level: 1 }),
+    ).toBeInTheDocument();
     // The body renders on the read-only live-preview surface: the heading line and
     // the bold text are present in the CM document.
     await waitFor(() =>

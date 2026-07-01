@@ -1,6 +1,6 @@
 .pageview {
-  /* Fill the available main-pane width (no centered cap) so the read view uses
-     all the usable space, like the editor. */
+  /* Full-width: fill the main pane and resize with the window (no centered cap),
+     matching the editor. */
   width: 100%;
 }
 
@@ -9,7 +9,14 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-md);
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-xs);
+}
+
+/* Left side of the header: breadcrumb stacked above the title. */
+.pageview-heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .pageview-title {
@@ -17,6 +24,7 @@
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-display);
   margin: 0;
+  word-break: break-word;
 }
 
 .pageview-actions {

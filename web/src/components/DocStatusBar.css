@@ -1,0 +1,24 @@
+/* DocStatusBar — the quiet Obsidian-style footer strip (backlinks · words ·
+   characters). Right-aligned, muted, label-sized; sits under the reading column.
+   Token-only. */
+.docstatusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.docstatusbar-item {
+  white-space: nowrap;
+}
+
+.docstatusbar-sep {
+  color: var(--color-faint);
+  user-select: none;
+}

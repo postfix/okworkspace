@@ -32,9 +32,13 @@ import "./DescriptionGenerate.css";
 export default function DescriptionGenerate({
   pagePath,
   onApplied,
+  compact = false,
 }: {
   pagePath: string;
   onApplied?: (text: string) => void;
+  // compact renders an icon-only ghost button (for the Properties description row);
+  // the accessible name stays "Generate description" so the tests contract holds.
+  compact?: boolean;
 }) {
   // The role lives in the cached ["me"] session query (App.tsx seeds it). We read it
   // here for the editor gate; the apply endpoint is independently editor+CSRF gated
@@ -108,19 +112,25 @@ export default function DescriptionGenerate({
     <div className="descgen">
       <button
         type="button"
-        className="btn btn-ghost descgen-trigger"
+        className={
+          compact
+            ? "btn btn-ghost icon-btn descgen-trigger"
+            : "btn btn-ghost descgen-trigger"
+        }
         onClick={() => generateMutation.mutate()}
         disabled={generateMutation.isPending}
+        aria-label="Generate description"
+        title="Generate description"
       >
         {generateMutation.isPending ? (
           <>
             <Loader2 size={16} className="spinner" aria-hidden="true" />
-            Generating description…
+            {!compact && "Generating description…"}
           </>
         ) : (
           <>
             <Sparkles size={16} aria-hidden="true" />
-            Generate description
+            {!compact && "Generate description"}
           </>
         )}
       </button>

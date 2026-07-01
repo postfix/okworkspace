@@ -42,11 +42,15 @@ export default function TagSuggest({
   body,
   frontmatter,
   onApplied,
+  compact = false,
 }: {
   pagePath: string;
   body: string;
   frontmatter: string;
   onApplied?: (appliedTags: string[]) => void;
+  // compact renders an icon-only ghost button (for the Properties tags row);
+  // the accessible name stays "Suggest tags" so the trust/tests contract holds.
+  compact?: boolean;
 }) {
   // The role lives in the cached ["me"] session query (App.tsx seeds it). We read
   // it here for the editor gate; the apply endpoint is independently editor+CSRF
@@ -167,19 +171,25 @@ export default function TagSuggest({
     <div className="tagsuggest">
       <button
         type="button"
-        className="btn btn-ghost tagsuggest-trigger"
+        className={
+          compact
+            ? "btn btn-ghost icon-btn tagsuggest-trigger"
+            : "btn btn-ghost tagsuggest-trigger"
+        }
         onClick={triggerSuggest}
         disabled={suggestMutation.isPending}
+        aria-label="Suggest tags"
+        title="Suggest tags"
       >
         {suggestMutation.isPending ? (
           <>
             <Loader2 size={16} className="spinner" aria-hidden="true" />
-            Suggesting tags…
+            {!compact && "Suggesting tags…"}
           </>
         ) : (
           <>
             <Tags size={16} aria-hidden="true" />
-            Suggest tags
+            {!compact && "Suggest tags"}
           </>
         )}
       </button>

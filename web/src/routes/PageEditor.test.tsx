@@ -505,7 +505,7 @@ describe("PageEditor", () => {
   // PageEditor.reconcileAppliedTags makes the apply autosave-safe. These three tests
   // are the criterion-5 hard bar: apply → tag in frontmatter; apply → keep typing →
   // no 409 / no revert; an unsaved title is NOT lost by the reconcile.
-  it("approving suggested tags lands the tag in frontmatter and renders it in TagBadgeBar (non-inline → removable)", async () => {
+  it("approving suggested tags lands the tag in frontmatter and renders it in PropertiesPanel (non-inline → removable)", async () => {
     vi.mocked(client.getPage)
       .mockResolvedValueOnce({
         frontmatter: "type: Page\ntitle: Notes\n",
@@ -533,7 +533,7 @@ describe("PageEditor", () => {
     fireEvent.click(await screen.findByRole("button", { name: /apply tags/i }));
 
     // After apply→reconcile the tag is in local frontmatter and rendered by
-    // TagBadgeBar as a NON-INLINE (LLM) tag → it carries the Remove ✕ (it never
+    // PropertiesPanel as a NON-INLINE (LLM) tag → it carries the Remove ✕ (it never
     // entered the body).
     await waitFor(() =>
       expect(

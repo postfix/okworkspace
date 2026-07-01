@@ -1,0 +1,38 @@
+/* Breadcrumb — the quiet folder trail above the title (Obsidian parity). Muted,
+   label-sized, with clickable ancestor-folder crumbs and a non-interactive current
+   segment. Token-only. */
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-xs);
+  min-height: var(--font-size-heading);
+}
+
+.breadcrumb-crumb {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.breadcrumb-crumb:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  color: var(--color-faint);
+  user-select: none;
+}
+
+.breadcrumb-current {
+  color: var(--color-text-2);
+}

@@ -44,6 +44,39 @@ export function setField(frontmatter: string, field: string, value: string): str
   return `${frontmatter}${sep}${line}\n`;
 }
 
+// listScalarFields returns every top-level INLINE-scalar frontmatter key/value in
+// document order (a key whose value sits on the same line, non-empty). Block/seq
+// keys (e.g. a multi-line `tags:` list) and empty keys are skipped — they have no
+// same-line scalar and are handled elsewhere (tags) or round-trip on the server.
+// This backs the Properties panel's "arbitrary key" rows; the panel filters out
+// title/tags/description, which have dedicated rows.
+export function listScalarFields(
+  frontmatter: string,
+): { key: string; value: string }[] {
+  const out: { key: string; value: string }[] = [];
+  const seen = new Set<string>();
+  for (const line of frontmatter.split("\n")) {
+    // Top-level only (no leading whitespace); key is a plain YAML-ish identifier.
+    const m = line.match(/^([A-Za-z0-9][A-Za-z0-9 _-]*?):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1];
+    const value = stripQuotes(m[2].trim());
+    if (value === "") continue; // block/seq/empty → not an inline scalar
+    if (seen.has(key)) continue; // first occurrence wins (mirrors readField)
+    seen.add(key);
+    out.push({ key, value });
+  }
+  return out;
+}
+
+// removeField deletes a top-level scalar field's whole line (and its trailing
+// newline) from a raw frontmatter block, leaving the rest byte-stable. Used by the
+// Properties panel's per-row remove. No-op when the field is absent.
+export function removeField(frontmatter: string, field: string): string {
+  const re = new RegExp(`^${escapeRegExp(field)}:\\s*.*(?:\\r?\\n|$)`, "m");
+  return frontmatter.replace(re, "");
+}
+
 function stripQuotes(s: string): string {
   if (
     (s.startsWith('"') && s.endsWith('"')) ||

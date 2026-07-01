@@ -1,12 +1,12 @@
 .pageeditor {
-  /* The editor fills ALL available main-pane space — full width (no cap) AND
-     full height (the surface grows to fill), reflowing with the window. */
+  /* Full-width: fill the main pane and resize with the window (no centered cap).
+     Header, Properties, body, and status bar share the pane's left edge. */
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
 
 /* Top-right corner controls row (save state + Live/Source toggle + Save +
@@ -29,30 +29,43 @@
 }
 
 .pageeditor-surface {
-  /* Grow to fill the leftover vertical space so the editor is full-height. */
+  /* Borderless, seamless with the canvas — the editor reads as a document, not a
+     boxed form field (Obsidian parity). Grows to fill the leftover height. */
   flex: 1 1 auto;
   min-height: var(--editor-min-height);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
 }
 
 /* CodeMirror fills the (now-growing) surface so the whole box is the editor. */
 .pageeditor-surface .cm-editor {
   height: 100%;
 }
-
-/* Subtle focus cue: the surface border tints accent while editing (replaces the
-   old heavy accent outline ring around the editor). */
-.pageeditor-surface:focus-within {
-  border-color: var(--color-accent);
+/* Presence sits at the far left of the top controls row; everything else stays
+   right-aligned (the row is justify-content:flex-end). */
+.pageeditor-topbar > .presence-indicator:first-child {
+  margin-right: auto;
 }
 
-.pageeditor-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
+/* Inline heading-style title — an H1 that happens to be editable. No box, no
+   label; it aligns flush with the body's left edge (Obsidian parity). */
+.doc-title-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-display);
+}
+
+.doc-title-input::placeholder {
+  color: var(--color-faint);
+}
+
+.doc-title-input:focus-visible {
+  outline: none;
 }
 
 /* The active Live/Source toggle reads as pressed: accent icon tint. */
