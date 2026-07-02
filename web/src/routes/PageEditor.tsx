@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Code, Eye, Paperclip, Pencil, Save } from "lucide-react";
+import { Code, Eye, FileText, Paperclip, Pencil, Save } from "lucide-react";
+import type { EditorView } from "@codemirror/view";
 
 import {
   acquireLock,
@@ -9,20 +10,24 @@ import {
   deletePage,
   forceLock,
   getPage,
+  listTemplates,
   releaseLock,
   savePage,
   type Page,
+  type TemplateInfo,
 } from "../api/client";
 import { okfTitle, readField, removeField, setField } from "../lib/frontmatter";
 import { readTags, setTags, unionTags } from "../lib/tag-frontmatter";
 import { reconcileFrontmatterTags } from "../lib/tag-reconcile";
 import { getConnId } from "../lib/connId";
+import { substitutePlaceholders } from "../lib/templates";
 import AutosaveStatus, { type SaveState } from "../components/AutosaveStatus";
 import DiffReviewDialog, {
   type ConflictBusy,
 } from "../components/DiffReviewDialog";
 import Dialog from "../components/Dialog";
 import LinkPicker from "../components/LinkPicker";
+import TemplatePicker from "../components/TemplatePicker";
 import LivePreviewEditor from "../components/LivePreviewEditor";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PresenceIndicator from "../components/PresenceIndicator";
@@ -69,6 +74,15 @@ export default function PageEditor() {
   const path = params["*"] ?? "";
   // The corner paperclip opens the attachments in a centered modal.
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  // Template picker open state (EP-03): an "Insert template" affordance that
+  // lists Templates/*.md and inserts the chosen body at the cursor.
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  // editorSurfaceRef points at the .pageeditor-surface wrapper div; the CM6
+  // EditorView is stamped on its child .cm-editor element as `cmView.view`
+  // (LivePreviewEditor.tsx:205). The insert-at-cursor path resolves it from here
+  // so no new prop or forwardRef is needed on LivePreviewEditor (zero contract
+  // change to the existing editor surface).
+  const editorSurfaceRef = useRef<HTMLDivElement>(null);
 
   // Live/Source editor mode — a persisted per-device UI preference (default Live).
   // The CM6 surface reads `mode`; the toolbar toggle and the Cmd/Ctrl-E shortcut
@@ -500,6 +514,42 @@ export default function PageEditor() {
     scheduleAutosave();
   }
 
+  // insertTemplateAtCursor (EP-03) fetches a template's body via getPage,
+  // substitutes {{title}}/{{date}}/{{time}} client-side (same substitution as
+  // the create-from-template flow), and inserts the substituted body at the
+  // cursor via a normal CM6 transaction (replaceSelection). This is a USER
+  // EDIT — it fires onChange verbatim on docChanged (the updateListener ships
+  // doc.toString()), so the autosave machinery picks it up exactly like a
+  // keystroke. The prop-driven reset annotation is NOT used (an insert is a
+  // user edit that must be saved, not a programmatic reset). The template body
+  // read via getPage (the existing safe-path resolver endpoint) — no path
+  // escape. replaceSelection replaces the current selection or inserts at the
+  // cursor if no selection, so inserting into a non-empty document does not
+  // corrupt surrounding text.
+  async function insertTemplateAtCursor(tpl: TemplateInfo) {
+    setTemplatePickerOpen(false);
+    try {
+      const page = await getPage(tpl.path);
+      const title = readField(frontmatterRef.current, "title") || "Untitled";
+      const substituted = substitutePlaceholders(page.body, {
+        title,
+        now: new Date(),
+      });
+      const el = editorSurfaceRef.current?.querySelector(".cm-editor");
+      const view = (el as { cmView?: { view?: EditorView } } | null)?.cmView
+        ?.view;
+      if (!view) return;
+      view.dispatch(view.state.replaceSelection(substituted));
+      // onChange fires via the updateListener on docChanged, syncing bodyRef +
+      // scheduling autosave. No manual setBody needed — doing so would race
+      // with the CM6-driven onChange and could clobber the editor.
+    } catch {
+      setSaveError(
+        "We couldn't insert that template just now. Check your connection and try again.",
+      );
+    }
+  }
+
   function onFieldChange(field: string, value: string) {
     setFrontmatter((fm) => {
       const next = setField(fm, field, value);
@@ -694,6 +744,12 @@ export default function PageEditor() {
             chrome controls — both moved OUT of the reading column (Obsidian parity). */}
         <PresenceIndicator path={path} conn={connId.current} />
         <LinkPicker fromPath={path} onInsert={insertLink} />
+        <TemplatePicker
+          open={templatePickerOpen}
+          onOpenChange={setTemplatePickerOpen}
+          disabled={readOnly}
+          onSelect={(tpl) => void insertTemplateAtCursor(tpl)}
+        />
         <AutosaveStatus state={saveState} />
         <button
           type="button"
@@ -858,6 +914,7 @@ export default function PageEditor() {
       )}
 
       <div
+        ref={editorSurfaceRef}
         className={
           readOnly ? "pageeditor-surface pageeditor-surface-readonly" : "pageeditor-surface"
         }
