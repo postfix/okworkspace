@@ -10,11 +10,24 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 ## Current State
 
-**Shipped: v1.4 Editor Enhancements & Authoring Polish (2026-07-01).** Phases 21–27 — inline `#tag` badges (frontmatter-canonical materialization), LLM tag suggestions, LLM-generated description, code syntax highlighting, mermaid diagrams, page templates. Audited + security-reviewed (SHIP).
+**Shipped: v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure (2026-07-01).** Phases 28–30
+— server-authoritative tag body-rewrite (`okf.RewriteHashtags`, Lezer-parity-pinned), reading-shell
+fold-in, and the retroactive v1.3 Tag Management closure (verified + security-reviewed). All post-close
+follow-ups (F-01/F-02/govulncheck/P26-UAT) closed; audit COMPLETE, security SHIP, debt=0.
 
-**Current milestone: v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure** — an assess-and-fix milestone. (1) Fix a confirmed cross-milestone regression: v1.4's inline-`#tag` materialization silently broke v1.3's workspace tag rename/merge/delete (they rewrite frontmatter only, so body `#tags` re-materialize the old tag on the next client save) — fixed server-authoritatively via a new code-region-aware `okf.RewriteHashtags` body-rewrite primitive, pinned to the Lezer grammar by a shared parity test. (2) Fold in the large uncommitted Obsidian-parity reading-shell refactor (Properties panel + Breadcrumb + DocStatusBar; inline nav search; per-page local-graph removed). (3) Formally close v1.3 Tag Management, which shipped as working code (commit `9de5077`) *outside the GSD workflow* — no independent qa verification, no security review, no milestone audit.
+**Current milestone: v1.6 Tag System Completion & Authoring Polish** — a feature milestone (minor),
+Phases 31–37, two tracks. **T — Tag System Completion (31–35):** the v1.3-original deferred tag set on
+the hardened v1.5 subsystem — bulk multi-tag ops, tag color/description metadata (new on-disk store,
+files-as-truth), tag hierarchy (display-only), tag-op undo, usage analytics. **E — Authoring Polish
+(36–37):** `#tag` badge on the react-markdown surfaces, copy-code button, page description in search
+cards, insert-at-cursor template snippets.
 
-**Correction to the record:** v1.3 Tag Management UX was previously described here as "deferred / not built." It was in fact **built and committed** (`9de5077`, 2026-06-28) — backend endpoints + admin UI — but never GSD-verified. v1.5 closes that gap.
+**Next milestone: v1.7 Rich-Block Editor (TipTap).** A TipTap (ProseMirror) WYSIWYG editor as an
+**opt-in** mode beside CM6, behind a two-tier Markdown-fidelity gate (semantic-lossless supported
+syntax + byte-for-byte verbatim preservation of unmodeled syntax), CM6 remaining the byte-exact
+default. Split out of v1.6 by an independent roadmap red-team (the combined 11-phase milestone was the
+largest ever, and TipTap-for-shared-content needs an unrushed fidelity decision). Requirements + the
+red-team's TipTap findings are locked in `REQUIREMENTS.md` §R so v1.7 starts warm.
 
 ## Requirements
 
@@ -43,23 +56,23 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 - ✓ **Graph schema extension** — v1.2 — extended backend GraphNode with aliases, tags, exists, and attachment type; activated 3 inert Phase 17 filter toggles
 - ✓ **Tag Management UX** — v1.3 (built `9de5077`; regression-fixed + verified + security-reviewed in v1.5) — admin-only workspace-wide tag rename / merge / delete with preview→approve; admin UI; derived-graph consistency
 - ✓ **Editor enhancements & authoring polish** — v1.4 — inline `#tag` badges (frontmatter-canonical), LLM tag suggestions, LLM-generated description, code syntax highlighting, mermaid diagrams, page templates
+- ✓ **Tag regression fix + v1.3 closure** — v1.5 — server-authoritative body-`#tag` rewrite (`okf.RewriteHashtags`, offset-parity-pinned to the Lezer grammar, CI-enforced) so rename/merge/delete are durable against inline-`#tag` materialization; reading-shell fold-in (Properties panel + Breadcrumb + DocStatusBar; inline nav search; per-page local graph removed); v1.3 Tag Management verified + security-reviewed retroactively
 
 ### Active
 
-<!-- v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure (detailed REQ-IDs in REQUIREMENTS.md) -->
+<!-- v1.6 Tag System Completion & Authoring Polish (detailed REQ-IDs in REQUIREMENTS.md) -->
 
-- **RS-01…04: Reading-shell refactor fold-in** — commit the Obsidian-parity reading shell (Properties panel + Breadcrumb + DocStatusBar; inline nav search; local-graph removed) as a verified baseline; close the search-redesign test gap; document the intentional scope reductions; smoke the CM6 selection/coordinate change.
-- **TR-01…05: Tag-regression fix (server-authoritative)** — a code-region-aware `okf.RewriteHashtags` body-rewrite primitive (modeled on `okf.RewriteLinks`), pinned to the Lezer grammar by a shared parity test; rename/merge/delete rewrite body `#tags` + frontmatter in one byte-stable commit; body-inclusive affected-set enumeration; preview surfaces body scope.
-- **TC-01…03: v1.3 closure** — independent qa verification of the shipped tag-admin surface + the fix; security review of the tag-admin + body-rewrite surface (ASVS L1, block-on-high); reconcile planning docs to reality.
+- **TF-01…05: Tag System Completion** — bulk multi-tag ops (reuse the byte-stable batch path); tag color/description metadata in a NEW committed on-disk store (files-as-truth, rebuildable cache); tag hierarchy (cycle-safe, display-only); tag-op undo (inverse `ApplyTagsBatch`, 409-guarded, dedicated op-journal); tag usage analytics (over the existing `TagPageCounts`).
+- **EP-01…04: Authoring Polish** — `#tag` badge on the react-markdown surfaces (`MarkdownProse`; sanitized element, XSS-guard preserved); copy-code button on read-mode fenced code; insert-at-cursor template snippets (reuse `Templates/`); page description in search result cards.
 
 ### Deferred / Queued
 
-<!-- v1.5 Future items + v1.4-carried follow-ups (detailed in REQUIREMENTS.md) -->
+<!-- v1.7 TipTap + Future items (detailed in REQUIREMENTS.md) -->
 
-- **Per-page local graph** — removed in the v1.5 reading-shell refactor (global `/app/graph` retained); re-introduce if missed.
-- **In-place file-tree filter** — replaced by full-text nav search in v1.5; re-introduce if the tree-prune model proves better for quick nav.
-- **v1.4-carried follow-ups** — F-02 (global JSON body `MaxBytesReader` cap), F-01 (pin mermaid deps + `npm audit` in CI), 2 Phase-26 manual UAT items, `govulncheck` re-run when the Go 1.26 toolchain panic is fixed.
-- **v1.3-original deferred tag features** — bulk multi-tag ops, tag color/description metadata, tag hierarchy, dedicated undo, tag usage analytics.
+- **Rich-Block Editor (TipTap)** — the whole R track (RE-01…04), split to **v1.7** by the co-driver-accepted red-team pre-mortem; two-tier fidelity gate, opt-in beside CM6. Requirements + red-team findings locked in `REQUIREMENTS.md` §R.
+- **Hierarchy-aware tag behavior** — auto-apply parent tags, descendant-expanding search, hierarchy graph grouping (v1.6's TF-03 is display-only).
+- **Multi-level tag-op undo** — v1.6's TF-05 is last-op undo; a full undo stack is deferred.
+- **Per-page local graph** / **in-place file-tree filter** — v1.5 removals; re-introduce if missed.
 
 ### Out of Scope
 
@@ -115,6 +128,9 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 | v1.0: `react-force-graph-2d` (Canvas-only), lockfile guard that `three` is absent | One new frontend dep; keep the initial editor bundle lean (graph code-splits) | ✓ Good — three.js provably absent; graph in its own lazy chunk |
 | v1.5: in-place tree-filter removed; navrail search replaces the tree | One find surface; full-text > title-prefix for a growing wiki | Removed in the reading-shell fold-in; Future re-intro tracked (REQUIREMENTS.md "In-place file-tree filter") |
 | v1.5: per-page local graph removed; global `/app/graph` retained | Local neighborhood underused vs its route+handler+panel weight | `/graph/local` + `Neighborhood` + `LocalGraphPanel`/`DepthControl` removed end-to-end; Future re-intro tracked (REQUIREMENTS.md "Re-introduce a per-page local graph") |
+| v1.6: tag metadata/hierarchy live in a NEW committed on-disk store (files-as-truth), SQLite only a rebuildable cache | Tag color/description/parent are durable data; a cache-only store would violate files-as-truth (data must copy off the server) | Store shape (`.okf-workspace/tags.json` vs `Tags/*.md`) decided in Phase 32 discuss-phase; metadata is adjunct — tags fully usable with the store absent |
+| v1.6: TipTap (rich editor) split to v1.7 | Independent red-team: combined 11-phase v1.6 was the largest milestone ever; TipTap is a self-contained editor sub-project + its shared-content fidelity decision must not be rushed | Co-driver accepted; v1.6 = tag completion + authoring polish (7 phases); TipTap requirements + red-team findings preserved in REQUIREMENTS.md §R |
+| v1.7: TipTap coexists opt-in beside CM6 under a TWO-TIER Markdown-fidelity gate; CM6 stays the byte-exact default | CM6 holds byte-stability by construction (doc IS the Markdown); TipTap serializes a tree so it can't — Tier-1 semantic-lossless+idempotent for supported syntax, Tier-2 byte-for-byte verbatim for unmodeled (tables/math/HTML) | Locked decision for v1.7; the round-trip corpus is a GO/NO-GO spike gate — the gate is never degraded to force a ship |
 
 ## Evolution
 
@@ -134,4 +150,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-01 — v1.5 milestone (Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure) started; corrected the record that v1.3 Tag Management shipped (`9de5077`) rather than being deferred*
+*Last updated: 2026-07-02 — v1.6 milestone (Tag System Completion & Authoring Polish) started: requirements + roadmap authored, independent red-team folded, TipTap (rich editor) split to v1.7*

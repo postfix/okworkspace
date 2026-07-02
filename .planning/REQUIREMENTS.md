@@ -1,303 +1,414 @@
-# Milestone v1.5 Requirements — Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure
+---
+author: architect
+responsible: architect
+milestone: v1.6
+milestone_name: Tag System Completion & Authoring Polish
+status: approved
+last_updated: "2026-07-02"
+parent_artifacts:
+  - .planning/PROJECT.md
+  - .planning/MILESTONES.md
+  - .planning/codebase/MAP-tag-rewrite-subsystem.md
+  - .planning/codebase/MAP-cm-editor-subsystem.md
+---
+
+# Milestone v1.6 Requirements — Tag System Completion & Authoring Polish
 
 ## Overview
 
-An **assess-and-fix** milestone. It does three things:
+A **feature milestone** (minor) on two tracks:
 
-1. **Fixes a confirmed cross-milestone regression.** v1.4's inline-`#tag` materialization
-   (shipped 2026-07-01) silently broke the v1.3 workspace tag rename/merge/delete
-   operations (committed 2026-06-28): those operations rewrite the frontmatter `tags:`
-   only, but the client re-materializes body `#tags` into frontmatter on every save — so
-   a renamed/merged/deleted tag that still appears literally as `#tag` in a page body
-   **reappears on the next client save**, silently undoing the admin operation.
-2. **Folds in a large uncommitted reading-shell refactor** already present in the working
-   tree (Obsidian-parity Properties panel + Breadcrumb + DocStatusBar; inline nav search
-   replacing the ⌘K modal; local-graph feature removed). It is coherent and green
-   (`go test`, `tsc -b`, `vitest` all pass) but must be committed as a clean baseline,
-   have its test-coverage gaps closed, and its intentional scope reductions documented.
-3. **Formally closes v1.3 Tag Management**, which shipped as working code *outside the GSD
-   workflow* — no phase 19/20 dirs, **no independent qa verification, no security review,
-   no milestone audit**. This milestone backfills that closure so the shipped tag-admin
-   surface is verified, security-reviewed, and the planning docs reflect reality.
+1. **Tag System Completion (T).** Finish the v1.3-original deferred tag set now that the
+   tag subsystem is hardened (v1.5 shipped the server-authoritative body-rewrite +
+   byte-stable batch apply): bulk multi-tag operations, tag color/description metadata,
+   tag hierarchy, dedicated tag-op undo, and tag usage analytics.
+2. **Authoring Polish (E).** Four small, mostly-frontend authoring wins deferred from v1.4:
+   `#tag` badge rendering on the react-markdown surfaces, a copy-code button on read-mode
+   fenced code, insert-at-cursor template snippets inside the open editor, and page
+   description shown in search result cards.
 
-**Locked design decisions (from kickoff analysis + user ratification):**
-
-- **The regression fix is SERVER-AUTHORITATIVE.** A new `okf.RewriteHashtags` primitive,
-  modeled on the existing code-region-aware `okf.RewriteLinks` byte-scanner, rewrites body
-  `#tag` text (rename → retag; merge → retag to target; delete → remove) in the **same
-  byte-stable commit** as the frontmatter change. A client-only guard is insufficient
-  (it cannot fix never-reopened pages or pages edited by a stale/other client).
-- **The Go tag-boundary scanner MUST NOT drift from the TS Lezer grammar.** This partially
-  reopens v1.4's "no second server-side `#tag` parser" decision; the mitigation is a
-  **shared corpus parity test** pinning the Go scanner's tag-boundary behavior against the
-  canonical `web/src/lib/cm/hashtag.ts` grammar corpus (`hashtag.test.ts` positive/negative
-  sets). The Go scanner targets the same conservative subset the Lezer parser recognizes.
-- **Affected-set enumeration must not rely on the frontmatter-only `page_tags` cache alone.**
-  A page carrying `#tag` in its body but not (yet) in frontmatter is invisible to
-  `PagesByTag`; enumeration for a body rewrite must also cover body occurrences so no
-  affected page is missed.
-- **All existing tag-admin safety invariants are preserved:** admin-only RBAC + CSRF,
-  server-side tag re-validation, byte-stable single-writer batched commit (N pages → 1
-  commit), per-page stale-revision (409) handling, audit logging.
-- **The refactor is folded, not re-designed.** v1.5 commits and hardens the working-tree
-  refactor as-is; it does not re-litigate the Obsidian-parity direction, the local-graph
-  removal, or the search redesign. Gaps (missing tests, undocumented scope cuts) are closed.
-
-Phases continue from v1.4's last (Phase 27) → **v1.5 spans Phases 28–30** (3 phases).
+**Rich-Block Editor (TipTap) split to v1.7.** The co-driver originally chose three tracks
+including a TipTap WYSIWYG editor. The independent roadmap red-team (2026-07-02) returned
+**SPLIT-REQUIRED**: the combined 11-phase draft was the largest milestone in project history,
+and the TipTap track is a self-contained editor sub-project (net-new ProseMirror serialization
+layer, its own GO/NO-GO fidelity gate, an 893-line `PageEditor` host refactor) that is
+milestone-sized alone — and its opt-in-for-shared-content fidelity decision must not be rushed.
+The co-driver **accepted the split**: v1.6 ships T + E; TipTap becomes **v1.7**. The TipTap
+requirements + the red-team's TipTap-track findings are preserved below (§R — DEFERRED TO v1.7)
+so v1.7 starts warm.
 
 ---
 
-## RS — Reading-Shell Refactor Fold-In *(Phase 28)*
+## Locked design decisions (from kickoff analysis + co-driver ratification)
 
-### RS-01: Commit the reading-shell refactor as a clean, verified baseline
-**Requirement:** The uncommitted working-tree refactor is committed as a coherent baseline
-after its coherence is re-verified, so subsequent phases build on committed HEAD.
-**Acceptance criteria:**
-- [ ] Full suites green pre-commit: backend `go build ./... && go vet ./... && go test ./...`;
-      frontend (from `web/`) `tsc -b` clean, `vitest` all pass, `npm run build` clean with the
-      `assertLazyChunks` guard active.
-- [ ] The refactor is committed (feature-scoped message) — Properties panel + Breadcrumb +
-      DocStatusBar reading shell, inline nav search, and the end-to-end local-graph removal.
-- [ ] The canonical frontmatter-tag model is confirmed preserved: `PropertiesPanel` rebuilds
-      the exact `readTags(frontmatter) ∪ inlineTagsFromBody(body)` union with inline-origin
-      tags carrying no ✕ (body-managed) and only non-inline tags removable via byte-stable
-      `setTags` — no tag-model regression from the `TagBadgeBar` deletion.
+### Global
+- **Files-as-truth is inviolable (SPEC core value).** Every new durable datum (tag metadata,
+  hierarchy) MUST live on disk in a committed, human-readable, portable form; SQLite may only
+  hold a **rebuildable cache** of it. `internal/graph/store.go` states this invariant; a
+  feature that puts tag metadata *only* in SQLite is rejected. (`MAP-tag-rewrite-subsystem`,
+  `store.go:1-6`.)
+- **Reuse the shipped byte-stable seams; no second implementation.** Tag writes go through
+  `pages.ApplyTagsBatch` / `SetTagsFrontmatter` (N pages → 1 commit, TOCTOU-safe body channel);
+  the single-recognizer `okf.FindHashtags` stays the only server-side `#tag` parser. New tag
+  logic consumes these, never forks them.
+- **Admin-only + CSRF + server-side re-validation** on every new mutating tag-admin endpoint,
+  matching the v1.3/v1.5 surface (`router.go:302-343`).
 
-### RS-02: Close the search-redesign test-coverage gap
-**Requirement:** The inline nav-search surface introduced by the refactor is tested to at
-least the standard the deleted ⌘K `SearchPalette` was (196 lines of tests were dropped).
-**Acceptance criteria:**
-- [ ] `NavSearchResults` has a test file covering: Pages/Headings/Attachments grouping,
-      heading-result navigate-and-scroll (rehype-slug id) with query-clear, and the
-      loading / error / empty states.
-- [ ] `stores/navSearch.ts` has coverage for its query state transitions (set / clear;
-      tree-returns-when-empty).
-- [ ] ⌘K focuses the navrail search input (opens nav first) — asserted.
+### Rich-Block Editor (TipTap) — DEFERRED TO v1.7 (locked decisions preserved)
+- **Coexist, do not replace.** CM6 `LivePreviewEditor` stays THE default editor and the
+  **byte-exact** surface (its round-trip holds *by construction*: the CM6 doc IS the raw
+  Markdown; all rendering is view-layer decoration — `MAP-cm-editor-subsystem`). TipTap is an
+  **opt-in alternate mode** (per-user persisted preference, like the existing Live/Source
+  toggle), never forced, never the default.
+- **Two-tier fidelity contract (the acceptance gate).** TipTap serializes a ProseMirror tree
+  back to Markdown, so it **cannot** be byte-stable by construction the way CM6 is. The gate is:
+  - **Tier 1 — SUPPORTED syntax → semantic-lossless + idempotent.** `parse(serialize(md))`
+    is tree-identical to `parse(md)`, and serialization is idempotent (one normalization pass,
+    then byte-stable). Marker normalization (e.g. `*`→`-` bullets) is **allowed** but must be
+    stable and predictable.
+  - **Tier 2 — UNMODELED syntax → byte-for-byte.** Constructs the bounded slice does not model
+    (tables, `$…$`/`$$…$$` math, raw HTML) survive an edit session **byte-identical** via a
+    `PreservedBlock`/`PreservedInline` verbatim mechanism (`code:true` skips serializer
+    escaping). Corpus-pinned.
+  - **The corpus round-trip test is written FIRST as a GO/NO-GO spike gate.** If the supported
+    corpus cannot pass after honest configuration effort, the track STOPS and reports NO-GO —
+    it does not degrade the gate to ship anyway.
+- **Bounded slice.** v1.6 TipTap models: paragraphs, headings (1–6), bold/italic/strike/inline-code,
+  bullet/ordered/task lists, blockquote, fenced code, links, hard breaks — the StarterKit +
+  task-list set that `@tiptap/markdown` (TipTap 3.26+, MarkedJS-backed, CommonMark) round-trips.
+  Everything else is Tier-2 preserved verbatim. Richer *editing* of tables/math is explicitly
+  deferred.
+- **Single-recognizer discipline extends to TipTap.** The TipTap `#tag` node reuses the same
+  conceptual grammar as the Lezer/Go recognizers; it does not introduce a third divergent
+  `#tag` parser semantics. (A TipTap tokenizer is a distinct mechanism, but its recognized
+  `#tag` set must match the corpus — pinned by a shared fixture where feasible.)
+- **Stack:** `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`,
+  `@tiptap/extension-list`, `@tiptap/extensions`, `@tiptap/suggestion`, `@tiptap/markdown`
+  (all pinned exact, per the v1.4/v1.5 supply-chain discipline: no caret ranges, `npm audit`
+  in CI). TipTap + its deps MUST be **code-split** (lazy chunk) and proven out of the entry
+  bundle by the existing `assertLazyChunks` guard — CM6-only users never pay for TipTap.
 
-### RS-03: Document the intentional scope reductions
-**Requirement:** The two behavior removals the refactor makes are recorded so they read as
-decisions, not accidental loss.
-**Acceptance criteria:**
-- [ ] The **in-place file-tree filter** removal (search now replaces the tree with full-text
-      results rather than pruning it) is documented in `docs/` and PROJECT.md Key Decisions.
-- [ ] The **per-page local-graph** removal (global `/app/graph` retained; `/graph/local`
-      route + `Neighborhood` store method + `LocalGraphPanel`/`DepthControl` deleted) is
-      documented in `docs/` and PROJECT.md Key Decisions. Any deferred re-introduction is
-      captured as a Future item.
-- [ ] Stale references corrected: the `AppShell.tsx` "Search now lives in the top bar"
-      comment and the `PageEditor.test.tsx` test descriptions still naming "TagBadgeBar".
-
-### RS-04: Smoke the manual-QA-only editor coordinate change
-**Requirement:** The CM6 selection/coordinate change bundled in the refactor
-(`drawSelection()` + `EditorView.lineWrapping` + heading `margin`→`padding` in `theme.ts`,
-made so CM6's height oracle keeps `posAtCoords`/`coordsAtPos` accurate) is confirmed in a
-real browser, since it is not unit-testable.
-**Acceptance criteria:**
-- [ ] A manual smoke confirms: drag-select + copy across rendered constructs (bold, heading,
-      link, code) yields correct text, and caret placement around headings and on wrapped
-      lines lands where clicked (no selection drift). Result recorded in the phase SUMMARY /
-      VERIFICATION.
-
----
-
-## TR — Tag-Regression Fix (server-authoritative body rewrite) *(Phase 29)*
-
-### TR-01: `okf.RewriteHashtags` body-rewrite primitive
-**Requirement:** A new `okf` primitive rewrites `#tag` occurrences in a Markdown body —
-rename (`#old`→`#new`), merge (`#source`→`#target`), and delete (`#tag`→removed) — that is
-code-region-aware and byte-stable, modeled on the existing `okf.RewriteLinks`/`FindLinks`
-scanner but with the FULL set of Lezer structural exclusions.
-**Acceptance criteria:**
-- [ ] The scanner skips **every region the Lezer parser excludes**, not just the link-scanner's
-      set: fenced code (``` / ~~~), inline-code backtick runs, `\#`-escapes, **indented (4-space/
-      tab) code blocks**, **HTML blocks**, and ATX-heading leading `#`. (RewriteLinks/`FindLinks`
-      skips only fenced/inline/escape — indented-code + HTML-block skips must be ADDED, since the
-      corpus already asserts indented-code exclusion, `hashtag.test.ts` `\t#deploy → []`.)
-- [ ] Tag-boundary recognition reuses the exact `scanBody` predicates the grammar documents
-      (`hashtag.ts:49-68`): body alphabet `[A-Za-z0-9_/-]`, ≥1 non-digit, nested `#a/b`,
-      trailing-`/` trim, start-boundary rule; case-insensitive match, original-case elsewhere
-      untouched.
-- [ ] **Conservative (skip-when-uncertain):** if the scanner cannot confidently classify a `#`
-      run's region, it leaves it UNCHANGED — a miss leaves a stale tag (self-healing on the next
-      correct op), never a corrupted code region or malformed document.
-- [ ] Byte-stable on no-match: a body with no matching `#tag` is returned byte-identical.
-- [ ] **Delete whitespace rule (chosen, not deferred):** delete removes `#`+token and collapses
-      exactly one adjacent space **only when the token was space-bounded on both sides**; it never
-      touches whitespace otherwise and never merges across a newline. Corpus-tested against
-      `see #ops here`, `foo #ops.`, a `#ops`-only line.
-- [ ] **Merge adjacent-duplicate rule (chosen):** a merge yielding `#b #b` leaves both tokens
-      as-is (byte-safer than collapsing; the frontmatter reconcile dedupes the set anyway).
-      Corpus-tested.
-
-### TR-02: Lezer↔Go grammar parity test (offset-level, whole-document)
-**Requirement:** A shared corpus test proves the Go `RewriteHashtags` scanner recognizes the
-same `#tag` boundaries — at the byte-offset level — as the canonical TS Lezer grammar over WHOLE
-documents, preventing the second-parser drift the Phase-21 retirement warns against.
-**Acceptance criteria:**
-- [ ] Expected results are generated by running the **real Lezer parser** over whole-document
-      fixtures (not a hand-transcribed name list), so structural block contexts are covered:
-      indented code, HTML blocks, tables, lazy blockquote continuation, `>#tag` block-marker abut,
-      plus the full `hashtag.test.ts` positive/negative corpus (`#a/b`, `#_`/`#-`, `#abc`/`#fff`;
-      rejects `#1984`, `foo#bar`, `a/#frag`, `\#esc`, bare `#`, `# heading`, `#12/34`, fenced/inline).
-- [ ] The test asserts **byte offsets / spliced output**, not merely tag-set equality — proving
-      the Go scanner splices the correct span (trailing-`/` trim, nested `#a/b`, adjacent punctuation),
-      since `inlineTagsFromBody` returns names without offsets.
-- [ ] The corpus is single-sourced (a shared checked-in fixture consumed by both sides); a
-      Lezer-corpus addition the Go scanner would miss fails CI.
-
-### TR-03: Rename/merge/delete rewrite body `#tags` in the same commit
-**Requirement:** The three admin tag operations rewrite affected pages' body `#tags` via
-`RewriteHashtags` AND the frontmatter `tags:` in the one byte-stable batched commit — including
-pages whose only occurrence is in the body.
-**Acceptance criteria:**
-- [ ] **Strict target validation (BLOCKER fix):** `new_name` (rename) AND `target` (merge) MUST
-      pass a `ValidateInlineTag` validator — the inline-`#tag` grammar subset (no space, ≥1
-      non-digit, `[A-Za-z0-9_/-]`, explicit slash policy) — BEFORE any write, failing 400 at the
-      handler. The current `okf.ValidateTagCharset` (`^[a-zA-Z0-9_ -]+$`, permits space + all-digit,
-      forbids slash) is INCOMPATIBLE with body injection and must NOT be the sole gate; merge/delete
-      (which today call no validator, handlers_tags_admin.go) must validate too.
-- [ ] **Body-inclusive change predicate (BLOCKER fix):** the per-page inclusion test in
-      `buildTagApplyItems` becomes `(frontmatterChanged OR bodyWillChange)`, where `bodyWillChange`
-      is computed by running `RewriteHashtags` on the batch's **freshly-read** body (not the
-      handler's stale read). A body-only page (frontmatter unchanged) MUST still produce a write —
-      it is currently dropped at `changed=false`.
-- [ ] **Body channel through the batch:** `pages.TagApplyItem` / `ApplyTagsBatch` gain a body-rewrite
-      step keyed to the op, so `ApplyTagsBatch` no longer writes `doc.Body` verbatim for affected
-      pages. Per affected page: one write updates body (via `RewriteHashtags`) AND frontmatter (via
-      `SetTagsFrontmatter`), committed through the single-writer path (N pages → 1 commit).
-- [ ] Byte-stability preserved: only the tags-region frontmatter lines and the matched body `#tag`
-      bytes change; all other bytes identical.
-- [ ] **Regression closed (golden test):** rename `#ops`→`#devops` on a page with body `#ops`, then
-      run the client `reconcileFrontmatterTags` for the next save (unchanged body) → byte-stable and
-      `ops` does **not** reappear (frontmatter `[devops]`, body `#devops`). Equivalent golden tests
-      for merge and delete, AND for a body-only page (tag only in body, not frontmatter).
-- [ ] **Stale-open-client 409 (the path a client-only fix can't cover):** an integration test asserts
-      a save carrying the PRE-rewrite body at the pre-rewrite `base_revision` is rejected 409
-      (`ErrStaleRevision`, service.go:235) — never clobbering the server rewrite — pinning the
-      invariant the server-authoritative choice depends on.
-- [ ] Per-page stale-revision (409) doesn't sink the batch; audit-log entries recorded, reflecting
-      body+frontmatter scope.
-
-### TR-04: Body-inclusive affected-set enumeration (in the pages service, not the graph layer)
-**Requirement:** The affected-page set includes pages carrying the tag in their body, enumerated
-via a body read that respects the SEC-01 path resolver — placed in the pages service, NOT bolted
-into the lean graph query layer.
-**Acceptance criteria:**
-- [ ] Enumeration finds a page whose `#tag` appears in the body even if the tag is not in that
-      page's frontmatter (the `PagesByTag`/`page_tags` frontmatter-only blind spot is closed).
-- [ ] The body scan lives in the **pages service** (which already reads bodies through the SEC-01
-      resolver) — NOT in `internal/graph/query.go`, whose documented invariant is "reads NO bodies —
-      only path enumeration." It reuses the same resolver + skip rules as the graph rebuild (live
-      `.md` pages only; no trashed/non-`.md` reads; no path escape).
-- [ ] No affected page is missed and no unaffected page is rewritten (preview reflects the true set);
-      the preview→approve contract holds. A merge whose source is in page A's body and target in page
-      B's frontmatter resolves both correctly.
-- [ ] Bounded/efficient at ~5-user, modest-page-count scale: a one-shot per-operation scan, never a
-      per-keystroke scan.
-
-### TR-05: Preview shows body + frontmatter changes
-**Requirement:** The preview step of each operation reflects that bodies will change, so the
-admin approves the true diff.
-**Acceptance criteria:**
-- [ ] The rename/merge/delete preview response distinguishes frontmatter-only changes from pages
-      whose body `#tags` will also be rewritten (affected-page list conveys both).
-- [ ] The Tag Management admin UI (`TagManagement.tsx`) surfaces the body-rewrite scope in the
-      preview so the admin isn't surprised that prose changes.
-
-### TR-06: Remediate stale body `#tags` left by pre-fix operations
-**Requirement:** Renames/deletes run between v1.3 (2026-06-28) and this fix already left stale body
-`#tags` that the client re-unioned into frontmatter (half-reverted state). The milestone must not
-claim "closed for all pages" while that corruption persists.
-**Acceptance criteria:**
-- [ ] A bounded one-shot remediation scans the workspace for pages whose body `#tags` disagree with
-      their frontmatter in a way indicative of a pre-fix rename/delete (e.g. a body `#tag` whose
-      frontmatter counterpart is absent because a prior op removed it), and reports them; OR the admin
-      is given a way to re-run the affected prior operations through the now-correct path.
-- [ ] If full auto-remediation is judged too broad, this requirement is explicitly scoped to
-      **detect + report** (not auto-fix), and the ROADMAP over-claim ("for all pages including
-      never-reopened ones") is softened to "for all future operations" — the historical corruption is
-      surfaced, not silently left. Whichever path is chosen is stated in the phase plan.
+### Tag metadata + hierarchy (the tag-track design fork)
+- **Metadata/hierarchy need a NEW on-disk store — its exact shape is a design fork resolved in
+  the phase (discuss-phase + `anvil-design-options`), NOT pre-decided here.** The constraint the
+  store MUST satisfy: committed to git, human-readable, portable, and the source of truth for a
+  rebuildable SQLite cache (candidates: a workspace-level `.okf-workspace/tags.json` beside the
+  existing `manifest.json`, or a `Tags/` folder of per-tag `.md` files). Tags themselves remain
+  plain strings in page frontmatter + body `#tags`; metadata is *adjunct*, and a page's tags are
+  fully usable with the metadata store absent (graceful degradation).
+- **Phase weight (red-team direct-answer B):** this is NOT a thin cache layer. Tag metadata has NO
+  on-disk source today (`page_tags` migration 0009 rebuilds from *frontmatter*, not from any metadata
+  store; grep for `tag_meta`/`tagmeta`/`tags.json` = empty). Phase 32 must invent the disk format, a
+  cache table + **migration**, and the rebuild harness from scratch — plan it as a substantial phase.
 
 ---
 
-## TC — v1.3 Tag Management Closure *(Phase 30)*
+## T — Tag System Completion
 
-### TC-01: Independent qa verification of the shipped tag-management surface
-**Requirement:** The already-shipped v1.3 tag-admin surface (TM-01…TM-04) plus the v1.5
-regression fix are verified goal-backward by an independent pass against code reality, since
-v1.3 never received one.
+### TF-01: Bulk multi-tag operations
+**Requirement:** An admin can add and/or remove **multiple tags** across a **selected set of
+pages** in one preview→approve operation, reusing the byte-stable batch commit path.
 **Acceptance criteria:**
-- [ ] Every v1.3 requirement (TM-01 rename, TM-02 merge, TM-03 delete, TM-04 admin UI, TM-05
-      graph-store consistency) is verified against the current code + tests, with the full
-      suites re-run; each is marked passed or a gap is routed up.
-- [ ] The regression-fix requirements (TR-01…TR-06) are verified.
-- [ ] A `VERIFICATION` artifact records the verdict and evidence.
+- [ ] A new admin operation accepts a set of target pages (by explicit selection and/or by an
+      existing-tag filter) and a set of tag adds and/or removes; it previews the exact per-page
+      before/after tag set and the affected count before any write.
+- [ ] Approve applies via `pages.ApplyTagsBatch` (N pages → **1** commit), byte-stable
+      (only the frontmatter tags-region changes for a pure-frontmatter op; body `#tags` are
+      only rewritten when the op is a rename/merge/delete, not an add/remove-from-set), with
+      per-page stale-revision (409) that does not sink the batch, and audit-logged.
+- [ ] Admin-only RBAC + CSRF; each added tag is server-side re-validated (`ValidateTagCharset`,
+      and `ValidateInlineTag` if it will be spliced into a body — but add-to-frontmatter does not
+      splice bodies, so charset gate suffices).
+- [ ] Golden test: adding `[a, b]` and removing `[c]` across 3 selected pages yields the correct
+      per-page frontmatter in one commit; a stale page is reported `stale` and excluded, batch
+      completes.
 
-### TC-02: Security review of the tag-admin + body-rewrite surface
-**Requirement:** The tag-management surface — never security-reviewed in v1.3 — plus the new
-`RewriteHashtags` body-rewrite path get an independent security review (the milestone-close
-security gate; ASVS L1, block-on-high per project config).
+### TF-02: Tag color/description metadata
+**Requirement:** A tag can carry a **color** and a **short description**, stored on disk
+(files-as-truth), surfaced in the admin tag list and on rendered tag badges.
 **Acceptance criteria:**
-- [ ] The review covers: admin-only RBAC + CSRF on all tag-admin endpoints; server-side
-      **inline-tag** re-validation (`new_name`/`target` grammar-constrained — no space/metachar
-      token can be spliced into a body; the `ValidateTagCharset` vs inline-grammar gap is closed);
-      byte-stable frontmatter + body writes (no YAML/Markdown injection, no prose corruption, no
-      malformed document); the untrusted-input surface of `RewriteHashtags` (a crafted tag/body
-      cannot break out of a code region or inject Markdown); AND the **new body-inclusive
-      enumeration read path** (TR-04) — it must go through the SEC-01 resolver with the same skip
-      rules as the graph rebuild (no path traversal, no trashed/non-`.md` reads, no resolver bypass).
-- [ ] Verdict recorded (`SHIP` / findings by severity); block-on-high enforced.
+- [ ] Tag metadata persists in a committed, human-readable on-disk store (shape decided in the
+      phase per the locked design fork); a SQLite cache of it is fully rebuildable from that store
+      (delete-cache → rebuild reproduces identical metadata), matching the `page_tags` derived-cache
+      discipline.
+- [ ] Admin UI (`TagManagement.tsx`) can set/clear a tag's color + description via an admin-only,
+      CSRF-protected, server-validated endpoint (color constrained to a safe palette/hex subset;
+      description single-line length-capped, HTML-metachar-safe — no injection into badge DOM).
+- [ ] Rendered `#tag` badges (CM6 `HashtagWidget`) reflect the tag's color when set; the badge DOM
+      stays `createElement`+`textContent` only (color applied via class/style attribute, never
+      `innerHTML`) — the no-innerHTML XSS invariant holds.
+- [ ] Absent metadata degrades gracefully: a tag with no metadata renders exactly as today; the
+      feature is additive and never blocks tag use.
 
-### TC-03: Reconcile planning docs to reality
-**Requirement:** The planning docs that falsely describe v1.3 as "deferred / not built" are
-corrected, and v1.3's closure is recorded.
+### TF-03: Tag hierarchy (parent/child)
+**Requirement:** Tags can form a **single-level-or-nested parent/child hierarchy** for grouping
+and navigation, stored in the same on-disk metadata store, with cycle prevention.
 **Acceptance criteria:**
-- [ ] PROJECT.md, STATE.md, and MILESTONES.md reflect that v1.3 Tag Management **shipped**
-      (commit `9de5077`), was regression-fixed + verified + security-reviewed in v1.5, and is
-      no longer "deferred."
-- [ ] The v1.3 requirements/roadmap archive is annotated (or a v1.3 closure note added) so the
-      historical record is coherent — v1.3 built outside the workflow, closed retroactively in
-      v1.5.
+- [ ] A tag may declare a parent (or none); the store rejects cycles and self-parenting
+      server-side (a tag cannot be its own ancestor); orphan/root tags are valid.
+- [ ] The admin tag list can display tags grouped by hierarchy (parent → children), and hierarchy
+      edits go through the same admin-only + CSRF + validated endpoint as TF-02 metadata.
+- [ ] Hierarchy is **display/organization only** in v1.6 — it does NOT auto-apply parent tags to
+      pages, auto-expand tag search to descendants, or rewrite any page (that scope is deferred and
+      stated as such). No page bytes change from a hierarchy edit.
+- [ ] Rebuildable-from-disk parity holds (hierarchy is part of the TF-02 store).
+
+### TF-04: Tag usage analytics
+**Requirement:** An admin can see **per-tag usage** — page counts, most/least used, and orphan
+tags — building on the existing `TagPageCounts` query.
+**Acceptance criteria:**
+- [ ] An admin analytics view surfaces per-tag page counts (sortable), most-used and unused/orphan
+      tags, and total tag/tagged-page counts, sourced from `graph.Store.TagPageCounts`
+      (`query.go:449`) — no new heavy scan; reuses the existing `GROUP BY` query.
+- [ ] Counts reflect frontmatter tags (the `page_tags` derived cache); the view states this scope
+      (body-only `#tags` not yet in frontmatter are counted only after materialization, consistent
+      with the graph model) so the number is not misread.
+- [ ] Admin-only; read-only (analytics never mutates); efficient at ~5-user, modest-page scale.
+
+### TF-05: Tag-operation undo
+**Requirement:** An admin can **undo the last tag-admin operation** (rename/merge/delete/bulk),
+reverting affected pages to their pre-operation tag state.
+**Acceptance criteria:**
+- [ ] Each tag-admin operation records a **minimum invertible record** (op type, old/new names, the
+      affected pages, each page's pre-op frontmatter tags + body-affected flag — enough to reconstruct
+      the inverse), stored durably in a **dedicated op-journal**. NOTE (red-team MAJ-01): the audit log
+      (`audit.Event{…, Detail string}`) CANNOT carry this — it holds only free-text `Detail`. The
+      journal is either a new small table/store (default; keeps the phase dependent on TF-01 only) or
+      the TF-02 metadata store (adds a dependency on Phase 32) — decided in discuss-phase. "Reuse the
+      audit log" is dropped as an option.
+- [ ] "Undo last tag operation" replays the inverse through `ApplyTagsBatch` (byte-stable, one
+      commit), guarded by per-page stale-revision (409): a page edited since the original op is
+      reported and skipped from the undo (never clobbered), not silently overwritten.
+- [ ] Undo is admin-only + CSRF + audited; it is a **forward commit** (never a git history
+      rewrite — consistent with `pages.RestoreVersion`); undo of an undo is possible or explicitly
+      scoped out (stated in the phase).
+- [ ] Golden test: rename `#ops`→`#devops`, then undo → affected pages' frontmatter + body `#tags`
+      byte-match the pre-rename state (via the same body-rewrite channel); a page changed in between
+      is skipped with a clear report.
+
+---
+
+## E — Authoring Polish
+
+### EP-01: `#tag` badge on the react-markdown surfaces
+**Requirement:** Inline `#tag` renders as a **badge** (not literal `#tag` text) on the two
+`MarkdownProse` (react-markdown) surfaces — the history version preview and the agent answer —
+matching the CM6 badge, without weakening the stored-XSS guard.
+**Acceptance criteria:**
+- [ ] A remark inline transform (or equivalent react-markdown plugin) renders body `#tag` as a
+      badge `<span>` in `MarkdownProse` (`HistoryPanel` version preview + `AgentAnswer`), matching
+      the CM6 `HashtagWidget` visual + the same recognized-`#tag` set (fenced/inline-code/escape/
+      heading exclusions honored).
+- [ ] The badge is produced as a **safe element node** (react element / sanitized span), NOT raw
+      HTML injection: `rehype-raw` stays OFF and `rehype-sanitize` stays ON; the `AgentAnswer`
+      stored-XSS test (`AgentAnswer.test.tsx:42-44`) still passes.
+- [ ] A `#` that should not badge (in fenced/inline code, escaped, heading, URL fragment) renders
+      as literal text on these surfaces too — no false badges.
+
+### EP-02: Copy-code button on read-mode fenced code
+**Requirement:** Read-mode fenced code blocks (`CodeBlockWidget`) have a **copy-to-clipboard**
+button that copies the exact code text.
+**Acceptance criteria:**
+- [ ] A copy button appears on the read-mode `CodeBlockWidget` (`widgets.ts`); clicking it writes
+      the block's exact source (`this.code`) to the clipboard and gives brief visual confirmation.
+- [ ] The button DOM is built with `createElement` + explicit attributes (no `innerHTML`), and does
+      NOT perturb the plain→highlighted async swap or its `destroyed`/`isConnected` teardown guards
+      (`widgets.ts:165-178`). Edit mode (raw fence revealed) is unaffected.
+- [ ] Clipboard write uses `navigator.clipboard` with a graceful no-op/fallback where unavailable;
+      no exception escapes to break the widget.
+
+### EP-03: Insert-at-cursor template snippets
+**Requirement:** Inside an open editor, a user can **insert a template snippet at the cursor**
+(distinct from Phase-27 new-page seeding), reusing the existing `Templates/` source.
+**Acceptance criteria:**
+- [ ] An editor affordance lists templates via the existing `listTemplates` endpoint and inserts
+      the chosen template's body (with `{{title}}`/`{{date}}`/`{{time}}` substituted) at the current
+      cursor position in the `LivePreviewEditor`.
+- [ ] Insertion dispatches a **normal CM6 transaction** on the live `EditorView` — it is an ordinary
+      user edit (the byte-stable EDIT-03 `onChange` fires verbatim on `docChanged`); the
+      `externalSeed` reset annotation is NOT used (that is for prop-driven resets only).
+- [ ] Insertion respects the safe-path resolver for the template read; no placeholder executes code;
+      inserting into a non-empty document does not corrupt surrounding text (cursor/selection correct).
+
+### EP-04: Page description in search result cards
+**Requirement:** Search result cards for **page** results show the page's frontmatter
+**description** (when present), in addition to the body-match snippet.
+**Acceptance criteria:**
+- [ ] The search backend indexes the frontmatter description (`pageDoc`/`rebuild.go`/`indexPage`)
+      and returns it as an **additive optional** field on `search.Result` (`query.go:14-21`) — the
+      existing snippet/anchor/page_title fields are unchanged.
+- [ ] `SearchResultRow.tsx` renders the description for page results (distinct from the body-match
+      snippet), truncated/styled to the card; absent description falls back to today's behavior.
+- [ ] The search response stays lean (description is a single additive field); no regression to
+      existing search relevance or the heading/attachment result shapes.
+
+---
+
+## R — Rich-Block Editor (TipTap) — DEFERRED TO v1.7
+
+> **This whole track ships as v1.7, not v1.6** (co-driver-accepted red-team split, 2026-07-02).
+> The requirements + the red-team's R-track findings below are preserved verbatim so v1.7 starts
+> warm. Phase numbers (38–41) are provisional and re-confirmed when v1.7 is roadmapped.
+> Track ordering when built is strict/risk-first: the **codec round-trip corpus is the GO/NO-GO
+> gate and comes FIRST** (RE-01); no TipTap UI is wired until the fidelity contract passes.
+
+### RE-01: Markdown codec + round-trip corpus (GO/NO-GO spike gate)
+**Requirement:** A headless TipTap Markdown codec (`@tiptap/markdown`) with the bounded-slice
+extension set, proven by a round-trip corpus test that is the **acceptance gate** for the whole
+track.
+**Acceptance criteria:**
+- [ ] A `buildExtensions()` schema set (StarterKit configured to the bounded slice + task lists +
+      `Markdown`) and headless `parse`/`serialize`/`roundTrip` helpers exist, shared by the codec
+      test and (later) the live editor so parse/serialize behavior is identical in both.
+- [ ] **Tier-1 corpus (supported syntax):** for each fixture (basic marks, headings, ordered/
+      unordered/nested/task lists, blockquotes, fenced code incl. a `mermaid` fence kept as code,
+      CJK+emoji, blockquote-mixed), `parse(serialize(src)) ≡ parse(src)` (tree equality) AND
+      serialization is idempotent (stable after one normalization pass). All pass.
+- [ ] The test is **written first and fails for the right reason** (missing module) before the codec
+      exists; if the supported corpus cannot be made to pass after honest config/custom-serializer
+      effort, the phase reports **NO-GO** with the failing fixtures + diffs and the track STOPS
+      (does not degrade the gate).
+- [ ] TipTap + deps are pinned exact; `npm audit` clean; the codec module is import-isolated so it
+      code-splits (proven later by `assertLazyChunks`).
+
+### RE-02: Verbatim preservation tier (PreservedBlock / PreservedInline)
+**Requirement:** Unmodeled constructs (tables, `$…$`/`$$…$$` math, raw HTML) round-trip
+**byte-for-byte** through a preserved-node/mark mechanism.
+**Acceptance criteria:**
+- [ ] `PreservedBlock` (block node, `code:true`, editable literal mono text) and `PreservedInline`
+      (inline mark, `code:true`) capture the raw Markdown source of unmodeled constructs at parse
+      time and re-emit it unchanged on serialize; marked "bridge" tokenizers/handlers route tables,
+      math, and raw HTML into them.
+- [ ] **Tier-2 corpus (byte equality):** fixtures containing only preserved constructs + inert prose
+      round-trip byte-identical (modulo outer trim); serialization is idempotent. Inline math
+      `$x_1$` does NOT get its `_` escaped; inline HTML `<em>x</em>` stays literal (not converted to
+      a mark); autolinks are not swallowed.
+- [ ] Unit tests assert the preserved constructs parse to a single `preservedBlock`/marked inline,
+      not a fallback that reflows them.
+
+### RE-03: `#tag` + suggestions + slash commands in TipTap
+**Requirement:** The TipTap editor supports the app's authoring affordances — inline `#tag`
+atoms, `#`-triggered tag suggestions, and `/`-triggered slash commands — consistent with the
+existing tag model.
+**Acceptance criteria:**
+- [ ] A TipTap `Tag` inline node renders `#tag` as a badge and serializes back to literal `#tag`
+      text (round-trips); its recognized-`#tag` set matches the corpus/grammar (no third divergent
+      semantics) — pinned by a shared fixture where feasible.
+- [ ] `#`-suggestion popup offers existing-vocabulary tags (reusing the tag vocabulary endpoint);
+      `/`-slash-command popup inserts bounded-slice blocks (heading, list, code, quote). Both are
+      UI-only extensions that do not alter the serialized schema.
+- [ ] Body `#tags` authored in TipTap materialize into frontmatter through the SAME
+      `reconcileFrontmatterTags` save path (ED-02b) — no divergent tag-materialization for the
+      TipTap surface.
+
+### RE-04: Editor-mode toggle + host integration
+**Requirement:** TipTap is selectable as an **opt-in editing mode** beside CM6, behind a persisted
+per-user preference, wired so the byte-exact CM6 path remains the default and the fidelity gate is
+enforced at the boundary.
+**Acceptance criteria:**
+- [ ] A shared editor-host abstraction lets `PageEditor` mount either the CM6 `LivePreviewEditor`
+      (default) or the TipTap editor based on a persisted preference (localStorage, like the
+      Live/Source toggle); switching modes preserves the current Markdown content losslessly per the
+      two-tier contract.
+- [ ] On opening a page in TipTap mode, a **load guard** checks `isLosslessRoundTrip` for that page;
+      if the page contains content the bounded slice cannot round-trip losslessly (and not covered by
+      the preserved tier), the UI warns and/or falls back to CM6 for that page rather than silently
+      normalizing — the byte-exact default is never violated without user awareness.
+- [ ] TipTap + deps are **code-split** and proven absent from the entry chunk by `assertLazyChunks`
+      (the `FORBIDDEN_IN_ENTRY` list updated in lockstep); CM6-only users incur no TipTap bundle cost.
+- [ ] Saving from TipTap mode goes through the existing revision-checked byte-stable save
+      (`pages.Save(baseRevision)` → single-writer commit); a stale-revision save 409s as usual.
+
+### Red-team findings for the R track (fold into v1.7 planning — do NOT lose these)
+
+The 2026-07-02 roadmap red-team (agent `RoadmapRedTeam-2`, all HIGH/direct-read) found these in the
+original R draft. They are unresolved because R was deferred; resolve them when v1.7 is planned:
+- **BLK-01 (ordering):** RE-03 criterion 3 (materialize via the real `reconcileFrontmatterTags` save
+  path) secretly depends on RE-04 (TipTap isn't mounted into `PageEditor` until then), NOT RE-02.
+  Either reorder so the host-mount precedes the materialization criterion, or extract the editor-host
+  abstraction before RE-03. Criterion 3 must be tested through the real revision-checked save, not a
+  headless harness alone.
+- **BLK-02 (existing file):** `editorMode.ts` ALREADY EXISTS at `web/src/stores/editorMode.ts`
+  (`EditorMode='live'|'source'`, persisted key `okf.editor.mode`, consumed by `PageEditor.tsx` +
+  `mode.ts` `toggleKeymap`). RE-04 must **extend** it to `'live'|'source'|'tiptap'` — NOT create a new
+  `web/src/lib/editorMode.ts`. Decide the three-way `Mod-e` toggle semantics.
+- **BLK-03 (load guard):** RE-04's "warns **and/or** falls back to CM6" is non-deterministic — it
+  permits a warning-only impl that still lets the user normalize. Tighten to "warn **AND** fall back"
+  (TipTap unavailable for that page, not merely discouraged). The load guard is a guard, not a toast.
+- **Shared-content fidelity (direct-answer C) — the deferred DESIGN DECISION:** Tier-1 marker
+  normalization is *lossless per the contract*, so `isLosslessRoundTrip` does NOT catch it. In a
+  5-person team, one user editing a shared page in TipTap silently rewrites modeled-syntax bytes
+  (bullets, heading style, spacing) for ALL viewers — forking the wiki's on-disk bytes by editor and
+  surprising the CM6 author who owns the page. It is still Markdown (core value not violated) but
+  breaks byte-stability's spirit for shared content. **v1.7 must decide:** (i) document that TipTap
+  edits normalize modeled syntax for all viewers (informed consent), OR (ii) tighten the load guard to
+  warn on ANY non-preserved byte delta, not just unmodeled-content fallback.
+- **MAJ-03 (host refactor):** RE-04 bundles a large `PageEditor.tsx` (~893 ln, at `web/src/routes/`,
+  NOT `components/`) host refactor with the toggle + load guard + code-split + save wiring. Consider a
+  dedicated "editor-host abstraction" phase extracting the save/reconcile/lock machinery first.
+- **MAJ-04 (security — flag RE-02):** `PreservedBlock`/`PreservedInline` `toDOM` for raw HTML is an
+  untrusted-input surface. The CM6 no-`innerHTML` invariant does NOT apply to ProseMirror. Add: "raw
+  HTML preserved as inert text (`textContent`) or via a sanitized DOM path — never `innerHTML` of page
+  bytes; an `<img onerror>` fixture does not execute in the editor view." Flag RE-02 for security review.
+- **MAJ-05 (security — TipTap paste is the SHARP surface):** the novel untrusted-input path is TipTap
+  PASTE/serialization, not EP-01. Add an RE-03/04 criterion: "pasted HTML/Markdown parses through the
+  bounded-slice schema only; dangerous nodes (script, event-handler attrs, iframe) are dropped or
+  preserved-as-text, never rendered live; a paste-XSS fixture proves it." Scope it into the v1.7
+  security review.
+- **MIN-02:** a `mermaid` fence renders as a diagram in CM6 but as raw code in TipTap (bytes preserved,
+  but TipTap is second-class for mermaid pages) — acceptable, note it.
+- **MIN-04:** RE-04's `FORBIDDEN_IN_ENTRY` regex must cover the WHOLE TipTap dep tree (`@tiptap/core`,
+  `/pm`, `/react`, `/starter-kit`, `/markdown`, `/extension-list`, `/extensions`, `/suggestion`) or
+  `assertLazyChunks` won't catch a stray static import.
 
 ---
 
 ## Future Requirements (deferred)
 
-- **Re-introduce a per-page local graph** if it proves missed (removed in the v1.5 refactor).
-- **In-place file-tree filter** (narrow-the-tree-by-title) if the full-text-replaces-tree
-  model proves worse for quick navigation.
-- The v1.3-original "Out of Scope" tag features remain deferred: bulk multi-tag operations,
-  tag color/description metadata, tag hierarchy, dedicated undo, tag usage analytics.
-- v1.4-carried follow-ups not in this milestone: F-02 (global JSON body `MaxBytesReader` cap),
-  F-01 (pin mermaid deps + `npm audit` in CI), the 2 Phase-26 manual UAT items, `govulncheck`
-  re-run when the Go 1.26 toolchain panic is fixed.
+- **TipTap rich editing of tables/math** — v1.6 preserves them verbatim (Tier 2); structured WYSIWYG
+  editing of tables and math is a follow-on.
+- **Hierarchy-aware tag behavior** — auto-applying parent tags, descendant-expanding tag search, and
+  hierarchy-driven graph grouping (TF-03 is display-only in v1.6).
+- **Tag-op undo history (multi-level)** — TF-05 is last-op undo; a full undo stack is deferred.
+- **Re-introduce a per-page local graph** / **in-place file-tree filter** — the v1.5 removals; still
+  gated on proven miss.
+- Prior v1.4/v1.5 carried follow-ups already CLOSED post-v1.5 (F-01/F-02/govulncheck/P26 UAT — see
+  `milestones/v1.5-FOLLOWUPS.md`); none carry into v1.6.
 
 ## Out of Scope (explicit)
 
-- **Re-designing the reading-shell refactor.** v1.5 folds it in as-is; the Obsidian-parity
-  direction, local-graph removal, and search redesign are accepted, not re-opened.
-- **A client-only regression fix.** Rejected as incomplete — cannot fix never-reopened or
-  stale-client pages.
-- **A full second Markdown parser in Go.** `RewriteHashtags` is a conservative, corpus-pinned
-  `#tag`-boundary scanner (like `RewriteLinks`), NOT a general Markdown/Lezer re-implementation.
-- **Removing the client-side `reconcileFrontmatterTags`** — the frontmatter-canonical
-  sync-at-save model (ED-02b) stays; the server fix makes it naturally no-op on renamed pages.
-- **New tag-management features** (bulk multi-tag, metadata, hierarchy) — deferred as above.
+- **Replacing CM6 with TipTap.** CM6 stays the default, byte-exact surface; TipTap is opt-in only.
+  A full editor replacement would be a v2.0, not this minor.
+- **Degrading the fidelity gate to ship TipTap.** If the round-trip corpus cannot pass, the track is
+  NO-GO — the gate is not relaxed to force a ship.
+- **A third `#tag` parser semantics.** The TipTap tag recognition matches the existing corpus/grammar;
+  it does not fork the recognized-`#tag` set.
+- **Tag metadata living only in SQLite.** Metadata/hierarchy MUST be on-disk (files-as-truth); a
+  cache-only store is rejected.
+- **Notion-style databases, realtime CRDT collaboration, comments, public publishing, SSO** — remain
+  SPEC §4 non-goals (unchanged).
 
 ## Traceability
 
-| REQ-ID | Phase | Status |
-|--------|-------|--------|
-| RS-01, RS-02, RS-03, RS-04 | 28 | planned |
-| TR-01, TR-02, TR-03, TR-04, TR-05, TR-06 | 29 | planned |
-| TC-01, TC-02, TC-03 | 30 | planned |
+| REQ-ID | Track | Phase | Status |
+|--------|-------|-------|--------|
+| TF-01 (bulk multi-tag) | T | 31 | planned |
+| TF-02 (tag metadata) | T | 32 | planned |
+| TF-03 (tag hierarchy) | T | 33 | planned |
+| TF-04 (usage analytics) | T | 34 | planned |
+| TF-05 (tag-op undo) | T | 35 | planned |
+| EP-01 (`#tag` in MarkdownProse) | E | 36 | planned |
+| EP-02 (copy-code button) | E | 36 | planned |
+| EP-04 (description in search) | E | 36 | planned |
+| EP-03 (insert-at-cursor templates) | E | 37 | planned |
+| RE-01 (codec + corpus gate) | R | v1.7 | deferred |
+| RE-02 (preserved verbatim tier) | R | v1.7 | deferred |
+| RE-03 (tag/suggest/slash in TipTap) | R | v1.7 | deferred |
+| RE-04 (toggle + host integration) | R | v1.7 | deferred |
 
-**v1.3 requirements re-validated in this milestone (built in `9de5077`, closed here):**
+**v1.6 = TF-01…05 (Phases 31–35, track T) + EP-01…04 (Phases 36–37, track E) = 7 phases.** The R
+rows are the v1.7 backlog, preserved here so v1.7 starts warm.
 
-| REQ-ID | Origin | v1.5 disposition |
-|--------|--------|------------------|
-| TM-01 (rename) | v1.3 | regression-fixed (TR-03) + verified (TC-01) |
-| TM-02 (merge) | v1.3 | regression-fixed (TR-03) + verified (TC-01) |
-| TM-03 (delete) | v1.3 | regression-fixed (TR-03) + verified (TC-01) |
-| TM-04 (admin UI) | v1.3 | body-scope surfaced (TR-05) + verified (TC-01) |
-| TM-05 (graph consistency) | v1.3 | verified (TC-01) |
+> Phase numbers continue from v1.5's last (Phase 30). v1.6 spans Phases 31–37; the EP consolidation
+> (36 = EP-01/02/04) and the TipTap split to v1.7 were decided by the co-driver-accepted red-team
+> pre-mortem (2026-07-02).
