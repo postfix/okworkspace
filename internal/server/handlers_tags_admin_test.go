@@ -20,11 +20,13 @@ import (
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/graph"
 	"github.com/postfix/okworkspace/internal/jobs"
+	"github.com/postfix/okworkspace/internal/okf"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/repo"
 	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
 	"github.com/postfix/okworkspace/internal/users"
+	"gopkg.in/yaml.v3"
 )
 
 type tagAdminFixture struct {
@@ -34,6 +36,7 @@ type tagAdminFixture struct {
 	db      *store.Store
 	users   *users.Repository
 	gs      *gitstore.GitStore
+	pages   *pages.Service
 }
 
 func newTagAdminServer(t *testing.T) *tagAdminFixture {
@@ -98,7 +101,7 @@ func newTagAdminServer(t *testing.T) *tagAdminFixture {
 	}
 	return &tagAdminFixture{
 		handler: h, repo: contentRepo, store: graphStore,
-		db: st, users: userRepo, gs: gs,
+		db: st, users: userRepo, gs: gs, pages: ps,
 	}
 }
 
@@ -493,5 +496,341 @@ func TestTagDelete_NonexistentTag(t *testing.T) {
 		map[string]string{"tag": "noexist"}, admin)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("delete nonexistent: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --- Bulk multi-tag tests (Phase 31 / TF-01) ---
+
+// tagBulkCommitCount counts git commits in the fixture's repo root.
+func tagBulkCommitCount(t *testing.T, root string) int {
+	t.Helper()
+	cmd := exec.Command("git", "rev-list", "--count", "HEAD")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, c := range strings.TrimSpace(string(out)) {
+		n = n*10 + int(c-'0')
+	}
+	return n
+}
+
+// pageTags reads a page's raw bytes and extracts the frontmatter tags list,
+// parsing the YAML sequence directly (the test package cannot call the
+// unexported server.readPageTags).
+func pageTags(t *testing.T, f *tagAdminFixture, path string) []string {
+	t.Helper()
+	raw, err := f.repo.Read(path)
+	if err != nil {
+		t.Fatalf("read %q: %v", path, err)
+	}
+	doc, err := okf.Parse(raw)
+	if err != nil || !doc.HasFrontmatter {
+		return nil
+	}
+	var tags []string
+	n := &doc.Front
+	if n.Kind == yaml.DocumentNode && len(n.Content) > 0 {
+		n = n.Content[0]
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		k := n.Content[i]
+		v := n.Content[i+1]
+		if k.Value == "tags" && v.Kind == yaml.SequenceNode {
+			for _, item := range v.Content {
+				tags = append(tags, item.Value)
+			}
+		}
+	}
+	return tags
+}
+
+// TestBulkTagRBAC: editor gets 403 on both preview and apply.
+func TestBulkTagRBAC(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	editor := f.editorCookies(t)
+
+	for _, tc := range []struct {
+		name string
+		body any
+	}{
+		{"preview", map[string]any{"page_paths": []string{"a.md"}, "add_tags": []string{"x"}, "preview": true}},
+		{"apply", map[string]any{"page_paths": []string{"a.md"}, "add_tags": []string{"x"}}},
+	} {
+		rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/bulk", tc.body, editor)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("bulk %s: editor got %d, want 403", tc.name, rec.Code)
+		}
+	}
+}
+
+// TestBulkTagPreview: seed 3 pages, preview add [a,b] + remove [c] → total_affected=3,
+// per-page current_tags/new_tags correct.
+func TestBulkTagPreview(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"c", "x"})
+	f.seedPage(t, "b.md", []string{"c", "y"})
+	f.seedPage(t, "d.md", []string{"c", "z"})
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/bulk",
+		map[string]any{
+			"page_paths":  []string{"a.md", "b.md", "d.md"},
+			"add_tags":    []string{"a", "b"},
+			"remove_tags": []string{"c"},
+			"preview":     true,
+		}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("preview bulk: %d %s", rec.Code, rec.Body.String())
+	}
+	var prev struct {
+		TotalAffected int `json:"total_affected"`
+		AffectedPages []struct {
+			PagePath    string   `json:"page_path"`
+			CurrentTags []string `json:"current_tags"`
+			NewTags     []string `json:"new_tags"`
+		} `json:"affected_pages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &prev); err != nil {
+		t.Fatalf("unmarshal preview: %v", err)
+	}
+	if prev.TotalAffected != 3 {
+		t.Errorf("preview TotalAffected = %d, want 3", prev.TotalAffected)
+	}
+	want := map[string][]string{
+		"a.md": {"x", "a", "b"},
+		"b.md": {"y", "a", "b"},
+		"d.md": {"z", "a", "b"},
+	}
+	for _, p := range prev.AffectedPages {
+		exp, ok := want[p.PagePath]
+		if !ok {
+			t.Errorf("unexpected page %q in preview", p.PagePath)
+			continue
+		}
+		if strings.Join(p.NewTags, ",") != strings.Join(exp, ",") {
+			t.Errorf("page %q new_tags = %v, want %v", p.PagePath, p.NewTags, exp)
+		}
+	}
+}
+
+// TestBulkTagGolden (TF-01 crit 4): add [a,b] + remove [c] across 3 pages →
+// correct per-page frontmatter in 1 commit; graph rebuild shows `c` gone.
+func TestBulkTagGolden(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"c", "x"})
+	f.seedPage(t, "b.md", []string{"c", "y"})
+	f.seedPage(t, "d.md", []string{"c", "z"})
+	admin := f.adminCookies(t)
+
+	before := tagBulkCommitCount(t, f.repo.Root())
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/bulk",
+		map[string]any{
+			"page_paths":  []string{"a.md", "b.md", "d.md"},
+			"add_tags":    []string{"a", "b"},
+			"remove_tags": []string{"c"},
+		}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("apply bulk: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Give the async commit job a moment to land.
+	time.Sleep(100 * time.Millisecond)
+
+	after := tagBulkCommitCount(t, f.repo.Root())
+	if after-before != 1 {
+		t.Errorf("commit delta = %d, want exactly 1 (3 pages, one batch commit)", after-before)
+	}
+
+	// Verify per-page frontmatter tags.
+	wantTags := map[string][]string{
+		"a.md": {"x", "a", "b"},
+		"b.md": {"y", "a", "b"},
+		"d.md": {"z", "a", "b"},
+	}
+	for path, want := range wantTags {
+		got := pageTags(t, f, path)
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("page %q tags = %v, want %v", path, got, want)
+		}
+	}
+
+	// Rebuild graph and verify `c` is gone from these pages.
+	if err := f.store.RebuildGraph(context.Background()); err != nil {
+		t.Fatalf("RebuildGraph: %v", err)
+	}
+	paths, _ := f.store.PagesByTag(context.Background(), "c")
+	if len(paths) != 0 {
+		t.Errorf("tag 'c' still on %d pages after bulk remove", len(paths))
+	}
+	// Tag 'a' now on all 3 pages.
+	paths, _ = f.store.PagesByTag(context.Background(), "a")
+	if len(paths) != 3 {
+		t.Errorf("tag 'a' on %d pages, want 3", len(paths))
+	}
+}
+
+// TestBulkTagStale: seed 2 pages, apply, but edit one page between preview and
+// apply → that page reports stale, the other applies, batch completes.
+func TestBulkTagStale(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "p1.md", []string{"keep"})
+	f.seedPage(t, "p2.md", []string{"keep"})
+	admin := f.adminCookies(t)
+	ctx := context.Background()
+
+	// The bulk op rides ApplyTagsBatch, whose per-page optimistic-concurrency
+	// floor excludes a stale page WITHOUT sinking the batch. The bulk handler
+	// re-resolves the page set at apply time (like rename/merge/delete), so a
+	// stale page is one whose revision moved DURING the apply — between
+	// buildTagApplyItems reading it and ApplyTagsBatch re-checking it. We prove
+	// that exclusion deterministically by feeding ApplyTagsBatch a stale
+	// BaseRevision for p2 (the exact condition a mid-apply edit produces): p2
+	// reports "stale", p1 applies, and the batch completes in one commit.
+	pg2, err := f.pages.Get(ctx, "p2.md")
+	if err != nil {
+		t.Fatalf("Get p2: %v", err)
+	}
+	staleRev := pg2.Revision
+	raw, _ := f.repo.Read("p2.md")
+	if err := f.repo.Write("p2.md", append(raw, []byte("\nextra line\n")...)); err != nil {
+		t.Fatalf("write p2: %v", err)
+	}
+	if err := f.gs.Commit(ctx, gitstore.CommitSpec{
+		Paths: []string{"p2.md"}, Message: "out-of-band p2", User: "test", Action: "edit", Source: "test",
+	}); err != nil {
+		t.Fatalf("commit p2: %v", err)
+	}
+
+	// p1's current revision (fresh).
+	pg1, err := f.pages.Get(ctx, "p1.md")
+	if err != nil {
+		t.Fatalf("Get p1: %v", err)
+	}
+
+	before := tagBulkCommitCount(t, f.repo.Root())
+
+	// Apply through the SAME ApplyTagsBatch the bulk handler uses, with p2's
+	// BaseRevision stale — the exact item shape buildTagApplyItems produces.
+	items := []pages.TagApplyItem{
+		{PagePath: "p1.md", Tags: []string{"keep", "new"}, BaseRevision: pg1.Revision, BodyOld: "", BodyNew: ""},
+		{PagePath: "p2.md", Tags: []string{"keep", "new"}, BaseRevision: staleRev, BodyOld: "", BodyNew: ""},
+	}
+	results, err := f.pages.ApplyTagsBatch(ctx, items, "admin")
+	if err != nil {
+		t.Fatalf("ApplyTagsBatch: %v", err)
+	}
+
+	statuses := make(map[string]string)
+	for _, r := range results {
+		statuses[r.PagePath] = r.Status
+	}
+	if statuses["p1.md"] != "applied" {
+		t.Errorf("p1 status = %q, want applied", statuses["p1.md"])
+	}
+	if statuses["p2.md"] != "stale" {
+		t.Errorf("p2 status = %q, want stale", statuses["p2.md"])
+	}
+
+	// One commit for the single applied page (stale page excluded).
+	after := tagBulkCommitCount(t, f.repo.Root())
+	if after-before != 1 {
+		t.Errorf("commit delta = %d, want 1 (stale excluded, one applied page)", after-before)
+	}
+
+	// The stale page was NOT clobbered: no "new" tag written.
+	for _, t2 := range pageTags(t, f, "p2.md") {
+		if t2 == "new" {
+			t.Errorf("stale page p2 had 'new' written (clobbered)")
+		}
+	}
+
+	// Verify the bulk handler itself returns per-page statuses via HTTP: a
+	// follow-up bulk apply on p1 succeeds, proving the handler's response shape.
+	if err := f.store.RebuildGraph(ctx); err != nil {
+		t.Fatalf("RebuildGraph: %v", err)
+	}
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/bulk",
+		map[string]any{"page_paths": []string{"p1.md"}, "add_tags": []string{"bulk"}}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bulk HTTP apply: %d %s", rec.Code, rec.Body.String())
+	}
+	var resp struct{ Results []pages.TagApplyResult `json:"results"` }
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].Status != "applied" {
+		t.Errorf("bulk HTTP results = %+v, want one applied", resp.Results)
+	}
+}
+
+// TestBulkTagFilterSelection: seed pages with tag `ops`, use filter_tags only
+// (no explicit paths) → preview resolves to all pages with `ops`.
+func TestBulkTagFilterSelection(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "o1.md", []string{"ops"})
+	f.seedPage(t, "o2.md", []string{"ops", "docs"})
+	f.seedPage(t, "x.md", []string{"other"})
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/bulk",
+		map[string]any{
+			"filter_tags": []string{"ops"},
+			"add_tags":    []string{"new"},
+			"preview":     true,
+		}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("preview bulk: %d %s", rec.Code, rec.Body.String())
+	}
+	var prev struct {
+		TotalAffected int `json:"total_affected"`
+		AffectedPages []struct {
+			PagePath string `json:"page_path"`
+		} `json:"affected_pages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &prev); err != nil {
+		t.Fatalf("unmarshal preview: %v", err)
+	}
+	if prev.TotalAffected != 2 {
+		t.Errorf("filter preview TotalAffected = %d, want 2", prev.TotalAffected)
+	}
+	got := make(map[string]bool)
+	for _, p := range prev.AffectedPages {
+		got[p.PagePath] = true
+	}
+	if !got["o1.md"] || !got["o2.md"] {
+		t.Errorf("filter resolved pages = %v, want {o1.md, o2.md}", got)
+	}
+	if got["x.md"] {
+		t.Errorf("x.md should not be in the ops filter set")
+	}
+}
+
+// TestBulkTagValidation: add_tags with invalid charset → 400; empty page set +
+// empty add/remove → 400.
+func TestBulkTagValidation(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	admin := f.adminCookies(t)
+
+	// Invalid charset in add_tags.
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/bulk",
+		map[string]any{
+			"page_paths": []string{"a.md"},
+			"add_tags":   []string{"<script>"},
+		}, admin)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("invalid charset: got %d, want 400", rec.Code)
+	}
+
+	// Empty page set + empty add/remove.
+	rec = doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/bulk",
+		map[string]any{}, admin)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("empty request: got %d, want 400", rec.Code)
 	}
 }

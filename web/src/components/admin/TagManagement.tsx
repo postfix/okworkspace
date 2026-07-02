@@ -1,16 +1,20 @@
 // TagManagement (TM-04 / v1.3) — workspace-wide tag management surface.
-// Renders the tag table with rename/merge/delete dialogs, embedded in the
-// Admin panel. Every destructive operation follows the preview→approve contract.
+// Renders the tag table with rename/merge/delete + bulk multi-tag dialogs,
+// embedded in the Admin panel. Every destructive operation follows the
+// preview→approve contract.
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2, Layers } from "lucide-react";
 import {
   listTags,
   renameTag,
   mergeTag,
   deleteTag,
+  bulkTag,
+  getTree,
   type TagEntry,
   type TagPreview,
+  type TreeNode,
 } from "../../api/client";
 import Dialog from "../../components/Dialog";
 import "./TagManagement.css";
@@ -42,6 +46,7 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
   const [renameTarget, setRenameTarget] = useState<TagEntry | null>(null);
   const [mergeSource, setMergeSource] = useState<TagEntry | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TagEntry | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   const filtered = query.trim()
@@ -58,6 +63,9 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
         onChange={(e) => setQuery(e.target.value)}
         aria-label="Filter tags"
       />
+      <button className="btn btn-sm tagmgmt-bulk-btn" onClick={() => setBulkOpen(true)} title="Bulk add/remove tags across pages">
+        <Layers size={14} /> Bulk add/remove
+      </button>
       <table className="tagmgmt-table">
         <thead>
           <tr>
@@ -93,6 +101,9 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
       )}
       {deleteTarget && (
         <DeleteDialog tag={deleteTarget} onClose={() => setDeleteTarget(null)} onDone={onDone} />
+      )}
+      {bulkOpen && (
+        <BulkTagDialog allTags={tags} onClose={() => setBulkOpen(false)} onDone={onDone} />
       )}
     </>
   );
@@ -293,6 +304,184 @@ function DeleteDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () => 
           </>
         ) : (
           <p><Loader2 size={14} className="spinner" /> Checking affected pages…</p>
+        )}
+        {error && <p className="tagmgmt-error"><AlertTriangle size={14} /> {error}</p>}
+      </div>
+    </Dialog>
+  );
+}
+
+// flattenTree walks the nested TreeNode[] and returns all type==="page" paths.
+function flattenTree(nodes: TreeNode[]): string[] {
+  const out: string[] = [];
+  const walk = (ns: TreeNode[]) => {
+    for (const n of ns) {
+      if (n.type === "page") out.push(n.path);
+      if (n.children) walk(n.children);
+    }
+  };
+  walk(nodes);
+  return out;
+}
+
+// parseTagInput splits a comma-separated string into trimmed non-empty tags.
+function parseTagInput(s: string): string[] {
+  return s
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}
+
+// BulkTagDialog (Phase 31 / TF-01) — add and/or remove multiple tags across a
+// selected set of pages (explicit checkboxes ∪ filter-tags) in one
+// preview→approve batch. Mirrors the RenameDialog/MergeDialog/DeleteDialog
+// preview-table + approve-button pattern.
+function BulkTagDialog({ allTags, onClose, onDone }: { allTags: TagEntry[]; onClose: () => void; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [addTagsStr, setAddTagsStr] = useState("");
+  const [removeTagsStr, setRemoveTagsStr] = useState("");
+  const [filterTagsStr, setFilterTagsStr] = useState("");
+  const [selectedPages, setSelectedPages] = useState<Set<string>>(new Set());
+  const [preview, setPreview] = useState<TagPreview | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState("");
+
+  const { data: tree = [] } = useQuery<TreeNode[]>({
+    queryKey: ["tree"],
+    queryFn: getTree,
+  });
+  const pagePaths = flattenTree(tree);
+  const vocab = allTags.map((t) => t.tag);
+
+  const togglePage = (path: string) => {
+    setSelectedPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
+  const buildOpts = (previewFlag: boolean) => ({
+    page_paths: Array.from(selectedPages),
+    filter_tags: parseTagInput(filterTagsStr),
+    add_tags: parseTagInput(addTagsStr),
+    remove_tags: parseTagInput(removeTagsStr),
+    preview: previewFlag,
+  });
+
+  const handlePreview = async () => {
+    setError("");
+    const opts = buildOpts(true);
+    if (opts.page_paths.length === 0 && opts.filter_tags.length === 0) {
+      setError("Select pages or enter filter tags.");
+      return;
+    }
+    if (opts.add_tags.length === 0 && opts.remove_tags.length === 0) {
+      setError("Enter tags to add or remove.");
+      return;
+    }
+    try {
+      const result = await bulkTag(opts);
+      if ("affected_pages" in result) setPreview(result);
+    } catch {
+      setError("Failed to preview bulk tag change.");
+    }
+  };
+
+  const handleApply = async () => {
+    setApplying(true);
+    setError("");
+    try {
+      await bulkTag(buildOpts(false));
+      queryClient.invalidateQueries({ queryKey: TAGS_KEY });
+      onDone();
+      onClose();
+    } catch {
+      setError("Failed to apply bulk tag change.");
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <Dialog open title="Bulk add/remove tags" confirmLabel={preview ? "Apply" : "Preview"} cancelLabel="Cancel"
+      busy={applying}
+      onCancel={onClose}
+      onConfirm={preview ? handleApply : handlePreview}
+    >
+      <div className="tagmgmt-dialog-body tagmgmt-bulk-body">
+        <fieldset className="tagmgmt-bulk-section">
+          <legend>Filter by tag (union)</legend>
+          <input
+            type="text"
+            className="input"
+            value={filterTagsStr}
+            onChange={(e) => setFilterTagsStr(e.target.value)}
+            placeholder={vocab.length > 0 ? vocab.slice(0, 4).join(", ") + ", …" : "tag1, tag2"}
+            aria-label="Filter by tag (comma-separated)"
+          />
+          <p className="tagmgmt-bulk-hint">Pages carrying any of these tags are included.</p>
+        </fieldset>
+
+        <fieldset className="tagmgmt-bulk-section">
+          <legend>Or select pages</legend>
+          <div className="tagmgmt-bulk-pagelist">
+            {pagePaths.length === 0 ? (
+              <p className="tagmgmt-bulk-hint">No pages.</p>
+            ) : (
+              pagePaths.map((p) => (
+                <label key={p} className="tagmgmt-bulk-pagecheck">
+                  <input
+                    type="checkbox"
+                    checked={selectedPages.has(p)}
+                    onChange={() => togglePage(p)}
+                  />
+                  <code>{p}</code>
+                </label>
+              ))
+            )}
+          </div>
+        </fieldset>
+
+        <div className="tagmgmt-bulk-ops">
+          <label className="tagmgmt-field">
+            Tags to add
+            <input
+              type="text"
+              className="input"
+              value={addTagsStr}
+              onChange={(e) => setAddTagsStr(e.target.value)}
+              placeholder="new-tag, another-tag"
+              aria-label="Tags to add (comma-separated)"
+            />
+          </label>
+          <label className="tagmgmt-field">
+            Tags to remove
+            <input
+              type="text"
+              className="input"
+              value={removeTagsStr}
+              onChange={(e) => setRemoveTagsStr(e.target.value)}
+              placeholder="old-tag, stale-tag"
+              aria-label="Tags to remove (comma-separated)"
+            />
+          </label>
+        </div>
+
+        {preview && (
+          <div className="tagmgmt-preview">
+            <p>{preview.total_affected} page(s) affected:</p>
+            <ul className="tagmgmt-preview-list">
+              {preview.affected_pages.slice(0, 30).map((p) => (
+                <li key={p.page_path}>
+                  <code>{p.page_path}</code>
+                  <span className="tagmgmt-tag-change">{p.current_tags.join(", ")} → {p.new_tags.join(", ")}</span>
+                </li>
+              ))}
+              {preview.total_affected > 30 && <li>…and {preview.total_affected - 30} more</li>}
+            </ul>
+          </div>
         )}
         {error && <p className="tagmgmt-error"><AlertTriangle size={14} /> {error}</p>}
       </div>

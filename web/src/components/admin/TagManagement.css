@@ -150,3 +150,68 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
+
+/* Bulk button + BulkTagDialog (Phase 31 / TF-01) */
+.tagmgmt-bulk-btn {
+  margin-bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tagmgmt-bulk-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tagmgmt-bulk-section {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 0;
+}
+
+.tagmgmt-bulk-section legend {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: 0 4px;
+}
+
+.tagmgmt-bulk-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.tagmgmt-bulk-pagelist {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.tagmgmt-bulk-pagecheck {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.tagmgmt-bulk-pagecheck code {
+  font-size: 11px;
+}
+
+.tagmgmt-bulk-ops {
+  display: flex;
+  gap: 10px;
+}
+
+.tagmgmt-bulk-ops .tagmgmt-field {
+  flex: 1;
+}

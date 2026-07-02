@@ -341,7 +341,14 @@ func New(deps Deps) (http.Handler, error) {
 				admin.Post("/admin/tags/rename", h.handleTagRename)
 				admin.Post("/admin/tags/merge", h.handleTagMerge)
 				admin.Post("/admin/tags/delete", h.handleTagDelete)
-			})
+				// Bulk multi-tag (Phase 31 / TF-01) — admin-only, inheriting the SAME
+				// RequireRole(admin) gate + nosurf CSRF. Add and/or remove multiple tags
+				// across a selected set of pages (explicit paths ∪ filter-tags) in ONE
+				// byte-stable preview→approve batch commit, reusing the proven
+				// buildTagApplyItems + ApplyTagsBatch seam. Frontmatter-only
+				// (BodyOld=""); added tags re-validated via ValidateTagCharset.
+				admin.Post("/admin/tags/bulk", h.handleTagBulk)
+		})
 		})
 	})
 

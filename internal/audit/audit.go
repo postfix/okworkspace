@@ -65,6 +65,7 @@ const (
 	ActionTagRename = "tag_rename"
 	ActionTagMerge  = "tag_merge"
 	ActionTagDelete = "tag_delete"
+	ActionTagBulk   = "tag_bulk"
 )
 
 // Event is one audit record. It carries only non-secret provenance — there is

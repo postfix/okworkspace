@@ -1416,6 +1416,23 @@ export async function deleteTag(opts: {
   );
 }
 
+// bulkTag (Phase 31 / TF-01) — add and/or remove multiple tags across a
+// selected set of pages (explicit paths ∪ filter-tags) in one byte-stable
+// preview→approve batch. preview=true returns the per-page before/after; omit
+// for the apply. Reuses TagPreview / TagApplyResponse (no new response types).
+export async function bulkTag(opts: {
+	page_paths: string[];
+	filter_tags: string[];
+	add_tags: string[];
+	remove_tags: string[];
+	preview?: boolean;
+}): Promise<TagPreview | TagApplyResponse> {
+	return mutate<TagPreview | TagApplyResponse>(
+		"/api/v1/admin/tags/bulk",
+		opts,
+	);
+}
+
 // relativeMdLink computes a relative `.md` link destination from the page at
 // fromPath to the page at toPath (both repo-relative slash paths), matching the
 // canonical on-disk link format (D-05). Used by the LinkPicker so an inserted

@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/postfix/okworkspace/internal/audit"
@@ -49,6 +50,14 @@ type tagMergeRequest struct {
 type tagDeleteRequest struct {
 	Tag     string `json:"tag"`
 	Preview bool   `json:"preview"`
+}
+
+type tagBulkRequest struct {
+	PagePaths  []string `json:"page_paths"`  // explicit selection
+	FilterTags []string `json:"filter_tags"` // existing-tag filter (union)
+	AddTags    []string `json:"add_tags"`
+	RemoveTags []string `json:"remove_tags"`
+	Preview    bool     `json:"preview"`
 }
 
 type tagPreviewResponse struct {
@@ -189,6 +198,63 @@ func containsNormalized(tags []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// sameTagSet reports whether two tag slices hold the same normalized set
+// (order-insensitive). nil and []string{} are equivalent.
+func sameTagSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	set := make(map[string]bool, len(a))
+	for _, t := range a {
+		set[normalizeTag(t)] = true
+	}
+	for _, t := range b {
+		n := normalizeTag(t)
+		if !set[n] {
+			return false
+		}
+		delete(set, n)
+	}
+	return len(set) == 0
+}
+
+// computeBulkTags returns a compute callback that yields (current ∪ addTags)
+// \ removeTags, normalized + deduped, preserving the original tag ordering of
+// current then appending new tags in addTags order. The bool is true when the
+// resulting set differs from current (order-insensitive).
+func computeBulkTags(addTags, removeTags []string) func(current []string) ([]string, bool) {
+	removeSet := make(map[string]bool)
+	for _, t := range removeTags {
+		removeSet[normalizeTag(t)] = true
+	}
+	return func(current []string) ([]string, bool) {
+		seen := make(map[string]bool)
+		var result []string
+		for _, t := range current {
+			n := normalizeTag(t)
+			if removeSet[n] {
+				continue
+			}
+			if !seen[n] {
+				seen[n] = true
+				result = append(result, t)
+			}
+		}
+		for _, t := range addTags {
+			n := normalizeTag(t)
+			if removeSet[n] {
+				continue
+			}
+			if !seen[n] {
+				seen[n] = true
+				result = append(result, n)
+			}
+		}
+		changed := !sameTagSet(current, result)
+		return result, changed
+	}
 }
 
 // buildTagApplyItems reads each page via pages.Get, computes the new tag list,
@@ -502,6 +568,132 @@ func (h *authHandlers) handleTagDelete(w http.ResponseWriter, r *http.Request) {
 		Detail: fmt.Sprintf("%d pages", len(items)),
 	})
 	writeJSON(w, http.StatusOK, tagApplyResponse{Action: "delete", Results: results})
+}
+
+// handleTagBulk handles POST /admin/tags/bulk (TF-01). An admin adds and/or
+// removes multiple tags across a selected set of pages (explicit paths ∪
+// filter-tags) in ONE byte-stable preview→approve batch commit, reusing
+// buildTagApplyItems + ApplyTagsBatch. Frontmatter-only: bodyOld/bodyNew are
+// "" so the body channel is disabled (no RewriteHashtags). Each added tag is
+// re-validated via okf.ValidateTagCharset (the frontmatter charset gate).
+// The page set is re-resolved server-side at BOTH preview and apply (TOCTOU).
+func (h *authHandlers) handleTagBulk(w http.ResponseWriter, r *http.Request) {
+	var req tagBulkRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request.")
+		return
+	}
+
+	// Normalize inputs.
+	addTags := make([]string, 0, len(req.AddTags))
+	for _, t := range req.AddTags {
+		n := normalizeTag(t)
+		if n != "" {
+			addTags = append(addTags, n)
+		}
+	}
+	removeTags := make([]string, 0, len(req.RemoveTags))
+	for _, t := range req.RemoveTags {
+		n := normalizeTag(t)
+		if n != "" {
+			removeTags = append(removeTags, n)
+		}
+	}
+	filterTags := make([]string, 0, len(req.FilterTags))
+	for _, t := range req.FilterTags {
+		n := normalizeTag(t)
+		if n != "" {
+			filterTags = append(filterTags, n)
+		}
+	}
+	pagePaths := make([]string, 0, len(req.PagePaths))
+	for _, p := range req.PagePaths {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			pagePaths = append(pagePaths, p)
+		}
+	}
+
+	// Validate: need a page-set spec AND an op spec.
+	if len(pagePaths) == 0 && len(filterTags) == 0 {
+		writeError(w, http.StatusBadRequest, "Provide page_paths or filter_tags to select pages.")
+		return
+	}
+	if len(addTags) == 0 && len(removeTags) == 0 {
+		writeError(w, http.StatusBadRequest, "Provide add_tags or remove_tags to change.")
+		return
+	}
+
+	// Validate each added tag's charset (frontmatter gate — added tags are
+	// written; removed/filter tags are matched, not written, so no charset gate).
+	for _, t := range addTags {
+		if err := okf.ValidateTagCharset(t); err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid tag name: "+err.Error())
+			return
+		}
+	}
+
+	actor := h.actorFromSession(r)
+	ctx := r.Context()
+
+	// Resolve the page set server-side: explicit paths ∪ pages matching any
+	// filter-tag (union). Deduped + sorted for determinism.
+	resolved := make(map[string]bool, len(pagePaths))
+	for _, p := range pagePaths {
+		resolved[p] = true
+	}
+	for _, ft := range filterTags {
+		paths, err := h.graph.PagesByTag(ctx, ft)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to resolve filter tags.")
+			return
+		}
+		for _, p := range paths {
+			resolved[p] = true
+		}
+	}
+	pageSet := make([]string, 0, len(resolved))
+	for p := range resolved {
+		pageSet = append(pageSet, p)
+	}
+	sort.Strings(pageSet)
+
+	computeFn := computeBulkTags(addTags, removeTags)
+	// Frontmatter-only: bodyOld="" disables the body channel (no body rewrite).
+	items, preview, err := h.buildTagApplyItems(ctx, pageSet, computeFn, "", "")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if req.Preview {
+		writeJSON(w, http.StatusOK, tagPreviewResponse{
+			Tag:           "bulk",
+			AffectedPages: preview,
+			TotalAffected: len(preview),
+		})
+		return
+	}
+
+	if len(items) == 0 {
+		writeJSON(w, http.StatusOK, tagApplyResponse{
+			Action: "bulk", Results: []pages.TagApplyResult{},
+		})
+		return
+	}
+
+	results, err := h.pages.ApplyTagsBatch(ctx, items, actor)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to apply bulk tag change.")
+		return
+	}
+	_ = h.audit.Record(ctx, audit.Event{
+		Action: audit.ActionTagBulk,
+		Actor:  actor,
+		Target: "bulk",
+		Detail: fmt.Sprintf("%d pages, +%v -%v", len(items), addTags, removeTags),
+	})
+	writeJSON(w, http.StatusOK, tagApplyResponse{Action: "bulk", Results: results})
 }
 
 // handleTagList handles GET /admin/tags (TM-04). Returns the workspace tag
