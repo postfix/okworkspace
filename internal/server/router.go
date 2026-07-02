@@ -17,6 +17,7 @@ import (
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/store"
+	"github.com/postfix/okworkspace/internal/tagmeta"
 	"github.com/postfix/okworkspace/internal/tagsweep"
 	"github.com/postfix/okworkspace/internal/users"
 )
@@ -80,6 +81,9 @@ type Deps struct {
 	// main.go this is the SAME single worker passed as SearchJobs/GraphJobs (the
 	// KindTagSuggest handler is registered on it), not a second worker.
 	TagSweepJobs tagSweepEnqueuer
+	// Tagmeta is the on-disk tag-metadata store backing POST /admin/tags/meta
+	// (Phase 32 / TF-02). Optional; when nil the meta handler returns a 500.
+	Tagmeta *tagmeta.Store
 }
 
 // New builds the HTTP handler: chi mux with the middleware stack (recover,
@@ -110,6 +114,7 @@ func New(deps Deps) (http.Handler, error) {
 		locks:          deps.Locks,
 		tagSuggestions: deps.TagSuggestions,
 		tagSweepJobs:   deps.TagSweepJobs,
+		tagmeta:        deps.Tagmeta,
 	}
 	health := &healthHandler{checker: deps.Health}
 
@@ -348,6 +353,10 @@ func New(deps Deps) (http.Handler, error) {
 				// buildTagApplyItems + ApplyTagsBatch seam. Frontmatter-only
 				// (BodyOld=""); added tags re-validated via ValidateTagCharset.
 				admin.Post("/admin/tags/bulk", h.handleTagBulk)
+			// Tag metadata (Phase 32 / TF-02) — admin-only, inheriting the SAME
+			// RequireRole(admin) gate + nosurf CSRF. Sets/clears a tag's color +
+			// description via the on-disk Tags/{tag}.md store + single-writer commit.
+			admin.Post("/admin/tags/meta", h.handleTagMeta)
 		})
 		})
 	})

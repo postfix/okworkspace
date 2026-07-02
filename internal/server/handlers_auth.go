@@ -18,6 +18,7 @@ import (
 	"github.com/postfix/okworkspace/internal/locks"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
+	"github.com/postfix/okworkspace/internal/tagmeta"
 	"github.com/postfix/okworkspace/internal/tagsweep"
 	"github.com/postfix/okworkspace/internal/users"
 )
@@ -85,6 +86,10 @@ type authHandlers struct {
 	// sweep-start (fire-and-forget). Optional: when nil sweep-start returns a 500. In
 	// main.go this is the SAME single worker passed as SearchJobs/GraphJobs.
 	tagSweepJobs tagSweepEnqueuer
+	// tagmeta is the on-disk tag-metadata store backing POST /admin/tags/meta
+	// (Phase 32 / TF-02). Optional: when nil the meta handler returns a 500,
+	// following the same optional-dependency pattern.
+	tagmeta *tagmeta.Store
 }
 
 type loginRequest struct {

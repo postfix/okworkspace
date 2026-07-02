@@ -66,6 +66,9 @@ const (
 	ActionTagMerge  = "tag_merge"
 	ActionTagDelete = "tag_delete"
 	ActionTagBulk   = "tag_bulk"
+	// ActionTagMeta (Phase 32 / TF-02) — admin sets/clears a tag's color +
+	// description through the on-disk Tags/{tag}.md store + single-writer commit.
+	ActionTagMeta = "tag_meta"
 )
 
 // Event is one audit record. It carries only non-secret provenance — there is

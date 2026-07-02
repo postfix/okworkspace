@@ -30,6 +30,7 @@ import (
 	"github.com/postfix/okworkspace/internal/auth"
 	"github.com/postfix/okworkspace/internal/okf"
 	"github.com/postfix/okworkspace/internal/pages"
+	"github.com/postfix/okworkspace/internal/tagmeta"
 	"gopkg.in/yaml.v3"
 )
 
@@ -78,6 +79,21 @@ type tagPreviewPage struct {
 type tagApplyResponse struct {
 	Action  string                 `json:"action"`
 	Results []pages.TagApplyResult `json:"results"`
+}
+
+// tagMetaRequest is the body of POST /admin/tags/meta (Phase 32 / TF-02). An
+// admin sets a tag's color + description. Empty color + description = clear.
+type tagMetaRequest struct {
+	Tag         string `json:"tag"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
+}
+
+// tagMetaResponse is the return shape: the updated metadata for the tag.
+type tagMetaResponse struct {
+	Tag         string `json:"tag"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
 }
 
 // normalizeTag trims whitespace and folds to lowercase. An empty string after
@@ -697,7 +713,9 @@ func (h *authHandlers) handleTagBulk(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTagList handles GET /admin/tags (TM-04). Returns the workspace tag
-// vocabulary with per-tag page counts from the derived graph cache.
+// vocabulary with per-tag page counts from the derived graph cache, merged
+// with per-tag color + description from the tag-metadata cache (Phase 32 /
+// TF-02). Tags with no metadata get empty color/description (graceful).
 func (h *authHandlers) handleTagList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if h.graph == nil {
@@ -709,13 +727,29 @@ func (h *authHandlers) handleTagList(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to list tags.")
 		return
 	}
+	// Build a tag→Meta lookup from the metadata cache (one call) so the list
+	// merges color/description inline without a second fetch per tag.
+	metaByTag := map[string]tagmeta.Meta{}
+	if h.tagmeta != nil {
+		metas, merr := h.tagmeta.AllMeta(ctx)
+		if merr == nil {
+			for _, m := range metas {
+				metaByTag[m.Tag] = m
+			}
+		}
+		// A metadata read error is non-fatal: the list still renders tags with
+		// empty color/description (graceful degradation, same as no metadata).
+	}
 	type tagEntry struct {
-		Tag   string `json:"tag"`
-		Count int    `json:"count"`
+		Tag         string `json:"tag"`
+		Count       int    `json:"count"`
+		Color       string `json:"color,omitempty"`
+		Description string `json:"description,omitempty"`
 	}
 	out := make([]tagEntry, 0, len(counts))
 	for tag, c := range counts {
-		out = append(out, tagEntry{Tag: tag, Count: c})
+		m := metaByTag[tag] // zero-value Meta{} when absent → empty fields
+		out = append(out, tagEntry{Tag: tag, Count: c, Color: m.Color, Description: m.Description})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -734,6 +768,63 @@ func (h *authHandlers) handleTagVocabulary(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, vocab)
+}
+
+// handleTagMeta handles POST /admin/tags/meta (Phase 32 / TF-02). An admin sets
+// or clears a tag's color + description. The metadata persists on disk as
+// Tags/{tag}.md via the single-writer commit path; the SQLite cache is updated
+// inline. Server validation: tag via ValidateTagCharset, color via
+// tagmeta.ValidateColor (hex/palette subset), description via
+// tagmeta.ValidateDescription (single-line, HTML-safe, ≤200). Empty color +
+// description = clear (the file is deleted). Admin-only RBAC + nosurf CSRF are
+// inherited from the admin route subgroup.
+func (h *authHandlers) handleTagMeta(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if h.tagmeta == nil {
+		writeError(w, http.StatusInternalServerError, "Tag metadata store not available.")
+		return
+	}
+	var req tagMetaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body.")
+		return
+	}
+	tag := normalizeTag(req.Tag)
+	if tag == "" {
+		writeError(w, http.StatusBadRequest, "Tag is required.")
+		return
+	}
+	if err := okf.ValidateTagCharset(tag); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid tag name.")
+		return
+	}
+	if err := tagmeta.ValidateColor(req.Color); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid color.")
+		return
+	}
+	if err := tagmeta.ValidateDescription(req.Description); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid description.")
+		return
+	}
+	// Thread the authenticated actor onto the commit spec + audit record.
+	actor := h.actorFromSession(r)
+	h.tagmeta.SetUser(actor)
+	if err := h.tagmeta.SetMeta(ctx, tag, req.Color, req.Description); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to set tag metadata.")
+		return
+	}
+	_ = h.audit.Record(ctx, audit.Event{
+		Action: audit.ActionTagMeta,
+		Actor:  actor,
+		Target: tag,
+		Detail: fmt.Sprintf("color=%s", req.Color),
+		Source: "web-ui",
+	})
+	writeJSON(w, http.StatusOK, tagMetaResponse{
+		Tag:         tag,
+		Color:       req.Color,
+		Description: req.Description,
+	})
 }
 
 func uniqueStrings(in []string) []string {

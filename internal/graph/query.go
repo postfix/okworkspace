@@ -269,7 +269,7 @@ func (s *Store) livePages() map[string]struct{} {
 		return live
 	}
 	for _, it := range items {
-		if it.IsDir || isTrashed(it.Path) || !strings.HasSuffix(it.Path, ".md") {
+		if it.IsDir || isTrashed(it.Path) || isTagMetaFile(it.Path) || !strings.HasSuffix(it.Path, ".md") {
 			continue
 		}
 		live[it.Path] = struct{}{}

@@ -19,6 +19,17 @@ func isTrashed(path string) bool {
 	return path == trashPrefix || strings.HasPrefix(path, trashPrefix+"/")
 }
 
+// tagsPrefix is the on-disk tag-metadata store (Phase 32, TF-02). Tags/*.md
+// files are metadata, not page content — they are excluded from the graph so
+// they never become link/tag adjacency rows.
+const tagsPrefix = "Tags"
+
+// isTagMetaFile reports whether a workspace-relative path lives under the Tags/
+// folder (the tag-metadata store). Mirrors isTrashed.
+func isTagMetaFile(path string) bool {
+	return path == tagsPrefix || strings.HasPrefix(path, tagsPrefix+"/")
+}
+
 // RebuildGraph rebuilds the derived link/tag adjacency from the files on disk,
 // idempotently — the correctness backstop that keeps the cache honest (deleting
 // both tables and rebuilding reproduces byte-identical rows). It walks the live
@@ -44,7 +55,7 @@ func (s *Store) RebuildGraph(ctx context.Context) error {
 	// edges using the same set the rebuild walks (rebuild==incremental agreement).
 	live := map[string]struct{}{}
 	for _, it := range items {
-		if it.IsDir || isTrashed(it.Path) || !strings.HasSuffix(it.Path, ".md") {
+		if it.IsDir || isTrashed(it.Path) || isTagMetaFile(it.Path) || !strings.HasSuffix(it.Path, ".md") {
 			continue
 		}
 		live[it.Path] = struct{}{}
@@ -60,7 +71,7 @@ func (s *Store) RebuildGraph(ctx context.Context) error {
 	var linkRows []linkRow
 	var tagRows []tagRow
 	for _, it := range items {
-		if it.IsDir || isTrashed(it.Path) || !strings.HasSuffix(it.Path, ".md") {
+		if it.IsDir || isTrashed(it.Path) || isTagMetaFile(it.Path) || !strings.HasSuffix(it.Path, ".md") {
 			continue
 		}
 		raw, rerr := s.repo.Read(it.Path)

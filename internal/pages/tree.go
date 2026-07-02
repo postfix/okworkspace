@@ -127,14 +127,14 @@ func isSkippedDir(slashRel string) bool {
 	if slashRel == ".okf-workspace" || strings.HasPrefix(slashRel, ".okf-workspace/") {
 		return true
 	}
-	// The reserved attachment store ("attachments/" at the repo root) holds
-	// ULID-named blobs/sidecars, not pages — it must not surface as a navigable
-	// folder. Attachments reach the tree as leaves under their owning page.
-	if slashRel == "attachments" || strings.HasPrefix(slashRel, "attachments/") {
+	// The tag-metadata store (Tags/ at the repo root) holds per-tag Markdown
+	// metadata files (Phase 32, TF-02) — not wiki pages. It must not surface as a
+	// navigable folder (mirrors the attachments/ reservation).
+	if slashRel == "Tags" || strings.HasPrefix(slashRel, "Tags/") {
 		return true
 	}
-	return false
-}
+ 	return false
+ }
 
 // pageTitle reads ONLY the frontmatter region of a page to recover its title,
 // falling back to the base filename (without .md) when there is no title field

@@ -22,6 +22,17 @@ func isTrashed(path string) bool {
 	return path == trashPrefix || strings.HasPrefix(path, trashPrefix+"/")
 }
 
+// tagsPrefix is the on-disk tag-metadata store (Phase 32, TF-02). Tags/*.md
+// files are metadata, not page content — they are excluded from the search
+// index so they never surface as searchable pages.
+const tagsPrefix = "Tags"
+
+// isTagMetaFile reports whether a workspace-relative path lives under the
+// Tags/ folder (the tag-metadata store). Mirrors isTrashed.
+func isTagMetaFile(path string) bool {
+	return path == tagsPrefix || strings.HasPrefix(path, tagsPrefix+"/")
+}
+
 // RebuildIndex rebuilds the index from the files on disk, idempotently. It builds
 // a NEW index into a sibling <dir>.tmp, walks the live pages (skipping dirs,
 // non-.md files, and anything under the trash prefix), reads each through the
@@ -57,7 +68,7 @@ func (s *Index) RebuildIndex(ctx context.Context) error {
 
 	batch := tmpIdx.NewBatch()
 	for _, it := range items {
-		if it.IsDir || isTrashed(it.Path) || !strings.HasSuffix(it.Path, ".md") {
+		if it.IsDir || isTrashed(it.Path) || isTagMetaFile(it.Path) || !strings.HasSuffix(it.Path, ".md") {
 			continue
 		}
 		raw, rerr := s.repo.Read(it.Path)

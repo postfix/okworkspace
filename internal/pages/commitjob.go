@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/postfix/okworkspace/internal/gitstore"
 	"github.com/postfix/okworkspace/internal/jobs"
@@ -143,4 +144,51 @@ func EnqueueCommit(ctx context.Context, w enqueuer, p commitPayload) error {
 		return nil
 	}
 	return err
+}
+
+// CommitEnqueuer is the exported subset of *jobs.Worker that the single-writer
+// commit path needs. External packages (e.g. tagmeta) use it via the exported
+// EnqueueFileCommit / EnqueueRemoveCommit helpers so they never touch the
+// unexported commitPayload type. *jobs.Worker satisfies this interface.
+type CommitEnqueuer interface {
+	Enqueue(ctx context.Context, kind, payload string) error
+	EnqueueAndWait(ctx context.Context, kind, payload string, timeout time.Duration) error
+}
+
+// EnqueueFileCommit writes one file through the single-writer commit path (the
+// SAME path page saves use — no second commit path). External packages call this
+// to land a content file + one git commit. action labels the commit subject;
+// user is the authenticated actor threaded onto the commit spec; push threads
+// config.Git.PushOnCommit.
+func EnqueueFileCommit(ctx context.Context, w CommitEnqueuer, rel string, data []byte, action, user string, push bool) error {
+	p := commitPayload{
+		Writes: []fileWrite{{Path: rel, Bytes: data}},
+		Spec: gitstore.CommitSpec{
+			Paths:   []string{rel},
+			Message: commitSubject(action, rel),
+			User:    user,
+			Action:  action,
+			Source:  "web-ui",
+		},
+		Push: push,
+	}
+	return EnqueueCommit(ctx, w, p)
+}
+
+// EnqueueRemoveCommit deletes one file through the single-writer commit path.
+// Used by external packages (e.g. tagmeta clearing a metadata file). A missing
+// file is not an error (idempotent) — the CommitHandler's repo.Remove tolerates it.
+func EnqueueRemoveCommit(ctx context.Context, w CommitEnqueuer, rel, action, user string, push bool) error {
+	p := commitPayload{
+		Removes: []string{rel},
+		Spec: gitstore.CommitSpec{
+			Paths:   []string{rel},
+			Message: commitSubject(action, rel),
+			User:    user,
+			Action:  action,
+			Source:  "web-ui",
+		},
+		Push: push,
+	}
+	return EnqueueCommit(ctx, w, p)
 }
