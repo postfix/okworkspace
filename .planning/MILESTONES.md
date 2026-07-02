@@ -1,5 +1,18 @@
 # Milestones
 
+## v1.6 v1.6 (Shipped: 2026-07-02)
+
+**Phases completed:** 7 phases, 7 plans, 15 tasks
+
+**Key accomplishments:**
+
+- Goal:
+- Goal:
+- Goal:
+- Goal:
+
+---
+
 ## v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure (Shipped: 2026-07-01)
 
 **Phases completed:** 3 phases (28–30), an assess-and-fix milestone
