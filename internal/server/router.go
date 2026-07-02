@@ -104,6 +104,7 @@ func New(deps Deps) (http.Handler, error) {
 		users:          deps.UserRepo,
 		config:         deps.Config,
 		audit:          rec,
+		store:          deps.Store,
 		pages:          deps.Pages,
 		attachments:    deps.Attachments,
 		search:         deps.Search,
@@ -342,7 +343,13 @@ func New(deps Deps) (http.Handler, error) {
 				// returns affected pages, approve applies through SetTagsFrontmatter
 				// → ApplyTagsBatch (N pages → ONE commit). Server-side tag
 				// re-validation and per-page 409 handling mirror /admin/tags/approve.
-				admin.Get("/admin/tags", h.handleTagList)
+			admin.Get("/admin/tags", h.handleTagList)
+			// Tag usage analytics (Phase 34 / TF-04) — admin-only, read-only.
+			// GET /admin/tags/analytics surfaces per-tag page counts, most/least
+			// used, orphans, and totals sourced from graph.TagPageCounts (the
+			// existing page_tags cache query — no new heavy scan). Inherits the
+			// SAME RequireRole(admin) gate; no CSRF needed (GET, read-only).
+			admin.Get("/admin/tags/analytics", h.handleTagAnalytics)
 				admin.Post("/admin/tags/rename", h.handleTagRename)
 				admin.Post("/admin/tags/merge", h.handleTagMerge)
 				admin.Post("/admin/tags/delete", h.handleTagDelete)
@@ -353,6 +360,13 @@ func New(deps Deps) (http.Handler, error) {
 				// buildTagApplyItems + ApplyTagsBatch seam. Frontmatter-only
 				// (BodyOld=""); added tags re-validated via ValidateTagCharset.
 				admin.Post("/admin/tags/bulk", h.handleTagBulk)
+			// Tag-operation undo (Phase 35 / TF-05) — admin-only, inheriting the
+			// SAME RequireRole(admin) gate + nosurf CSRF. Replays the inverse of
+			// the last tag-admin op through ApplyTagsBatch (one forward commit,
+			// per-page 409-guarded). The op-journal is a SQLite table
+			// (tag_op_journal, migration 0013); undo is itself journaled so
+			// undo-of-undo (redo) works for free.
+			admin.Post("/admin/tags/undo", h.handleTagUndo)
 			// Tag metadata (Phase 32 / TF-02) — admin-only, inheriting the SAME
 			// RequireRole(admin) gate + nosurf CSRF. Sets/clears a tag's color +
 			// description via the on-disk Tags/{tag}.md store + single-writer commit.

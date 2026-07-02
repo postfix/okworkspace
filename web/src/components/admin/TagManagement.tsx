@@ -1,10 +1,11 @@
 // TagManagement (TM-04 / v1.3) — workspace-wide tag management surface.
 // Renders the tag table with rename/merge/delete + bulk multi-tag dialogs,
 // embedded in the Admin panel. Every destructive operation follows the
-// preview→approve contract.
+// preview→approve contract. Phase 34 / TF-04 adds an Analytics tab with
+// per-tag usage counts, most/least used, orphans, and totals.
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2, Layers, Palette } from "lucide-react";
+import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2, Layers, Palette, BarChart3 } from "lucide-react";
 import {
   listTags,
   renameTag,
@@ -13,17 +14,23 @@ import {
   bulkTag,
   setTagMeta,
   getTree,
+  getTagAnalytics,
   type TagEntry,
   type TagPreview,
   type TreeNode,
+  type TagAnalyticsSummary,
 } from "../../api/client";
 import Dialog from "../../components/Dialog";
 import "./TagManagement.css";
 
 const TAGS_KEY = ["admin", "tags"];
+const ANALYTICS_KEY = ["admin", "tags", "analytics"];
+
+type Tab = "tags" | "analytics";
 
 export default function TagManagement() {
   const queryClient = useQueryClient();
+  const [tab, setTab] = useState<Tab>("tags");
   const { data: tags = [], isLoading, isError } = useQuery<TagEntry[]>({
     queryKey: TAGS_KEY,
     queryFn: listTags,
@@ -31,13 +38,40 @@ export default function TagManagement() {
 
   return (
     <div className="tagmgmt">
-      {isLoading && <p className="tagmgmt-status"><Loader2 size={14} className="spinner" /> Loading tags…</p>}
-      {isError && <p className="tagmgmt-status tagmgmt-error">Couldn't load tags.</p>}
-      {!isLoading && !isError && tags.length === 0 && (
-        <p className="tagmgmt-status">No tags yet. Tags appear when pages carry them.</p>
+      <div className="tagmgmt-tabs" role="tablist">
+        <button
+          className={`btn btn-sm tagmgmt-tab ${tab === "tags" ? "tagmgmt-tab-active" : ""}`}
+          role="tab"
+          aria-selected={tab === "tags"}
+          onClick={() => setTab("tags")}
+        >
+          Tags
+        </button>
+        <button
+          className={`btn btn-sm tagmgmt-tab ${tab === "analytics" ? "tagmgmt-tab-active" : ""}`}
+          role="tab"
+          aria-selected={tab === "analytics"}
+          onClick={() => setTab("analytics")}
+        >
+          <BarChart3 size={14} /> Analytics
+        </button>
+      </div>
+
+      {tab === "tags" && (
+        <>
+          {isLoading && <p className="tagmgmt-status"><Loader2 size={14} className="spinner" /> Loading tags…</p>}
+          {isError && <p className="tagmgmt-status tagmgmt-error">Couldn't load tags.</p>}
+          {!isLoading && !isError && tags.length === 0 && (
+            <p className="tagmgmt-status">No tags yet. Tags appear when pages carry them.</p>
+          )}
+          {!isLoading && !isError && tags.length > 0 && (
+            <TagTable tags={tags} onDone={() => queryClient.invalidateQueries({ queryKey: TAGS_KEY })} />
+          )}
+        </>
       )}
-      {!isLoading && !isError && tags.length > 0 && (
-        <TagTable tags={tags} onDone={() => queryClient.invalidateQueries({ queryKey: TAGS_KEY })} />
+
+      {tab === "analytics" && (
+        <AnalyticsPanel />
       )}
     </div>
   );
@@ -148,6 +182,142 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
         <BulkTagDialog allTags={tags} onClose={() => setBulkOpen(false)} onDone={onDone} />
       )}
     </>
+  );
+}
+
+// AnalyticsPanel (Phase 34 / TF-04) — read-only admin analytics view over
+// graph.TagPageCounts. Shows summary cards (total tags, tagged/untagged
+// pages), a per-tag counts table (client-side sortable by count or name),
+// most-used + least-used sections (top 5 each), and orphan tags (metadata-only
+// tags with zero pages). A scope note states that counts reflect frontmatter
+// page_tags only — body-only #tags are counted after materialization.
+function AnalyticsPanel() {
+  const [sortKey, setSortKey] = useState<"count" | "name">("count");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const { data, isLoading, isError } = useQuery<TagAnalyticsSummary>({
+    queryKey: ANALYTICS_KEY,
+    queryFn: getTagAnalytics,
+  });
+
+  if (isLoading) {
+    return <p className="tagmgmt-status"><Loader2 size={14} className="spinner" /> Loading analytics…</p>;
+  }
+  if (isError) {
+    return <p className="tagmgmt-status tagmgmt-error">Couldn't load tag analytics.</p>;
+  }
+  if (!data) {
+    return <p className="tagmgmt-status">No analytics data.</p>;
+  }
+
+  const sortedTags = [...data.tags].sort((a, b) => {
+    let cmp: number;
+    if (sortKey === "count") {
+      cmp = a.count - b.count;
+    } else {
+      cmp = a.tag.localeCompare(b.tag);
+    }
+    return sortDir === "desc" ? -cmp : cmp;
+  });
+
+  const toggleSort = (key: "count" | "name") => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "desc" ? "asc" : "desc");
+    } else {
+      setSortKey(key);
+      setSortDir(key === "count" ? "desc" : "asc");
+    }
+  };
+
+  return (
+    <div className="tagmgmt-analytics">
+      <div className="tagmgmt-analytics-cards">
+        <div className="tagmgmt-analytics-card">
+          <span className="tagmgmt-analytics-card-value">{data.total_tags}</span>
+          <span className="tagmgmt-analytics-card-label">Total tags</span>
+        </div>
+        <div className="tagmgmt-analytics-card">
+          <span className="tagmgmt-analytics-card-value">{data.tagged_pages}</span>
+          <span className="tagmgmt-analytics-card-label">Tagged pages</span>
+        </div>
+        <div className="tagmgmt-analytics-card">
+          <span className="tagmgmt-analytics-card-value">{data.untagged_pages}</span>
+          <span className="tagmgmt-analytics-card-label">Untagged pages</span>
+        </div>
+        <div className="tagmgmt-analytics-card">
+          <span className="tagmgmt-analytics-card-value">{data.total_pages}</span>
+          <span className="tagmgmt-analytics-card-label">Total pages</span>
+        </div>
+      </div>
+
+      <div className="tagmgmt-analytics-sections">
+        <div className="tagmgmt-analytics-section">
+          <h4 className="tagmgmt-analytics-heading">Most used</h4>
+          <ul className="tagmgmt-analytics-list">
+            {data.most_used.length === 0 ? (
+              <li className="tagmgmt-analytics-empty">No tags yet.</li>
+            ) : (
+              data.most_used.map((t) => (
+                <li key={t.tag}><code>{t.tag}</code> <span className="tagmgmt-analytics-count">{t.count}</span></li>
+              ))
+            )}
+          </ul>
+        </div>
+        <div className="tagmgmt-analytics-section">
+          <h4 className="tagmgmt-analytics-heading">Least used</h4>
+          <ul className="tagmgmt-analytics-list">
+            {data.least_used.length === 0 ? (
+              <li className="tagmgmt-analytics-empty">No tags yet.</li>
+            ) : (
+              data.least_used.map((t) => (
+                <li key={t.tag}><code>{t.tag}</code> <span className="tagmgmt-analytics-count">{t.count}</span></li>
+              ))
+            )}
+          </ul>
+        </div>
+        <div className="tagmgmt-analytics-section">
+          <h4 className="tagmgmt-analytics-heading">Orphan tags (0 pages)</h4>
+          <ul className="tagmgmt-analytics-list">
+            {data.orphans.length === 0 ? (
+              <li className="tagmgmt-analytics-empty">No orphan tags.</li>
+            ) : (
+              data.orphans.map((t) => (
+                <li key={t.tag}><code>{t.tag}</code> <span className="tagmgmt-analytics-count">{t.count}</span></li>
+              ))
+            )}
+          </ul>
+        </div>
+      </div>
+
+      <table className="tagmgmt-table tagmgmt-analytics-table">
+        <thead>
+          <tr>
+            <th className="tagmgmt-analytics-sort" onClick={() => toggleSort("name")}>
+              Tag {sortKey === "name" && (sortDir === "desc" ? "▼" : "▲")}
+            </th>
+            <th className="tagmgmt-count-col tagmgmt-analytics-sort" onClick={() => toggleSort("count")}>
+              Pages {sortKey === "count" && (sortDir === "desc" ? "▼" : "▲")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedTags.length === 0 ? (
+            <tr><td className="tagmgmt-empty-row" colSpan={2}>No tags.</td></tr>
+          ) : (
+            sortedTags.map((t) => (
+              <tr key={t.tag}>
+                <td><code>{t.tag}</code></td>
+                <td className="tagmgmt-count-col">{t.count}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+
+      <p className="tagmgmt-analytics-scope">
+        Counts reflect frontmatter tags (the page_tags cache). Body-only #tags
+        are counted only after materialization.
+      </p>
+    </div>
   );
 }
 

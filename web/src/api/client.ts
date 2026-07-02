@@ -1211,6 +1211,7 @@ export interface SearchResult {
   snippet: string;
   anchor?: string;
   page_title?: string;
+  description?: string;
 }
 
 // search runs a full-text query against GET /api/v1/search (a GET — no CSRF).
@@ -1375,6 +1376,27 @@ export async function listTags(): Promise<TagEntry[]> {
   const res = await fetch("/api/v1/admin/tags", { credentials: "same-origin" });
   if (!res.ok) throw new Error("Couldn't load tags.");
   return (await res.json()) as TagEntry[];
+}
+
+// TagAnalyticsSummary (Phase 34 / TF-04) — admin analytics view over
+// graph.TagPageCounts. Read-only: per-tag page counts, most/least used,
+// orphans (metadata-only tags with zero pages), and totals. Scope is
+// frontmatter page_tags only; body-only #tags are counted after materialization.
+export interface TagAnalyticsSummary {
+  total_tags: number;
+  total_pages: number;
+  tagged_pages: number;
+  untagged_pages: number;
+  most_used: { tag: string; count: number }[];
+  least_used: { tag: string; count: number }[];
+  orphans: { tag: string; count: number }[];
+  tags: { tag: string; count: number }[];
+}
+
+export async function getTagAnalytics(): Promise<TagAnalyticsSummary> {
+  const res = await fetch("/api/v1/admin/tags/analytics", { credentials: "same-origin" });
+  if (!res.ok) throw new Error("Couldn't load tag analytics.");
+  return (await res.json()) as TagAnalyticsSummary;
 }
 
 export interface TagApplyResult {

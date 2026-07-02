@@ -454,6 +454,21 @@ func (s *Store) TagPageCounts(ctx context.Context) (map[string]int, error) {
 	return s.tagPageCounts(ctx)
 }
 
+// TaggedPageCount returns the count of distinct pages carrying at least one tag
+// (from the DERIVED page_tags cache). Used by the analytics summary to compute
+// tagged vs untagged page totals. Returns 0 when the store is empty.
+func (s *Store) TaggedPageCount(ctx context.Context) (int, error) {
+	if s.db == nil {
+		return 0, nil
+	}
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT page_path) FROM page_tags`).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // titleFor resolves a page's display title by reading ONLY its frontmatter title
 // through the SEC-01 resolver (s.repo), with a basename fallback. This is the only
 // place the query layer touches files, and only for titles, never bodies. A nil

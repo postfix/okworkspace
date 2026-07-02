@@ -1130,3 +1130,179 @@ func TestTagHierarchyRootTag(t *testing.T) {
 		t.Errorf("root tag parent = %q, want empty", resp.Parent)
 	}
 }
+
+// --- Tag analytics (Phase 34 / TF-04) ---
+
+// TestTagAnalyticsRBAC: editor gets 403; admin gets 200 on GET /admin/tags/analytics.
+func TestTagAnalyticsRBAC(t *testing.T) {
+	f := newTagAdminServer(t)
+
+	editor := f.editorCookies(t)
+	rec := doGet(t, f.handler, "/api/v1/admin/tags/analytics", editor)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("editor: got %d, want 403", rec.Code)
+	}
+
+	admin := f.adminCookies(t)
+	rec = doGet(t, f.handler, "/api/v1/admin/tags/analytics", admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin: got %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTagAnalytics: seeded pages with tags → verify total_tags, most_used,
+// orphans (a metadata-only tag with no pages), and the totals.
+func TestTagAnalytics(t *testing.T) {
+	f := newTagAdminServer(t)
+	// Seed pages with tags. ops on 2 pages, docs on 1 page.
+	f.seedPage(t, "a.md", []string{"ops"})
+	f.seedPage(t, "b.md", []string{"ops", "docs"})
+	f.seedPage(t, "c.md", nil) // untagged page
+	// Define a metadata-only tag with no pages → should appear as an orphan.
+	admin := f.adminCookies(t)
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "orphan-tag", "color": "#4caf50", "description": "", "parent": ""}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set orphan meta: %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doGet(t, f.handler, "/api/v1/admin/tags/analytics", admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("analytics: %d %s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		TotalTags     int `json:"total_tags"`
+		TotalPages    int `json:"total_pages"`
+		TaggedPages   int `json:"tagged_pages"`
+		UntaggedPages int `json:"untagged_pages"`
+		MostUsed      []struct {
+			Tag   string `json:"tag"`
+			Count int    `json:"count"`
+		} `json:"most_used"`
+		LeastUsed []struct {
+			Tag   string `json:"tag"`
+			Count int    `json:"count"`
+		} `json:"least_used"`
+		Orphans []struct {
+			Tag   string `json:"tag"`
+			Count int    `json:"count"`
+		} `json:"orphans"`
+		Tags []struct {
+			Tag   string `json:"tag"`
+			Count int    `json:"count"`
+		} `json:"tags"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal analytics: %v", err)
+	}
+	// 2 distinct tags in page_tags (ops, docs) — orphan-tag is metadata-only.
+	if got.TotalTags != 2 {
+		t.Errorf("total_tags = %d, want 2", got.TotalTags)
+	}
+	// 3 live pages (a, b, c).
+	if got.TotalPages != 3 {
+		t.Errorf("total_pages = %d, want 3", got.TotalPages)
+	}
+	// 2 pages tagged (a, b); c is untagged.
+	if got.TaggedPages != 2 {
+		t.Errorf("tagged_pages = %d, want 2", got.TaggedPages)
+	}
+	if got.UntaggedPages != 1 {
+		t.Errorf("untagged_pages = %d, want 1", got.UntaggedPages)
+	}
+	// most_used: ops=2, docs=1 → ops first.
+	if len(got.MostUsed) < 1 || got.MostUsed[0].Tag != "ops" || got.MostUsed[0].Count != 2 {
+		t.Errorf("most_used[0] = %+v, want {ops 2}", got.MostUsed)
+	}
+	// least_used: docs=1 (the lowest-count non-zero tag) should be present.
+	foundDocs := false
+	for _, lu := range got.LeastUsed {
+		if lu.Tag == "docs" && lu.Count == 1 {
+			foundDocs = true
+		}
+	}
+	if !foundDocs {
+		t.Errorf("least_used missing docs (count 1): %+v", got.LeastUsed)
+	}
+	// orphans: orphan-tag with count 0.
+	foundOrphan := false
+	for _, o := range got.Orphans {
+		if o.Tag == "orphan-tag" && o.Count == 0 {
+			foundOrphan = true
+		}
+	}
+	if !foundOrphan {
+		t.Errorf("orphans missing orphan-tag (count 0): %+v", got.Orphans)
+	}
+	// tags list has both ops and docs.
+	tagSet := map[string]int{}
+	for _, tg := range got.Tags {
+		tagSet[tg.Tag] = tg.Count
+	}
+	if tagSet["ops"] != 2 {
+		t.Errorf("tags[ops] = %d, want 2", tagSet["ops"])
+	}
+	if tagSet["docs"] != 1 {
+		t.Errorf("tags[docs] = %d, want 1", tagSet["docs"])
+	}
+}
+
+// TestTagAnalyticsEmpty: no pages, no tags → all zeros, empty arrays.
+func TestTagAnalyticsEmpty(t *testing.T) {
+	f := newTagAdminServer(t)
+	admin := f.adminCookies(t)
+
+	rec := doGet(t, f.handler, "/api/v1/admin/tags/analytics", admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("analytics empty: %d %s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		TotalTags     int `json:"total_tags"`
+		TotalPages    int `json:"total_pages"`
+		TaggedPages   int `json:"tagged_pages"`
+		UntaggedPages int `json:"untagged_pages"`
+		MostUsed      []struct {
+			Tag   string `json:"tag"`
+			Count int    `json:"count"`
+		} `json:"most_used"`
+		LeastUsed []struct {
+			Tag   string `json:"tag"`
+			Count int    `json:"count"`
+		} `json:"least_used"`
+		Orphans []struct {
+			Tag   string `json:"tag"`
+			Count int    `json:"count"`
+		} `json:"orphans"`
+		Tags []struct {
+			Tag   string `json:"tag"`
+			Count int    `json:"count"`
+		} `json:"tags"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal analytics empty: %v", err)
+	}
+	if got.TotalTags != 0 {
+		t.Errorf("total_tags = %d, want 0", got.TotalTags)
+	}
+	if got.TotalPages != 0 {
+		t.Errorf("total_pages = %d, want 0", got.TotalPages)
+	}
+	if got.TaggedPages != 0 {
+		t.Errorf("tagged_pages = %d, want 0", got.TaggedPages)
+	}
+	if got.UntaggedPages != 0 {
+		t.Errorf("untagged_pages = %d, want 0", got.UntaggedPages)
+	}
+	if len(got.MostUsed) != 0 {
+		t.Errorf("most_used len = %d, want 0", len(got.MostUsed))
+	}
+	if len(got.LeastUsed) != 0 {
+		t.Errorf("least_used len = %d, want 0", len(got.LeastUsed))
+	}
+	if len(got.Orphans) != 0 {
+		t.Errorf("orphans len = %d, want 0", len(got.Orphans))
+	}
+	if len(got.Tags) != 0 {
+		t.Errorf("tags len = %d, want 0", len(got.Tags))
+	}
+}

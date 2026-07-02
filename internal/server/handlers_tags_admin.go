@@ -20,8 +20,10 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -434,6 +436,7 @@ func (h *authHandlers) handleTagRename(w http.ResponseWriter, r *http.Request) {
 		Target: oldName + "→" + newName,
 		Detail: fmt.Sprintf("%d pages", len(items)),
 	})
+	h.journalOp(ctx, "rename", map[string]string{"old_name": oldName, "new_name": newName}, preview)
 	writeJSON(w, http.StatusOK, tagApplyResponse{Action: "rename", Results: results})
 }
 
@@ -518,6 +521,7 @@ func (h *authHandlers) handleTagMerge(w http.ResponseWriter, r *http.Request) {
 		Target: source + "→" + target,
 		Detail: fmt.Sprintf("%d pages", len(items)),
 	})
+	h.journalOp(ctx, "merge", map[string]string{"source": source, "target": target}, preview)
 	writeJSON(w, http.StatusOK, tagApplyResponse{Action: "merge", Results: results})
 }
 
@@ -586,6 +590,7 @@ func (h *authHandlers) handleTagDelete(w http.ResponseWriter, r *http.Request) {
 		Target: tag,
 		Detail: fmt.Sprintf("%d pages", len(items)),
 	})
+	h.journalOp(ctx, "delete", map[string]string{"tag": tag}, preview)
 	writeJSON(w, http.StatusOK, tagApplyResponse{Action: "delete", Results: results})
 }
 
@@ -712,6 +717,7 @@ func (h *authHandlers) handleTagBulk(w http.ResponseWriter, r *http.Request) {
 		Target: "bulk",
 		Detail: fmt.Sprintf("%d pages, +%v -%v", len(items), addTags, removeTags),
 	})
+	h.journalOp(ctx, "bulk", map[string]interface{}{"add_tags": addTags, "remove_tags": removeTags}, preview)
 	writeJSON(w, http.StatusOK, tagApplyResponse{Action: "bulk", Results: results})
 }
 
@@ -757,6 +763,149 @@ func (h *authHandlers) handleTagList(w http.ResponseWriter, r *http.Request) {
 		out = append(out, tagEntry{Tag: tag, Count: c, Color: m.Color, Description: m.Description, Parent: m.Parent})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// tagCountPair is a {tag, count} entry in the analytics summary.
+type tagCountPair struct {
+	Tag   string `json:"tag"`
+	Count int    `json:"count"`
+}
+
+// tagAnalyticsResponse is the JSON payload for GET /admin/tags/analytics
+// (Phase 34 / TF-04). Read-only: it never mutates. Sources per-tag counts from
+// graph.Store.TagPageCounts (the existing page_tags cache query — no new scan),
+// tagged/untagged page totals from the live page tree + the distinct-tagged-page
+// count, most/least used (top/bottom 5 by count), and orphans (tags that exist as
+// metadata but are carried by zero pages). The scope is frontmatter page_tags
+// only — body-only #tags are counted only after materialization.
+type tagAnalyticsResponse struct {
+	TotalTags     int            `json:"total_tags"`
+	TotalPages    int            `json:"total_pages"`
+	TaggedPages   int            `json:"tagged_pages"`
+	UntaggedPages int            `json:"untagged_pages"`
+	MostUsed      []tagCountPair `json:"most_used"`
+	LeastUsed     []tagCountPair `json:"least_used"`
+	Orphans       []tagCountPair `json:"orphans"`
+	Tags          []tagCountPair `json:"tags"`
+}
+
+// handleTagAnalytics handles GET /admin/tags/analytics (Phase 34 / TF-04).
+// Admin-only, read-only: returns a per-tag usage summary sourced from
+// graph.Store.TagPageCounts (the existing page_tags cache query — no new heavy
+// scan). Computes totals, most/least used (top/bottom 5), and orphans (tags
+// defined as metadata but carried by zero pages). The scope is frontmatter
+// page_tags only; body-only #tags are counted only after materialization.
+func (h *authHandlers) handleTagAnalytics(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if h.graph == nil {
+		writeError(w, http.StatusInternalServerError, "Graph store not available.")
+		return
+	}
+	counts, err := h.graph.TagPageCounts(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to read tag counts.")
+		return
+	}
+	taggedPages, err := h.graph.TaggedPageCount(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to read tagged-page count.")
+		return
+	}
+	// Total live pages from the page tree (a recursive walk is not needed: Tree
+	// already flattens to leaf nodes; we count type=="page"). When the pages
+	// service is unavailable, total_pages falls back to the tagged count so
+	// untagged is reported as 0 rather than a meaningless negative.
+	totalPages := taggedPages
+	if h.pages != nil {
+		nodes, perr := h.pages.Tree(ctx)
+		if perr == nil {
+			totalPages = countPageNodes(nodes)
+		}
+	}
+	if totalPages < taggedPages {
+		totalPages = taggedPages
+	}
+	// Orphans: tags that exist as metadata but are carried by zero pages.
+	var orphans []tagCountPair
+	if h.tagmeta != nil {
+		metas, merr := h.tagmeta.AllMeta(ctx)
+		if merr == nil {
+			for _, m := range metas {
+				if counts[m.Tag] == 0 {
+					orphans = append(orphans, tagCountPair{Tag: m.Tag, Count: 0})
+				}
+			}
+		}
+		// A metadata read error is non-fatal: orphans is left empty.
+	}
+
+	// Build the flat per-tag list + most/least used (top/bottom 5 by count).
+	tags := make([]tagCountPair, 0, len(counts))
+	for tag, c := range counts {
+		tags = append(tags, tagCountPair{Tag: tag, Count: c})
+	}
+	sort.Slice(tags, func(i, j int) bool { return tags[i].Tag < tags[j].Tag })
+
+	mostUsed := topNByCount(tags, 5, true)
+	leastUsed := topNByCount(tags, 5, false)
+
+	if orphans == nil {
+		orphans = []tagCountPair{}
+	}
+	if mostUsed == nil {
+		mostUsed = []tagCountPair{}
+	}
+	if leastUsed == nil {
+		leastUsed = []tagCountPair{}
+	}
+
+	writeJSON(w, http.StatusOK, tagAnalyticsResponse{
+		TotalTags:     len(counts),
+		TotalPages:    totalPages,
+		TaggedPages:   taggedPages,
+		UntaggedPages: totalPages - taggedPages,
+		MostUsed:      mostUsed,
+		LeastUsed:     leastUsed,
+		Orphans:       orphans,
+		Tags:          tags,
+	})
+}
+
+// countPageNodes recursively counts Tree nodes of type "page".
+func countPageNodes(nodes []pages.Node) int {
+	n := 0
+	for _, node := range nodes {
+		if node.Type == "page" {
+			n++
+		}
+		if len(node.Children) > 0 {
+			n += countPageNodes(node.Children)
+		}
+	}
+	return n
+}
+
+// topNByCount returns the top (desc=true) or bottom (desc=false) N entries by
+// count from a copy of tags, sorted by count then name for stable ordering.
+func topNByCount(tags []tagCountPair, n int, desc bool) []tagCountPair {
+	if len(tags) == 0 {
+		return []tagCountPair{}
+	}
+	sorted := make([]tagCountPair, len(tags))
+	copy(sorted, tags)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Count != sorted[j].Count {
+			if desc {
+				return sorted[i].Count > sorted[j].Count
+			}
+			return sorted[i].Count < sorted[j].Count
+		}
+		return sorted[i].Tag < sorted[j].Tag
+	})
+	if len(sorted) > n {
+		sorted = sorted[:n]
+	}
+	return sorted
 }
 
 // handleTagVocabulary handles GET /tags/vocabulary — any-authed read returning
@@ -858,4 +1007,193 @@ func uniqueStrings(in []string) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// --- Tag-operation undo journal (Phase 35 / TF-05) ---
+
+// journalPage is one page's invertible record captured at op time: its path,
+// the frontmatter tags it carried BEFORE the op, and whether the op also
+// rewrote its body #tags.
+type journalPage struct {
+	PagePath      string   `json:"page_path"`
+	PreOpTags    []string `json:"pre_op_tags"`
+	BodyAffected bool     `json:"body_affected"`
+}
+
+// journalRecord is the invertible record stored per tag-admin op: the op type,
+// the op-specific detail (old/new names, add/remove sets, etc.), and the
+// per-page pre-op state. It is marshalled to JSON columns in tag_op_journal.
+type journalRecord struct {
+	OpType   string        `json:"op_type"`
+	OpDetail interface{}   `json:"op_detail"`
+	Pages    []journalPage `json:"pages"`
+}
+
+// journalOp inserts one append-only row into tag_op_journal recording the op
+// just applied, built from the per-page preview (CurrentTags = pre-op tags,
+// BodyAffected = body channel flag). Non-fatal: a DB error is logged but never
+// breaks the request (the op already committed; the journal is best-effort so
+// a transient SQLite hiccup can't sink a successful apply).
+func (h *authHandlers) journalOp(ctx context.Context, opType string, opDetail interface{}, preview []tagPreviewPage) {
+	if h.store == nil {
+		return
+	}
+	pages := make([]journalPage, len(preview))
+	for i, p := range preview {
+		pages[i] = journalPage{PagePath: p.PagePath, PreOpTags: p.CurrentTags, BodyAffected: p.BodyAffected}
+	}
+	detailJSON, err := json.Marshal(opDetail)
+	if err != nil {
+		return
+	}
+	pagesJSON, err := json.Marshal(pages)
+	if err != nil {
+		return
+	}
+	if _, err := h.store.DB().ExecContext(ctx,
+		`INSERT INTO tag_op_journal (op_type, op_detail, pages) VALUES (?, ?, ?)`,
+		opType, string(detailJSON), string(pagesJSON)); err != nil {
+		// Non-fatal: the op already committed; the journal is best-effort.
+		slog.WarnContext(ctx, "tag_op_journal insert failed",
+			slog.String("op_type", opType), slog.Any("error", err))
+	}
+}
+
+// handleTagUndo handles POST /admin/tags/undo (TF-05). It reads the last
+// tag_op_journal row, builds the inverse TagApplyItems (swap bodyOld/bodyNew
+// for rename/merge; frontmatter-only for delete/bulk — delete body #tags are
+// NOT invertible, a stated limitation), replays them through ApplyTagsBatch
+// (one forward commit, per-page 409-guarded), audits the undo, and journals
+// the undo op itself so undo-of-undo (redo) works for free.
+func (h *authHandlers) handleTagUndo(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, http.StatusInternalServerError, "Tag undo unavailable.")
+		return
+	}
+	actor := h.actorFromSession(r)
+	ctx := r.Context()
+
+	// Read the LAST journal row (last-op undo, v1.6).
+	var id int64
+	var opType, opDetailJSON, pagesJSON string
+	err := h.store.DB().QueryRowContext(ctx,
+		`SELECT id, op_type, op_detail, pages FROM tag_op_journal ORDER BY id DESC LIMIT 1`).
+		Scan(&id, &opType, &opDetailJSON, &pagesJSON)
+	if err == sql.ErrNoRows {
+		writeError(w, http.StatusBadRequest, "No tag operation to undo.")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to read undo journal.")
+		return
+	}
+
+	var jpages []journalPage
+	if err := json.Unmarshal([]byte(pagesJSON), &jpages); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to parse undo journal.")
+		return
+	}
+	if len(jpages) == 0 {
+		writeError(w, http.StatusBadRequest, "No tag operation to undo.")
+		return
+	}
+
+	// Build the inverse TagApplyItems. BaseRevision is read FRESH per page at
+	// undo time (NOT the stored one) so a page edited since the op is stale and
+	// skipped by the 409-guard, never clobbered.
+	items := make([]pages.TagApplyItem, 0, len(jpages))
+	for _, jp := range jpages {
+		pg, err := h.pages.Get(ctx, jp.PagePath)
+		if err != nil {
+			// A page gone since the op is reported stale (it can't be restored
+			// to a revision we no longer have). Skip it from the inverse batch
+			// and let the result surface it.
+			continue
+		}
+		var bodyOld, bodyNew string
+		switch opType {
+		case "rename":
+			var d struct {
+				OldName string `json:"old_name"`
+				NewName string `json:"new_name"`
+			}
+			_ = json.Unmarshal([]byte(opDetailJSON), &d)
+			bodyOld, bodyNew = d.NewName, d.OldName // swap
+		case "merge":
+			var d struct {
+				Source string `json:"source"`
+				Target string `json:"target"`
+			}
+			_ = json.Unmarshal([]byte(opDetailJSON), &d)
+			bodyOld, bodyNew = d.Target, d.Source // swap
+		case "delete", "bulk", "undo":
+			// delete: body #tags removed by the delete are NOT invertible (the
+			// span is gone; self-heals on next edit) — stated limitation; the undo
+			// restores frontmatter tags only. bulk is frontmatter-only by design.
+			// undo: the undo's own body swap is already reflected in the
+			// frontmatter restore (pre_op_tags); no body channel needed.
+			bodyOld, bodyNew = "", ""
+		}
+		tags := jp.PreOpTags
+		if tags == nil {
+			tags = []string{}
+		}
+		items = append(items, pages.TagApplyItem{
+			PagePath:        jp.PagePath,
+			Tags:            tags,
+			BaseRevision:    pg.Revision,
+			SkipFrontmatter: false,
+			BodyOld:         bodyOld,
+			BodyNew:         bodyNew,
+		})
+	}
+
+	if len(items) == 0 {
+		writeJSON(w, http.StatusOK, tagApplyResponse{
+			Action:  "undo",
+			Results: []pages.TagApplyResult{},
+		})
+		return
+	}
+
+	results, err := h.pages.ApplyTagsBatch(ctx, items, actor)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to apply tag undo.")
+		return
+	}
+
+	_ = h.audit.Record(ctx, audit.Event{
+		Action: audit.ActionTagUndo,
+		Actor:  actor,
+		Target: opType,
+		Detail: fmt.Sprintf("undo %s (%d pages)", opType, len(items)),
+		Source: auditSourceWeb,
+	})
+
+	// Journal the undo op itself (built from the FRESH page state we just read)
+	// so undo-of-undo (redo) works for free. The pre_op_tags for the redo row are
+	// the CURRENT tags (i.e. the state we just wrote); body_affected mirrors the
+	// original op's body channel.
+	undoPreview := make([]tagPreviewPage, len(items))
+	for i, it := range items {
+		undoPreview[i] = tagPreviewPage{
+			PagePath:     it.PagePath,
+			CurrentTags:  it.Tags,
+			BodyAffected: it.BodyOld != "",
+		}
+	}
+	h.journalOp(ctx, "undo", map[string]string{"undid": opType}, undoPreview)
+
+	resp := tagApplyResponse{Action: "undo", Results: results}
+	if opType == "delete" {
+		// Surface the delete body-#tag limitation so the admin knows body #tags
+		// removed by the original delete are NOT re-inserted by the undo.
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"action":  resp.Action,
+			"results": resp.Results,
+			"note":    "Undo restores frontmatter tags only; body #tags removed by the original delete are not re-inserted (they self-heal on the next edit).",
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

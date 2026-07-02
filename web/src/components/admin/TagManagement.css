@@ -263,3 +263,146 @@
   color: var(--color-text-muted);
   font-size: 11px;
 }
+
+/* Analytics tab + panel (Phase 34 / TF-04) */
+.tagmgmt-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: var(--space-sm, 8px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tagmgmt-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 6px 12px;
+  border-radius: 4px 4px 0 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tagmgmt-tab:hover {
+  color: var(--color-text);
+  background: var(--color-bg-subtle, rgba(0, 0, 0, 0.03));
+}
+
+.tagmgmt-tab-active {
+  color: var(--color-accent, #8b5cf6);
+  border-bottom: 2px solid var(--color-accent, #8b5cf6);
+  font-weight: 600;
+}
+
+.tagmgmt-analytics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md, 16px);
+}
+
+.tagmgmt-analytics-cards {
+  display: flex;
+  gap: var(--space-sm, 8px);
+  flex-wrap: wrap;
+}
+
+.tagmgmt-analytics-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-elevated);
+  min-width: 100px;
+}
+
+.tagmgmt-analytics-card-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.tagmgmt-analytics-card-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.tagmgmt-analytics-sections {
+  display: flex;
+  gap: var(--space-md, 16px);
+  flex-wrap: wrap;
+}
+
+.tagmgmt-analytics-section {
+  flex: 1;
+  min-width: 180px;
+}
+
+.tagmgmt-analytics-heading {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin: 0 0 8px 0;
+}
+
+.tagmgmt-analytics-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tagmgmt-analytics-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--color-bg-subtle, rgba(0, 0, 0, 0.02));
+}
+
+.tagmgmt-analytics-count {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  min-width: 24px;
+  text-align: right;
+}
+
+.tagmgmt-analytics-empty {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 8px;
+  justify-content: center !important;
+}
+
+.tagmgmt-analytics-table {
+  margin-top: var(--space-sm, 8px);
+}
+
+.tagmgmt-analytics-sort {
+  cursor: pointer;
+  user-select: none;
+}
+
+.tagmgmt-analytics-sort:hover {
+  color: var(--color-text);
+}
+
+.tagmgmt-analytics-scope {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 0;
+}
