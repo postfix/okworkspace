@@ -46,11 +46,13 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
 |  |  |   index.md               |                                  | |
 |  |  +---------------------------+                                  | |
 |  |  +---------------------------+                                  | |
-|  |  | app.db (SQLite)          |                                  | |
-|  |  | users, sessions,         |                                  | |
-|  |  | audit_log,               |                                  | |
-|  |  | page_links, page_tags,   |                                  | |
-|  |  | tag_suggestions, jobs    |                                  | |
+|  | app.db (SQLite)          |                                  | |
+|  | users, sessions,         |                                  | |
+|  | audit_log,               |                                  | |
+|  | page_links, page_tags,   |                                  | |
+|  | tag_suggestions,         |                                  | |
+|  | tag_meta, tag_op_journal,|                                  | |
+|  | jobs                     |                                  | |
 |  |  +---------------------------+                                  | |
 |  +----------------------------------------------------------------+ |
 +---------------------------------------------------------------------+
@@ -97,6 +99,12 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
 2. The affected-page set unions the frontmatter-tag pages (`graph.PagesByTag`) with pages carrying the tag in their BODY (`pages.PagesWithBodyTag`) -- so a body-only page is not missed (v1.5, TR-04)
 3. Each affected page's frontmatter `tags:` AND body `#tags` are rewritten byte-stably (`okf.SetTags` + `okf.RewriteHashtags`) in ONE batched commit (`pages.ApplyTagsBatch`) -- the fix that made these ops server-authoritative for the body, not just the frontmatter (v1.5); see [tag-subsystem.md](tag-subsystem.md)
 
+### Tag Metadata, Bulk, Analytics & Undo (v1.6)
+1. Admin sets a tag's color/description/parent via `POST /api/v1/admin/tags/meta` → written as `Tags/{tag}.md` (files-as-truth) through the single-writer commit path + a rebuildable `tag_meta` cache. Color/description surface on the CM6 `#tag` badge and the admin list; the parent forms a display-only hierarchy (cycle-safe). See [tag-metadata-subsystem.md](tag-metadata-subsystem.md)
+2. Admin bulk-adds/removes multiple tags across a page set via `POST /api/v1/admin/tags/bulk` — the same byte-stable `ApplyTagsBatch` seam (frontmatter-only), no new write path
+3. Admin views usage analytics via `GET /api/v1/admin/tags/analytics` — a read-only summary over the existing `page_tags` counts (no new scan), with orphans sourced from the metadata store
+4. Admin undoes the last tag-admin op via `POST /api/v1/admin/tags/undo` — the inverse replayed through `ApplyTagsBatch`, backed by the append-only `tag_op_journal`
+
 ## Component Map
 
 | Component | Package | Purpose |
@@ -106,9 +114,10 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
 | Pages | `internal/pages` | Page CRUD, byte-stable Markdown round-trip, tag apply |
 | Graph | `internal/graph` | Derived link/tag adjacency cache, rebuild, query layer |
 | Tagsweep | `internal/tagsweep` | Bulk tag sweep staging, pending queue, target enumeration, sweep progress tracking |
+| Tagmeta | `internal/tagmeta` | Tag-metadata store (color/description/parent) — files-as-truth `Tags/*.md` + rebuildable `tag_meta` cache (v1.6, see [tag-metadata-subsystem.md](tag-metadata-subsystem.md)) |
 | Agent | `internal/agent` | Eino orchestration: ask, summarize, rewrite, draft, suggest-tags, generate-description |
 | Editor | `web/src/lib/cm` | CM6 live-preview surface (edit + read); decoration pipeline, syntax highlight, mermaid, hashtags (see [editor-subsystem.md](editor-subsystem.md)) |
-| Search | `internal/search` | Bleve full-text index |
+| Search | `internal/search` | Bleve full-text index (v1.6: page frontmatter `description` stored + surfaced in result cards) |
 | Auth | `internal/auth` | Session management, RBAC, Argon2id |
 | Server | `internal/server` | HTTP handlers, chi router, DI wiring |
 | OKF | `internal/okf` | Markdown/frontmatter parsing, repair, emit, link extraction |
@@ -119,9 +128,10 @@ OKF Workspace follows a **files-are-truth** architecture. All wiki content lives
 
 ## Key Architectural Decisions
 
-- **SQLite is never the source of truth.** All wiki content is plain files. The graph cache (`page_links`, `page_tags`) and tag staging (`tag_suggestions`) are derived data: deleting and rebuilding from files reproduces identical rows.
+- **SQLite is never the source of truth.** All wiki content is plain files. The graph cache (`page_links`, `page_tags`), tag staging (`tag_suggestions`), and the tag-metadata cache (`tag_meta`, v1.6) are derived data: deleting and rebuilding from files reproduces identical rows. (The `tag_op_journal` undo record, v1.6, is operational-only state — machine-generated, not content.)
 - **Single-writer commit spine.** All mutations serialize through one writer to prevent Git merge conflicts. Optimistic concurrency (base revision check) catches stale edits.
 - **Fire-and-forget for derived caches.** Page mutations enqueue graph/index rebuild jobs asynchronously. The jobs worker serializes them through a single drain goroutine.
 - **Hidden infrastructure.** Error responses to clients use generic messages ("The graph is unavailable."). Internal details (Git, SQLite, index, jobs) are logged server-side only.
 - **Generic error copies on all server-facing failures.** No Git/SQLite/LLM vocabulary reaches the client response body.
 - **Navrail full-text search replaces the in-place tree filter (v1.5).** One find surface: full-text search beats a title-prefix tree filter for a growing wiki. The narrow-the-tree-by-title control was removed in the reading-shell fold-in; re-introduction is tracked as a Future requirement ("In-place file-tree filter") in `.planning/REQUIREMENTS.md`.
+- **Tag metadata is content, not operational data (v1.6).** Tag color/description/parent are durable data a team must be able to copy off the server, so they live as `Tags/*.md` files (files-as-truth) with only a rebuildable `tag_meta` cache — the same discipline as page content. The write path reuses the page-save single-writer commit spine (no second commit kind). The hierarchy is **display-only** in v1.6 (no page rewrites / search expansion); tag-op undo is **last-op only** (a full stack is a Future item). See [tag-metadata-subsystem.md](tag-metadata-subsystem.md).

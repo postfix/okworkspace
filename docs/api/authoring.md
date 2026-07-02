@@ -50,6 +50,13 @@ listing; every candidate path is re-validated through `repo.Resolve` so the SEC-
 
 **Source:** [`internal/server/handlers_pages.go`](../../internal/server/handlers_pages.go) `handleListTemplates()`, [`internal/pages/templates.go`](../../internal/pages/templates.go) `ListTemplates()`
 
+> **v1.6 (EP-03):** this endpoint has a second consumer — the editor's **insert-at-cursor**
+> affordance. `TemplatePicker` (in `PageEditor`) lists templates via `GET /templates`, reads the
+> chosen template body via `GET /pages/*`, substitutes `{{title}}`/`{{date}}`/`{{time}}` with the
+> shared `lib/templates.ts` `substitutePlaceholders`, and inserts the result at the cursor as a
+> normal CM6 transaction (`replaceSelection`) — no new endpoint, no page-create. See
+> [editor-subsystem.md](../architecture/editor-subsystem.md#authoring-polish-v16).
+
 ---
 
 ## `POST /api/v1/pages`

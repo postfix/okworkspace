@@ -336,7 +336,7 @@ See [`docs/api/tag-admin.md`](../api/tag-admin.md) for the full contract.
 
 ## HTTP Endpoints
 
-See [`docs/api/tagsweep.md`](../api/tagsweep.md) (suggest/sweep/approve) and [`docs/api/tag-admin.md`](../api/tag-admin.md) (rename/merge/delete) for full endpoint contracts.
+See [`docs/api/tagsweep.md`](../api/tagsweep.md) (suggest/sweep/approve) and [`docs/api/tag-admin.md`](../api/tag-admin.md) (rename/merge/delete/bulk, meta, analytics, undo) for full endpoint contracts. The v1.6 tag-metadata store, hierarchy, analytics, and undo design lives in [`docs/architecture/tag-metadata-subsystem.md`](tag-metadata-subsystem.md).
 
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|
@@ -350,6 +350,10 @@ See [`docs/api/tagsweep.md`](../api/tagsweep.md) (suggest/sweep/approve) and [`d
 | `/api/v1/admin/tags/rename` | POST | Admin | Rename a tag workspace-wide (frontmatter + body), preview/apply |
 | `/api/v1/admin/tags/merge` | POST | Admin | Merge a source tag into a target, preview/apply |
 | `/api/v1/admin/tags/delete` | POST | Admin | Delete a tag workspace-wide (frontmatter + body), preview/apply |
+| `/api/v1/admin/tags/bulk` | POST | Admin | Bulk add/remove multiple tags across a page set (v1.6, frontmatter-only), preview/apply |
+| `/api/v1/admin/tags/meta` | POST | Admin | Set/clear a tag's color/description/parent (v1.6, files-as-truth store) |
+| `/api/v1/admin/tags/analytics` | GET | Admin | Read-only per-tag usage summary (v1.6, over `page_tags` counts) |
+| `/api/v1/admin/tags/undo` | POST | Admin | Undo the last tag-admin op via inverse `ApplyTagsBatch` (v1.6) |
 
 ---
 

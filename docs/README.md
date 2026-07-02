@@ -11,10 +11,11 @@ tag, and editor subsystems and their HTTP contracts.
 - [Editor Subsystem](architecture/editor-subsystem.md) -- the CM6 live-preview surface, decoration pipeline, syntax highlight, mermaid, hashtags
 - [Graph Subsystem](architecture/graph-subsystem.md) -- derived link/tag adjacency store, rebuild, query layer
 - [Tag Subsystem](architecture/tag-subsystem.md) -- LLM tag suggestion, bulk sweep, review queue, byte-stable apply
+- [Tag Metadata Subsystem](architecture/tag-metadata-subsystem.md) -- tag color/description/hierarchy store (files-as-truth), usage analytics, tag-op undo (v1.6)
 - [API: Authoring](api/authoring.md) -- page templates, page create, LLM-generated description endpoint contracts
 - [API: Graph](api/graph.md) -- global graph (GraphData), Backlinks endpoint contracts (the per-page local graph was removed in v1.5)
 - [API: Tagsweep](api/tagsweep.md) -- tag suggestion, bulk sweep, review queue endpoint contracts
-- [API: Tag Admin](api/tag-admin.md) -- workspace-wide rename/merge/delete (frontmatter + body), tag vocabulary
+- [API: Tag Admin](api/tag-admin.md) -- workspace-wide rename/merge/delete/bulk (frontmatter + body), tag metadata, analytics, undo, tag vocabulary
 
 ## Tech Stack
 

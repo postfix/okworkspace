@@ -1,12 +1,12 @@
 ---
 author: codebase-archaeologist
 responsible: codebase-archaeologist
-phase: 27
-milestone: v1.4
+phase: 27, 37
+milestone: v1.4 (create-path) · v1.6 (insert-at-cursor)
 status: verified
 confidence: direct_read
 grounding: direct file read (SMTC daemon offline this session)
-head: 1ba6d6b
+head: 1653933
 ---
 
 # Codebase Map: Page Templates Create-Path
@@ -47,6 +47,37 @@ CreatePageModal
           6. enqueueWrite "create" + index/graph upsert (single-writer spine)
       → 201 {path}
 ```
+
+### Second consumer — insert-at-cursor (Phase 37, EP-03)
+
+v1.6 added a SECOND consumer of the `Templates/` folder that does NOT create a page: an
+"Insert template" affordance in the `PageEditor` toolbar inserts a template's substituted body
+**at the cursor** via a normal CM6 transaction.
+
+| File | Role |
+|------|------|
+| `web/src/components/TemplatePicker.tsx` (new) | Button + popover listing `listTemplates()` on-demand (react-query, `enabled: open`). Mirrors `LinkPicker` exactly. |
+| `web/src/components/TemplatePicker.css` (new) | Picker styles (mirrors `LinkPicker.css`). |
+| `web/src/routes/PageEditor.tsx` | `insertTemplateAtCursor(tpl)`: `getPage(tpl.path)` → `substitutePlaceholders` (`{{title}}`/`{{date}}`/`{{time}}`, the SAME `lib/templates.ts` helper the create-path uses) → resolves the `EditorView` via `editorSurfaceRef.querySelector('.cm-editor').cmView.view` → `view.dispatch(view.state.replaceSelection(substituted))`. Disabled when `readOnly`. |
+
+```
+TemplatePicker (toolbar, beside LinkPicker)
+  → listTemplates() → GET /templates → flat Templates/*.md {name, path}
+  → user picks → getPage(tpl.path) reads the body
+  → substitutePlaceholders (client) → replaceSelection dispatch (normal user edit)
+      → updateListener fires onChange on docChanged → autosave (like a keystroke)
+```
+
+**Key invariants (per-claim confidence):**
+- **Normal CM6 transaction, NOT `externalSeed`.** (HIGH — 37-SUMMARY; `grep 'externalSeed'
+  PageEditor.tsx` → 0.) `replaceSelection` is a standard user edit that MUST fire `onChange` so it
+  autosaves; `externalSeed` is for prop-driven resets only. The byte-stable round-trip is preserved
+  by construction (the doc IS the Markdown).
+- **EditorView via DOM ref, zero contract change.** (HIGH — 37-SUMMARY key decisions.) The
+  `LivePreviewEditor` stamps `cmView.view` on its `.cm-editor` host; `insertTemplateAtCursor`
+  resolves it through the wrapper ref — no forwardRef, no new prop/interface on the editor surface.
+- **Reuses `substitutePlaceholders` + `getPage`.** (HIGH.) No duplicate substitution logic; the
+  template body is read via the existing safe-path resolver endpoint (no path escape).
 
 ### Key invariants & landmines (per-claim confidence)
 

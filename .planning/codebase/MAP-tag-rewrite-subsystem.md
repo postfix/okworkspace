@@ -1,12 +1,12 @@
 ---
 author: codebase-archaeologist
 responsible: codebase-archaeologist
-phase: 29
-milestone: v1.5
+phase: 29, 31, 35
+milestone: v1.5 (base) · v1.6 (bulk + undo integration)
 status: verified
 confidence: direct_read
 grounding: direct file read (SMTC daemon offline this session — no semantic/blast-radius certs)
-head: f03cffc
+head: 1653933
 ---
 
 # Codebase Map: Server-Authoritative Tag-Rewrite Subsystem
@@ -133,6 +133,37 @@ trashed/non-`.md`). Merge enumerates body-`#source` pages only, NOT body-`#targe
 `tagPreviewPage`. The preview response carries per-page `body_affected` (JSON `body_affected`);
 `web/src/api/client.ts` types it (`body_affected?: boolean`) and `TagManagement.tsx` renders a
 `prose` badge + a "N page(s) also have body #tags that will be rewritten" note.
+
+### The v1.6 integration — new callers of this batch seam (Phases 31 + 35)
+
+v1.6 added two more callers to the SAME `buildTagApplyItems` → `ApplyTagsBatch` seam — no new
+write path, no second commit kind. Both ride the exact byte-stable + 409-guard + no-op-guard
+machinery above; the tag-metadata store and the undo journal themselves live in the sibling
+**`MAP-tagmeta-subsystem.md`**.
+
+- **Bulk multi-tag (Phase 31, TF-01) — `handleTagBulk`.** Adds and/or removes multiple tags across
+  a server-resolved page set (explicit `page_paths` ∪ `filter_tags` pages, re-resolved at BOTH
+  preview and apply — TOCTOU-safe) via `computeBulkTags(add, remove)` = `(current ∪ add) \ remove`
+  through `buildTagApplyItems(ctx, pageSet, computeFn, "", "")`. **`BodyOld=""` disables the body
+  channel** — bulk is frontmatter-only (D-02), so the body-rewrite path above is NOT exercised; only
+  the frontmatter tags region changes. Added tags are re-validated via `okf.ValidateTagCharset`
+  (removed/filter tags are matched, not written).
+
+- **Tag-operation undo (Phase 35, TF-05) — `handleTagUndo`.** Replays the INVERSE of the last
+  tag-admin op as an `ApplyTagsBatch`. It reuses the body channel in REVERSE: for a rename undo it
+  sets `BodyOld=new_name, BodyNew=old_name` (swap); merge undo `BodyOld=target, BodyNew=source`;
+  delete/bulk undo carry no body inverse (`BodyOld=BodyNew=""`). `BaseRevision` is read FRESH per
+  page at undo time (the journal stores `pre_op_tags`, not revisions), so the batch's 409-guard is
+  the authoritative net; a SEMANTIC stale check in the handler (recompute the op's expected output
+  from `pre_op_tags`, compare to current tags) skips a concurrently-edited page BEFORE the batch.
+  **Delete's body `#tags` are NOT invertible** — `RewriteHashtags(body, tag, "")` splices the span
+  OUT, and the original bytes are in git history, not the page; undo restores the frontmatter `tags:`
+  list only (body `#tags` self-heal on the next edit). See `MAP-tagmeta-subsystem.md` for the
+  journal schema, the redo (undo-of-undo) mechanics, and the full undo landmine set.
+
+**Every mutating op is now journaled.** `journalOp` is hooked into rename/merge/delete/bulk (and
+undo journals itself for redo), capturing per-page `pre_op_tags` from the preview — the invertible
+record. The journal is operational SQLite state (`tag_op_journal`, migration 0013), NOT files-as-truth.
 
 ## Undocumented invariants & landmines (per-claim confidence)
 

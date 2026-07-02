@@ -200,3 +200,52 @@ and edit configs:
   exact; the two are visually identical (headings have no background/border). The `.cm-content`
   block also moved to a centered doc column governed by the `.pageeditor`/`.pageview` max-width
   with generous bottom padding.
+
+## Authoring polish (v1.6)
+
+Three small read-surface + authoring wins landed in v1.6 (Phases 36–37, EP-01..03).
+
+### Copy-code button on read-mode fenced code (EP-02)
+
+`CodeBlockWidget.toDOM` (`widgets.ts`) appends a copy-to-clipboard `<button class="cm-copy-btn">`
+as a **sibling of `<code>` inside `<pre>`** — built with `createElement` + `textContent` only (the
+no-`innerHTML` invariant holds). It does not perturb the async highlight swap or the
+`destroyed`/`isConnected` teardown guards (both guard `codeEl`, not the button). Click uses
+`navigator.clipboard.writeText(this.code)` with a graceful fallback (a no-op + "Failed" state when
+the API is unavailable), and flips the label to "Copied" for 1.5s.
+
+The button lives inside `<pre>`, so it would otherwise pollute a select-all copy of the code block.
+Two guards prevent that: the CSS sets `user-select: none` on `.cm-copy-btn` (so the "Copy" text is
+excluded from a text selection of the code), and the button is `opacity: 0` until the block is
+hovered. The widget test asserts on the `<code>` child's `textContent` (not the whole `<pre>`), so
+the rendered code — not the button label — is what "renders without fences" verifies.
+
+### `#tag` badge on the react-markdown surface (EP-01)
+
+CM6 is not the only Markdown renderer: **`MarkdownProse.tsx`** (a react-markdown / rehype surface,
+used by the agent-answer and other prose views) is separate from the CM6 editor. v1.6 gives it the
+same `#tag` badge via **`web/src/lib/remark-hashtag.ts`** — a remark plugin that walks mdast `text`
+nodes and replaces recognized `#tag` patterns with a **typed hast `<span class="cm-hashtag">`**
+(via `data.hName`/`hProperties`/`hChildren`), NOT raw HTML.
+
+This preserves the surface's XSS posture: `rehype-raw` stays **off**, `rehype-sanitize` stays
+**on**. The tag text flows through as a hast `text` node (never parsed as markup), and the
+`headingIdSchema` sanitize allow-list is extended with a **value-locked** `["className",
+"cm-hashtag"]` tuple on `span` (not a free-form `className` allow). Recognition mirrors
+`hashtag.ts` (body alphabet, ≥1 non-digit, word-start boundary); code/heading/URL exclusions are
+structural (only `text` nodes are walked; escapes are checked against the source vfile). The
+AgentAnswer stored-XSS test confirms raw HTML in content still does not render.
+
+### Insert-at-cursor templates (EP-03)
+
+`web/src/components/TemplatePicker.tsx` (mirroring `LinkPicker`) adds an "Insert template" toolbar
+affordance to `PageEditor`. On selection, `insertTemplateAtCursor` reads the template body via
+`getPage(tpl.path)` (the existing safe-path resolver endpoint), substitutes
+`{{title}}`/`{{date}}`/`{{time}}` via the shared `lib/templates.ts` `substitutePlaceholders`
+(the same helper the create-from-template flow uses), and dispatches a **normal CM6 transaction**:
+`view.dispatch(view.state.replaceSelection(substituted))`. The `EditorView` is resolved from the
+`.cm-editor` host's `cmView.view` via a DOM ref — **zero contract change** to the editor surface
+(no new prop/forwardRef). Because it is a standard user-edit transaction (not an `externalSeed`
+reset), the update listener fires `onChange` on `docChanged`, so autosave picks it up exactly like a
+keystroke, and the byte-stable round-trip is preserved by construction (the doc IS the Markdown).
+The picker is disabled when `readOnly` (held-by-other soft lock), matching the Save button.
