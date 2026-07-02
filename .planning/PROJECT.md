@@ -10,24 +10,22 @@ A non-technical teammate can create, edit, and find knowledge — and get useful
 
 ## Current State
 
-**Shipped: v1.5 Tag Regression Fix, Reading-Shell Fold-In & v1.3 Closure (2026-07-01).** Phases 28–30
-— server-authoritative tag body-rewrite (`okf.RewriteHashtags`, Lezer-parity-pinned), reading-shell
-fold-in, and the retroactive v1.3 Tag Management closure (verified + security-reviewed). All post-close
-follow-ups (F-01/F-02/govulncheck/P26-UAT) closed; audit COMPLETE, security SHIP, debt=0.
+**Shipped: v1.6 Tag System Completion & Authoring Polish (2026-07-02).** Phases 31–37, two tracks —
+bulk multi-tag ops, a NET-NEW on-disk tag-metadata store (`internal/tagmeta/`, `Tags/*.md`,
+files-as-truth + rebuildable cache), display-only tag hierarchy, tag-op undo (dedicated op-journal),
+usage analytics, plus authoring polish (`#tag` badge in react-markdown, copy-code button,
+insert-at-cursor templates, description in search cards). Audit COMPLETE, security SHIP (0 high/med/low),
+debt=0. Prior: v1.5 (tag regression fix + v1.3 closure), v1.4 (editor enhancements).
 
-**Current milestone: v1.6 Tag System Completion & Authoring Polish** — a feature milestone (minor),
-Phases 31–37, two tracks. **T — Tag System Completion (31–35):** the v1.3-original deferred tag set on
-the hardened v1.5 subsystem — bulk multi-tag ops, tag color/description metadata (new on-disk store,
-files-as-truth), tag hierarchy (display-only), tag-op undo, usage analytics. **E — Authoring Polish
-(36–37):** `#tag` badge on the react-markdown surfaces, copy-code button, page description in search
-cards, insert-at-cursor template snippets.
-
-**Next milestone: v1.7 Rich-Block Editor (TipTap).** A TipTap (ProseMirror) WYSIWYG editor as an
-**opt-in** mode beside CM6, behind a two-tier Markdown-fidelity gate (semantic-lossless supported
-syntax + byte-for-byte verbatim preservation of unmodeled syntax), CM6 remaining the byte-exact
-default. Split out of v1.6 by an independent roadmap red-team (the combined 11-phase milestone was the
-largest ever, and TipTap-for-shared-content needs an unrushed fidelity decision). Requirements + the
-red-team's TipTap findings are locked in `REQUIREMENTS.md` §R so v1.7 starts warm.
+**Current milestone: v1.7 Rich-Block Editor (TipTap)** — a self-contained editor sub-project, Phases
+38–42, one track. A TipTap (ProseMirror) WYSIWYG editor as an **opt-in** mode beside CM6, behind a
+**two-tier Markdown-fidelity gate** (Tier 1: supported syntax semantic-lossless + idempotent; Tier 2:
+unmodeled syntax — tables/math/raw-HTML — byte-for-byte preserved). CM6 stays THE default and
+byte-exact surface. **RE-01 (Phase 38) is a GO/NO-GO spike gate** — if the round-trip corpus can't pass,
+the milestone halts. Risk-first: the codec gate first, the ~949-line `PageEditor` host refactor isolated
+as its own no-behavior-change phase (RE-05, Phase 40), TipTap features layered on last. The sharp
+security surface is TipTap **paste** (MAJ-05). Requirements RE-01…05 + folded red-team findings in
+`REQUIREMENTS.md`. One design fork deferred to Phase 42 discuss (shared-content Tier-1 normalization).
 
 ## Requirements
 
@@ -57,19 +55,23 @@ red-team's TipTap findings are locked in `REQUIREMENTS.md` §R so v1.7 starts wa
 - ✓ **Tag Management UX** — v1.3 (built `9de5077`; regression-fixed + verified + security-reviewed in v1.5) — admin-only workspace-wide tag rename / merge / delete with preview→approve; admin UI; derived-graph consistency
 - ✓ **Editor enhancements & authoring polish** — v1.4 — inline `#tag` badges (frontmatter-canonical), LLM tag suggestions, LLM-generated description, code syntax highlighting, mermaid diagrams, page templates
 - ✓ **Tag regression fix + v1.3 closure** — v1.5 — server-authoritative body-`#tag` rewrite (`okf.RewriteHashtags`, offset-parity-pinned to the Lezer grammar, CI-enforced) so rename/merge/delete are durable against inline-`#tag` materialization; reading-shell fold-in (Properties panel + Breadcrumb + DocStatusBar; inline nav search; per-page local graph removed); v1.3 Tag Management verified + security-reviewed retroactively
+- ✓ **Tag system completion & authoring polish** — v1.6 — bulk multi-tag ops; a NET-NEW on-disk tag-metadata store (`internal/tagmeta/`, `Tags/*.md` frontmatter, files-as-truth + rebuildable `tag_meta` cache, migrations 0011–0013) for tag color/description; display-only cycle-safe tag hierarchy; tag-op undo (dedicated op-journal, inverse `ApplyTagsBatch`, 409-guarded); tag usage analytics; `#tag` badge in react-markdown (`remark-hashtag`, sanitized element); copy-code button; insert-at-cursor templates; description in search cards
 
 ### Active
 
-<!-- v1.6 Tag System Completion & Authoring Polish (detailed REQ-IDs in REQUIREMENTS.md) -->
+<!-- v1.7 Rich-Block Editor (TipTap) — detailed RE-IDs in REQUIREMENTS.md -->
 
-- **TF-01…05: Tag System Completion** — bulk multi-tag ops (reuse the byte-stable batch path); tag color/description metadata in a NEW committed on-disk store (files-as-truth, rebuildable cache); tag hierarchy (cycle-safe, display-only); tag-op undo (inverse `ApplyTagsBatch`, 409-guarded, dedicated op-journal); tag usage analytics (over the existing `TagPageCounts`).
-- **EP-01…04: Authoring Polish** — `#tag` badge on the react-markdown surfaces (`MarkdownProse`; sanitized element, XSS-guard preserved); copy-code button on read-mode fenced code; insert-at-cursor template snippets (reuse `Templates/`); page description in search result cards.
+- **RE-01: Markdown codec + round-trip corpus (GO/NO-GO gate)** — headless TipTap↔Markdown codec (bounded slice) proven by a Tier-1 corpus written first; NO-GO halts the milestone.
+- **RE-02: Verbatim preservation tier** — `PreservedBlock`/`PreservedInline` so tables/math/raw-HTML round-trip byte-for-byte (Tier 2); raw HTML kept inert (no `innerHTML`, MAJ-04).
+- **RE-05: Editor-host abstraction** — extract `PageEditor`'s save/reconcile/lock/409 host seam; mount CM6 through it as default with ZERO behavior change; extend `editorMode` to 3-way.
+- **RE-03: TipTap `#tag` + suggestions + slash + real save** — Tag node matching the corpus; `#`-suggest / `/`-slash; body `#tags` materialize through the REAL save; paste-XSS hardened (MAJ-05).
+- **RE-04: Toggle + load guard + code-split** — persisted 3-way toggle; warn-AND-fall-back load guard; `assertLazyChunks` proves TipTap out of the entry chunk; shared-content fidelity design fork resolved.
 
 ### Deferred / Queued
 
-<!-- v1.7 TipTap + Future items (detailed in REQUIREMENTS.md) -->
+<!-- Future items (detailed in REQUIREMENTS.md) -->
 
-- **Rich-Block Editor (TipTap)** — the whole R track (RE-01…04), split to **v1.7** by the co-driver-accepted red-team pre-mortem; two-tier fidelity gate, opt-in beside CM6. Requirements + red-team findings locked in `REQUIREMENTS.md` §R.
+- **TipTap rich editing of tables/math** — v1.7 preserves them verbatim (Tier 2); structured WYSIWYG editing is a follow-on.
 - **Hierarchy-aware tag behavior** — auto-apply parent tags, descendant-expanding search, hierarchy graph grouping (v1.6's TF-03 is display-only).
 - **Multi-level tag-op undo** — v1.6's TF-05 is last-op undo; a full undo stack is deferred.
 - **Per-page local graph** / **in-place file-tree filter** — v1.5 removals; re-introduce if missed.
@@ -83,7 +85,7 @@ red-team's TipTap findings are locked in `REQUIREMENTS.md` §R so v1.7 starts wa
 - Comments, public sharing, web publishing, enterprise SSO — outside MVP value for an internal team
 - Direct agent writes without user approval — violates the safety model; all agent writes require review
 - In-browser editing of DOCX/PDF — originals are immutable; only extracted text is read
-- TipTap / rich block editor — deferred to Phase 2, gated on Markdown round-trip tests passing
+- **Replacing CM6 with TipTap** (TipTap as default / CM6 retirement) — a v2.0 question; v1.7 ships TipTap opt-in only, CM6 stays the byte-exact default. Degrading the fidelity gate to force a ship is also out of scope (NO-GO is a valid outcome).
 - Mobile native app, per-paragraph permissions, complex workflow automation — not MVP
 
 ## Context
@@ -150,4 +152,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-02 — v1.6 milestone (Tag System Completion & Authoring Polish) started: requirements + roadmap authored, independent red-team folded, TipTap (rich editor) split to v1.7*
+*Last updated: 2026-07-02 — v1.6 (Tag System Completion & Authoring Polish) shipped; v1.7 milestone (Rich-Block Editor / TipTap) started: RE-01…05 requirements + risk-first roadmap (Phases 38–42) authored, v1.6 §R red-team findings folded, independent red-team gate run.*
