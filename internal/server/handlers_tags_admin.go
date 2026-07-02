@@ -1099,18 +1099,24 @@ func (h *authHandlers) handleTagUndo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build the inverse TagApplyItems. BaseRevision is read FRESH per page at
-	// undo time (NOT the stored one) so a page edited since the op is stale and
-	// skipped by the 409-guard, never clobbered.
+	// undo time (NOT a stored one — the journal carries pre_op_tags, not
+	// revisions). The 409-guard in ApplyTagsBatch protects against a race between
+	// this read and the commit. A SEMANTIC stale check ALSO runs here: if the
+	// page's current frontmatter tags no longer match what the op would have
+	// produced from pre_op_tags, the page was edited since the op → report stale
+	// and skip (never clobber a concurrent edit).
 	items := make([]pages.TagApplyItem, 0, len(jpages))
+	results := make([]pages.TagApplyResult, 0, len(jpages))
+	preUndoTags := make([][]string, 0, len(jpages)) // current tags BEFORE undo (for the undo journal row)
 	for _, jp := range jpages {
 		pg, err := h.pages.Get(ctx, jp.PagePath)
 		if err != nil {
-			// A page gone since the op is reported stale (it can't be restored
-			// to a revision we no longer have). Skip it from the inverse batch
-			// and let the result surface it.
+			// A page gone since the op can't be restored — report notfound.
+			results = append(results, pages.TagApplyResult{PagePath: jp.PagePath, Status: pages.TagApplyNotFound})
 			continue
 		}
 		var bodyOld, bodyNew string
+		var expectedPostOp func([]string) ([]string, bool)
 		switch opType {
 		case "rename":
 			var d struct {
@@ -1119,6 +1125,8 @@ func (h *authHandlers) handleTagUndo(w http.ResponseWriter, r *http.Request) {
 			}
 			_ = json.Unmarshal([]byte(opDetailJSON), &d)
 			bodyOld, bodyNew = d.NewName, d.OldName // swap
+			oa, na := d.OldName, d.NewName
+			expectedPostOp = func(c []string) ([]string, bool) { return computeRenameTags(c, oa, na) }
 		case "merge":
 			var d struct {
 				Source string `json:"source"`
@@ -1126,41 +1134,99 @@ func (h *authHandlers) handleTagUndo(w http.ResponseWriter, r *http.Request) {
 			}
 			_ = json.Unmarshal([]byte(opDetailJSON), &d)
 			bodyOld, bodyNew = d.Target, d.Source // swap
-		case "delete", "bulk", "undo":
-			// delete: body #tags removed by the delete are NOT invertible (the
-			// span is gone; self-heals on next edit) — stated limitation; the undo
-			// restores frontmatter tags only. bulk is frontmatter-only by design.
-			// undo: the undo's own body swap is already reflected in the
-			// frontmatter restore (pre_op_tags); no body channel needed.
-			bodyOld, bodyNew = "", ""
+			src, tgt := d.Source, d.Target
+			expectedPostOp = func(c []string) ([]string, bool) { return computeMergeTags(c, src, tgt) }
+		case "delete":
+			var d struct {
+				Tag string `json:"tag"`
+			}
+			_ = json.Unmarshal([]byte(opDetailJSON), &d)
+			tg := d.Tag
+			expectedPostOp = func(c []string) ([]string, bool) { return computeDeleteTags(c, tg) }
+		case "bulk":
+			var d struct {
+				AddTags    []string `json:"add_tags"`
+				RemoveTags []string `json:"remove_tags"`
+			}
+			_ = json.Unmarshal([]byte(opDetailJSON), &d)
+			expectedPostOp = computeBulkTags(d.AddTags, d.RemoveTags)
+		case "undo":
+			// Undo-of-undo (redo): the undo row's op_detail carries the ORIGINAL
+			// op's type + detail. The redo reapplies the ORIGINAL op's body
+			// direction (NOT a swap-of-swap — the undo already swapped once;
+			// redo = original direction again). The semantic stale check is
+			// skipped for undo rows (the 409-guard still applies; the fresh read
+			// is authoritative).
+			var inner struct {
+				OpType   string          `json:"op_type"`
+				OpDetail  json.RawMessage `json:"op_detail"`
+			}
+			_ = json.Unmarshal([]byte(opDetailJSON), &inner)
+			switch inner.OpType {
+			case "rename":
+				var d struct {
+					OldName string `json:"old_name"`
+					NewName string `json:"new_name"`
+				}
+				_ = json.Unmarshal(inner.OpDetail, &d)
+				bodyOld, bodyNew = d.OldName, d.NewName // original direction
+			case "merge":
+				var d struct {
+					Source string `json:"source"`
+					Target string `json:"target"`
+				}
+				_ = json.Unmarshal(inner.OpDetail, &d)
+				bodyOld, bodyNew = d.Source, d.Target // original direction
+			}
 		}
-		tags := jp.PreOpTags
-		if tags == nil {
-			tags = []string{}
+
+	// Read the page's current frontmatter tags (needed for the stale check AND
+	// for the undo journal row's pre_op_tags — the state BEFORE the undo).
+	src := pages.AssembleSource(pg.Frontmatter, pg.Body)
+	currentTags, _ := readPageTags([]byte(src))
+	if currentTags == nil {
+		currentTags = []string{}
+	}
+
+	// Semantic stale check: compare the page's CURRENT frontmatter tags
+	// against what the op would have produced from pre_op_tags. A mismatch
+	// means the page was edited since the op → stale, skip (never clobber).
+	if expectedPostOp != nil {
+		expectedTags, _ := expectedPostOp(jp.PreOpTags)
+		if !sameTagSet(currentTags, expectedTags) {
+			results = append(results, pages.TagApplyResult{PagePath: jp.PagePath, Status: pages.TagApplyStale})
+			continue
 		}
-		items = append(items, pages.TagApplyItem{
-			PagePath:        jp.PagePath,
-			Tags:            tags,
-			BaseRevision:    pg.Revision,
-			SkipFrontmatter: false,
-			BodyOld:         bodyOld,
-			BodyNew:         bodyNew,
-		})
+	}
+
+	tags := jp.PreOpTags
+	if tags == nil {
+		tags = []string{}
+	}
+	preUndoTags = append(preUndoTags, currentTags)
+	items = append(items, pages.TagApplyItem{
+		PagePath:        jp.PagePath,
+		Tags:            tags,
+		BaseRevision:    pg.Revision,
+		SkipFrontmatter: false,
+		BodyOld:         bodyOld,
+		BodyNew:         bodyNew,
+	})
 	}
 
 	if len(items) == 0 {
-		writeJSON(w, http.StatusOK, tagApplyResponse{
-			Action:  "undo",
-			Results: []pages.TagApplyResult{},
-		})
+		// Every page was stale or notfound — no commit, return the outcomes.
+		writeJSON(w, http.StatusOK, tagApplyResponse{Action: "undo", Results: results})
 		return
 	}
 
-	results, err := h.pages.ApplyTagsBatch(ctx, items, actor)
+	applied, err := h.pages.ApplyTagsBatch(ctx, items, actor)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to apply tag undo.")
 		return
 	}
+	// Merge the pre-built stale/notfound results with the apply outcomes.
+	results = append(results, applied...)
 
 	_ = h.audit.Record(ctx, audit.Event{
 		Action: audit.ActionTagUndo,
@@ -1170,19 +1236,20 @@ func (h *authHandlers) handleTagUndo(w http.ResponseWriter, r *http.Request) {
 		Source: auditSourceWeb,
 	})
 
-	// Journal the undo op itself (built from the FRESH page state we just read)
-	// so undo-of-undo (redo) works for free. The pre_op_tags for the redo row are
-	// the CURRENT tags (i.e. the state we just wrote); body_affected mirrors the
-	// original op's body channel.
+	// Journal the undo op itself so undo-of-undo (redo) works for free. The
+	// pre_op_tags are the CURRENT tags (the state BEFORE the undo) — so a redo
+	// restores the post-original-op state. body_affected mirrors the original
+	// op's body channel. The op_detail carries the ORIGINAL op's type + detail
+	// so a redo can swap the body back the same way the original applied it.
 	undoPreview := make([]tagPreviewPage, len(items))
 	for i, it := range items {
 		undoPreview[i] = tagPreviewPage{
 			PagePath:     it.PagePath,
-			CurrentTags:  it.Tags,
+			CurrentTags:  preUndoTags[i],
 			BodyAffected: it.BodyOld != "",
 		}
 	}
-	h.journalOp(ctx, "undo", map[string]string{"undid": opType}, undoPreview)
+	h.journalOp(ctx, "undo", map[string]interface{}{"undid": opType, "op_type": opType, "op_detail": json.RawMessage(opDetailJSON)}, undoPreview)
 
 	resp := tagApplyResponse{Action: "undo", Results: results}
 	if opType == "delete" {

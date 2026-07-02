@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -1304,5 +1305,415 @@ func TestTagAnalyticsEmpty(t *testing.T) {
 	}
 	if len(got.Tags) != 0 {
 		t.Errorf("tags len = %d, want 0", len(got.Tags))
+	}
+}
+
+// --- Phase 35 / TF-05: tag-operation undo journal + undo handler ---
+
+// seedPageWithBody writes a page with the given frontmatter tags AND a body
+// (so body #tags can be tested for the golden + delete tests), then commits
+// and rebuilds the graph so PagesByTag finds the frontmatter tags.
+func (f *tagAdminFixture) seedPageWithBody(t *testing.T, path string, tags []string, body string) {
+	t.Helper()
+	fm := ""
+	if tags != nil && len(tags) > 0 {
+		tagLines := ""
+		for _, tag := range tags {
+			tagLines += "  - " + tag + "\n"
+		}
+		fm = "tags:\n" + tagLines
+	}
+	content := "---\ntype: page\ntitle: " + path + "\ndescription: \n" + fm + "timestamp: 2026-06-21T00:00:00Z\n---\n\n" + body + "\n"
+	if err := f.repo.Write(path, []byte(content)); err != nil {
+		t.Fatalf("write page %q: %v", path, err)
+	}
+	if err := f.gs.Commit(context.Background(), gitstore.CommitSpec{
+		Paths:   []string{path},
+		Message: "seed " + path,
+		User:    "test",
+		Action:  "seed",
+		Source:  "test",
+	}); err != nil {
+		t.Fatalf("commit %q: %v", path, err)
+	}
+	if err := f.store.RebuildGraph(context.Background()); err != nil {
+		t.Fatalf("RebuildGraph: %v", err)
+	}
+}
+
+// pageBody returns the body region (after the frontmatter) of a page.
+func pageBody(t *testing.T, f *tagAdminFixture, path string) string {
+	t.Helper()
+	raw, err := f.repo.Read(path)
+	if err != nil {
+		t.Fatalf("read %q: %v", path, err)
+	}
+	doc, err := okf.Parse(raw)
+	if err != nil {
+		t.Fatalf("parse %q: %v", path, err)
+	}
+	return string(doc.Body)
+}
+
+// journalCount returns the number of tag_op_journal rows (for op_type if non-empty).
+func journalCount(t *testing.T, f *tagAdminFixture, opType string) int {
+	t.Helper()
+	q := `SELECT COUNT(1) FROM tag_op_journal`
+	if opType != "" {
+		q += ` WHERE op_type=?`
+		var n int
+		if err := f.db.DB().QueryRow(q, opType).Scan(&n); err != nil {
+			t.Fatalf("journal count %q: %v", opType, err)
+		}
+		return n
+	}
+	var n int
+	if err := f.db.DB().QueryRow(q).Scan(&n); err != nil {
+		t.Fatalf("journal count: %v", err)
+	}
+	return n
+}
+
+// lastJournalRow returns the last journal row's op_type + op_detail + pages JSON.
+func lastJournalRow(t *testing.T, f *tagAdminFixture) (opType, opDetail, pagesJSON string) {
+	t.Helper()
+	err := f.db.DB().QueryRow(
+		`SELECT op_type, op_detail, pages FROM tag_op_journal ORDER BY id DESC LIMIT 1`).
+		Scan(&opType, &opDetail, &pagesJSON)
+	if err != nil {
+		t.Fatalf("read last journal row: %v", err)
+	}
+	return
+}
+
+// decodeApply reads a tagApplyResponse from a recorder body.
+func decodeApply(t *testing.T, rec *httptest.ResponseRecorder) map[string]interface{} {
+	t.Helper()
+	var out map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode apply response: %v (body=%s)", err, rec.Body.String())
+	}
+	return out
+}
+
+// TestJournalRename: applying a rename inserts a journal row with op_type
+// "rename", the old/new names in op_detail, and the affected page records.
+func TestJournalRename(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	f.seedPage(t, "b.md", []string{"ops", "docs"})
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/rename",
+		map[string]interface{}{"old_name": "ops", "new_name": "devops", "preview": false}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rename: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := journalCount(t, f, "rename"); got != 1 {
+		t.Fatalf("journal rename rows = %d, want 1", got)
+	}
+	opType, detail, pagesJSON := lastJournalRow(t, f)
+	if opType != "rename" {
+		t.Errorf("op_type = %q, want rename", opType)
+	}
+	var d map[string]string
+	if err := json.Unmarshal([]byte(detail), &d); err != nil {
+		t.Fatalf("decode op_detail: %v", err)
+	}
+	if d["old_name"] != "ops" || d["new_name"] != "devops" {
+		t.Errorf("op_detail = %v, want old=ops new=devops", d)
+	}
+	var jpages []journalPageHelper
+	if err := json.Unmarshal([]byte(pagesJSON), &jpages); err != nil {
+		t.Fatalf("decode pages: %v", err)
+	}
+	if len(jpages) != 2 {
+		t.Fatalf("journal pages len = %d, want 2", len(jpages))
+	}
+	// At least one page should carry pre_op_tags containing "ops".
+	found := false
+	for _, jp := range jpages {
+		for _, tg := range jp.PreOpTags {
+			if tg == "ops" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no journal page recorded pre_op_tags containing ops")
+	}
+}
+
+type journalPageHelper struct {
+	PagePath      string   `json:"page_path"`
+	PreOpTags    []string `json:"pre_op_tags"`
+	BodyAffected bool     `json:"body_affected"`
+}
+
+// TestJournalBulk: applying a bulk op inserts a journal row with op_type "bulk"
+// and the add/remove tag sets in op_detail.
+func TestJournalBulk(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/bulk",
+		map[string]interface{}{
+			"page_paths":  []string{"a.md"},
+			"add_tags":    []string{"new"},
+			"remove_tags": []string{"ops"},
+			"preview":     false,
+		}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bulk: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := journalCount(t, f, "bulk"); got != 1 {
+		t.Fatalf("journal bulk rows = %d, want 1", got)
+	}
+	opType, detail, _ := lastJournalRow(t, f)
+	if opType != "bulk" {
+		t.Errorf("op_type = %q, want bulk", opType)
+	}
+	var d map[string]interface{}
+	if err := json.Unmarshal([]byte(detail), &d); err != nil {
+		t.Fatalf("decode op_detail: %v", err)
+	}
+	addTags, _ := d["add_tags"].([]interface{})
+	if len(addTags) != 1 || addTags[0] != "new" {
+		t.Errorf("add_tags = %v, want [new]", addTags)
+	}
+}
+
+// TestUndoRBAC: an editor gets 403 on the undo endpoint.
+func TestUndoRBAC(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	editor := f.editorCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/undo", map[string]interface{}{}, editor)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("editor undo: %d, want 403", rec.Code)
+	}
+}
+
+// TestUndoNothing: with no journal rows, undo returns 400.
+func TestUndoNothing(t *testing.T) {
+	f := newTagAdminServer(t)
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/undo", map[string]interface{}{}, admin)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("undo nothing: %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestUndoRenameGolden (TF-05 crit 4): rename #ops→#devops on a page with body
+// #ops, then undo → the page's frontmatter tags + body #tag byte-match the
+// pre-rename state.
+func TestUndoRenameGolden(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPageWithBody(t, "a.md", []string{"ops"}, "See #ops for details.")
+	admin := f.adminCookies(t)
+
+	preTags := pageTags(t, f, "a.md")
+	preBody := pageBody(t, f, "a.md")
+
+	// Rename ops→devops (applies frontmatter + body rewrite).
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/rename",
+		map[string]interface{}{"old_name": "ops", "new_name": "devops", "preview": false}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rename: %d %s", rec.Code, rec.Body.String())
+	}
+	// After rename: frontmatter has devops, body has #devops.
+	if got := pageTags(t, f, "a.md"); len(got) != 1 || got[0] != "devops" {
+		t.Fatalf("post-rename tags = %v, want [devops]", got)
+	}
+	if got := pageBody(t, f, "a.md"); !strings.Contains(got, "#devops") || strings.Contains(got, "#ops") {
+		t.Fatalf("post-rename body = %q, want #devops (no #ops)", got)
+	}
+
+	// Undo.
+	rec = doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/undo", map[string]interface{}{}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("undo: %d %s", rec.Code, rec.Body.String())
+	}
+	// Frontmatter tags restored to pre-rename.
+	if got := pageTags(t, f, "a.md"); len(got) != len(preTags) || (len(got) > 0 && got[0] != preTags[0]) {
+		t.Fatalf("post-undo tags = %v, want %v (pre-rename)", got, preTags)
+	}
+	// Body #tag restored: #ops present, #devops gone.
+	if got := pageBody(t, f, "a.md"); got != preBody {
+		t.Fatalf("post-undo body = %q, want %q (byte-match pre-rename)", got, preBody)
+	}
+}
+
+// TestUndoStale: rename two pages, edit one in between, then undo → the edited
+// page is stale (skipped), the other is undone.
+func TestUndoStale(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	f.seedPage(t, "b.md", []string{"ops"})
+	admin := f.adminCookies(t)
+
+	// Rename ops→devops on both pages.
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/rename",
+		map[string]interface{}{"old_name": "ops", "new_name": "devops", "preview": false}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rename: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Edit page a directly (so its revision moves; undo will see it as stale).
+	if err := f.repo.Write("a.md", []byte("---\ntype: page\ntitle: a.md\ndescription: \ntags:\n  - manual\n---\n\nedited by hand\n")); err != nil {
+		t.Fatalf("manual write a.md: %v", err)
+	}
+	if err := f.gs.Commit(context.Background(), gitstore.CommitSpec{
+		Paths: []string{"a.md"}, Message: "manual edit", User: "test", Action: "edit", Source: "test",
+	}); err != nil {
+		t.Fatalf("manual commit a.md: %v", err)
+	}
+	if err := f.store.RebuildGraph(context.Background()); err != nil {
+		t.Fatalf("RebuildGraph: %v", err)
+	}
+
+	// Undo.
+	rec = doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/undo", map[string]interface{}{}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("undo: %d %s", rec.Code, rec.Body.String())
+	}
+	out := decodeApply(t, rec)
+	results, _ := out["results"].([]interface{})
+	if len(results) != 2 {
+		t.Fatalf("undo results len = %d, want 2", len(results))
+	}
+	// One page should be "stale" (a.md — manually edited), the other "applied".
+	statuses := map[string]int{}
+	for _, ri := range results {
+		rm, _ := ri.(map[string]interface{})
+		statuses[rm["status"].(string)]++
+	}
+	if statuses["stale"] != 1 {
+		t.Errorf("stale count = %d, want 1 (statuses=%v)", statuses["stale"], statuses)
+	}
+	if statuses["applied"] != 1 {
+		t.Errorf("applied count = %d, want 1 (statuses=%v)", statuses["applied"], statuses)
+	}
+	// b.md should be restored to ops; a.md keeps "manual".
+	if got := pageTags(t, f, "b.md"); len(got) != 1 || got[0] != "ops" {
+		t.Errorf("b.md tags after undo = %v, want [ops]", got)
+	}
+	if got := pageTags(t, f, "a.md"); len(got) != 1 || got[0] != "manual" {
+		t.Errorf("a.md tags after undo = %v, want [manual] (stale, untouched)", got)
+	}
+}
+
+// TestUndoDelete: delete a tag, then undo → frontmatter tags restored. Body
+// #tags removed by the delete are NOT re-inserted (stated limitation); the
+// response carries a note about this.
+func TestUndoDelete(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPageWithBody(t, "a.md", []string{"ops"}, "See #ops here.")
+	admin := f.adminCookies(t)
+
+	// Delete ops (removes frontmatter tag + body #ops).
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/delete",
+		map[string]interface{}{"tag": "ops", "preview": false}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	// After delete: frontmatter has no tags, body has no #ops.
+	if got := pageTags(t, f, "a.md"); len(got) != 0 {
+		t.Fatalf("post-delete tags = %v, want []", got)
+	}
+	if got := pageBody(t, f, "a.md"); strings.Contains(got, "#ops") {
+		t.Fatalf("post-delete body still has #ops: %q", got)
+	}
+
+	// Undo.
+	rec = doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/undo", map[string]interface{}{}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("undo: %d %s", rec.Code, rec.Body.String())
+	}
+	// Frontmatter tags restored.
+	if got := pageTags(t, f, "a.md"); len(got) != 1 || got[0] != "ops" {
+		t.Errorf("post-undo tags = %v, want [ops]", got)
+	}
+	// Body #ops NOT re-inserted (stated limitation — the span is gone).
+	if got := pageBody(t, f, "a.md"); strings.Contains(got, "#ops") {
+		t.Errorf("post-undo body should NOT contain #ops (delete limitation): %q", got)
+	}
+	// Response should carry the note.
+	out := decodeApply(t, rec)
+	if note, ok := out["note"]; !ok || note == nil {
+		t.Errorf("undo delete response missing note about body #tags limitation")
+	}
+}
+
+// TestUndoBulk: bulk add/remove, then undo → frontmatter tags restored.
+func TestUndoBulk(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	admin := f.adminCookies(t)
+
+	// Bulk: add "new", remove "ops".
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/bulk",
+		map[string]interface{}{
+			"page_paths":  []string{"a.md"},
+			"add_tags":    []string{"new"},
+			"remove_tags": []string{"ops"},
+			"preview":     false,
+		}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bulk: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := pageTags(t, f, "a.md"); len(got) != 1 || got[0] != "new" {
+		t.Fatalf("post-bulk tags = %v, want [new]", got)
+	}
+
+	// Undo.
+	rec = doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/undo", map[string]interface{}{}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("undo: %d %s", rec.Code, rec.Body.String())
+	}
+	// Frontmatter restored to pre-bulk (ops only, no "new").
+	if got := pageTags(t, f, "a.md"); len(got) != 1 || got[0] != "ops" {
+		t.Errorf("post-undo tags = %v, want [ops]", got)
+	}
+}
+
+// TestUndoOfUndo: rename, undo, undo again → the second undo redoes the rename
+// (undo-of-undo = redo works, because the undo op is itself journaled).
+func TestUndoOfUndo(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	admin := f.adminCookies(t)
+
+	// Rename ops→devops.
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/rename",
+		map[string]interface{}{"old_name": "ops", "new_name": "devops", "preview": false}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rename: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// First undo → back to ops.
+	rec = doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/undo", map[string]interface{}{}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("undo 1: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := pageTags(t, f, "a.md"); len(got) != 1 || got[0] != "ops" {
+		t.Fatalf("after undo 1 tags = %v, want [ops]", got)
+	}
+
+	// Second undo → redo (devops again). The undo op was journaled, so the
+	// last row is the undo (op_type "undo"), whose inverse is the original
+	// rename applied forward.
+	rec = doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/undo", map[string]interface{}{}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("undo 2: %d %s", rec.Code, rec.Body.String())
+	}
+	// After redo: tags should be devops (the rename re-applied).
+	// NOTE: the undo-of-undo restores the frontmatter to the pre-undo state
+	// (which was devops), so tags = devops.
+	if got := pageTags(t, f, "a.md"); len(got) != 1 || got[0] != "devops" {
+		t.Fatalf("after undo 2 (redo) tags = %v, want [devops]", got)
 	}
 }
