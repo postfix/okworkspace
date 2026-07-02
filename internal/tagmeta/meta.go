@@ -13,9 +13,12 @@ package tagmeta
 
 // Meta is one parsed tag-metadata record: the tag name (canonical, normalized),
 // an optional color (hex #RRGGBB/#RGB or a fixed palette token; "" = default),
-// and an optional single-line HTML-safe description ("" = none).
+// an optional single-line HTML-safe description ("" = none), and an optional
+// parent tag name (normalized; "" = root, D-01/TF-03). The parent forms a
+// cycle-safe hierarchy (checkCycle rejects a tag being its own ancestor).
 type Meta struct {
 	Tag         string
 	Color       string
 	Description string
+	Parent      string
 }

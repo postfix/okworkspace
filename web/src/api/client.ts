@@ -1368,6 +1368,7 @@ export interface TagEntry {
   count: number;
   color?: string;
   description?: string;
+  parent?: string;
 }
 
 export async function listTags(): Promise<TagEntry[]> {
@@ -1434,13 +1435,15 @@ export async function bulkTag(opts: {
 		opts,
 	);
 }
-
-// setTagMeta (Phase 32 / TF-02) — set or clear a tag's color + description.
-// Empty color + description = clear (the Tags/{tag}.md file is deleted).
+// setTagMeta (Phase 32 / TF-02, Phase 33 / TF-03) — set or clear a tag's color +
+// description + parent. Empty color + description + parent = clear (the
+// Tags/{tag}.md file is deleted). The server validates the parent tag name and
+// runs a cycle check before the write.
 export async function setTagMeta(opts: {
   tag: string;
   color: string;
   description: string;
+  parent: string;
 }): Promise<void> {
   await mutate<void>("/api/v1/admin/tags/meta", opts);
 }

@@ -3,6 +3,8 @@ package tagmeta
 import (
 	"fmt"
 	"strings"
+
+	"github.com/postfix/okworkspace/internal/okf"
 )
 
 // paletteTokens is the fixed safe set of named color tokens accepted alongside
@@ -68,4 +70,17 @@ func ValidateDescription(desc string) error {
 		return fmt.Errorf("description must not contain HTML metacharacters (<, >, &, \", ')")
 	}
 	return nil
+}
+
+// ValidateParent validates the parent tag name. An empty string is valid (it
+// means "root / no parent"). A non-empty parent must be a valid tag name per the
+// frontmatter charset gate (ValidateTagCharset). It does NOT check existence —
+// a non-existent parent is treated as root per D-02b (a tag can reference a
+// parent that was deleted/renamed). The cycle check (checkCycle) is separate and
+// runs after the parent is resolved, before the write.
+func ValidateParent(parent string) error {
+	if parent == "" {
+		return nil // root
+	}
+	return okf.ValidateTagCharset(parent)
 }

@@ -2,6 +2,7 @@ package tagmeta
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -70,7 +71,7 @@ func newHarness(t *testing.T) *testHarness {
 // equality assertions across rebuilds.
 func (h *testHarness) snapshotMeta(t *testing.T) []Meta {
 	t.Helper()
-	rows, err := h.db.DB().Query(`SELECT tag, color, description FROM tag_meta ORDER BY tag`)
+	rows, err := h.db.DB().Query(`SELECT tag, color, description, parent FROM tag_meta ORDER BY tag`)
 	if err != nil {
 		t.Fatalf("snapshot tag_meta: %v", err)
 	}
@@ -78,7 +79,7 @@ func (h *testHarness) snapshotMeta(t *testing.T) []Meta {
 	var out []Meta
 	for rows.Next() {
 		var m Meta
-		if err := rows.Scan(&m.Tag, &m.Color, &m.Description); err != nil {
+		if err := rows.Scan(&m.Tag, &m.Color, &m.Description, &m.Parent); err != nil {
 			t.Fatalf("scan tag_meta: %v", err)
 		}
 		out = append(out, m)
@@ -90,7 +91,7 @@ func TestSetGetMeta(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
 
-	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops"); err != nil {
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", ""); err != nil {
 		t.Fatalf("SetMeta: %v", err)
 	}
 	m, ok := h.st.GetMeta(ctx, "deploy")
@@ -110,10 +111,10 @@ func TestRebuildTagMeta(t *testing.T) {
 	ctx := context.Background()
 
 	// Seed two Tags/*.md files via SetMeta (which writes + commits + caches).
-	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops"); err != nil {
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", ""); err != nil {
 		t.Fatalf("SetMeta deploy: %v", err)
 	}
-	if err := h.st.SetMeta(ctx, "ops", "red", "Operations"); err != nil {
+	if err := h.st.SetMeta(ctx, "ops", "red", "Operations", ""); err != nil {
 		t.Fatalf("SetMeta ops: %v", err)
 	}
 
@@ -134,10 +135,10 @@ func TestRebuildParity(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
 
-	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops"); err != nil {
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", ""); err != nil {
 		t.Fatalf("SetMeta deploy: %v", err)
 	}
-	if err := h.st.SetMeta(ctx, "ops", "blue", ""); err != nil {
+	if err := h.st.SetMeta(ctx, "ops", "blue", "", ""); err != nil {
 		t.Fatalf("SetMeta ops: %v", err)
 	}
 	if err := h.st.RebuildTagMeta(ctx); err != nil {
@@ -260,7 +261,7 @@ func TestSetMetaWritesFile(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
 
-	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops"); err != nil {
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", ""); err != nil {
 		t.Fatalf("SetMeta: %v", err)
 	}
 	// The file Tags/deploy.md must exist on disk with the correct frontmatter.
@@ -288,7 +289,7 @@ func TestClearMetaDeletesFile(t *testing.T) {
 	ctx := context.Background()
 
 	// Set metadata, then clear it (empty color + description → file deleted).
-	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops"); err != nil {
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", ""); err != nil {
 		t.Fatalf("SetMeta: %v", err)
 	}
 	if err := h.st.ClearMeta(ctx, "deploy"); err != nil {
@@ -314,10 +315,10 @@ func TestRebuildSortsByTag(t *testing.T) {
 	ctx := context.Background()
 
 	// Seed in non-sorted order.
-	if err := h.st.SetMeta(ctx, "zeta", "red", ""); err != nil {
+	if err := h.st.SetMeta(ctx, "zeta", "red", "", ""); err != nil {
 		t.Fatalf("SetMeta zeta: %v", err)
 	}
-	if err := h.st.SetMeta(ctx, "alpha", "blue", ""); err != nil {
+	if err := h.st.SetMeta(ctx, "alpha", "blue", "", ""); err != nil {
 		t.Fatalf("SetMeta alpha: %v", err)
 	}
 	if err := h.st.RebuildTagMeta(ctx); err != nil {
@@ -330,5 +331,179 @@ func TestRebuildSortsByTag(t *testing.T) {
 	}
 	if !sort.StringsAreSorted(tags) {
 		t.Errorf("rebuild did not sort by tag: %v", tags)
+	}
+}
+
+// --- Tag hierarchy tests (Phase 33 / TF-03) ---
+
+// TestSetMetaWithParent: set parent on "deploy" → "ops"; GetMeta returns
+// parent="ops"; Tags/deploy.md frontmatter has parent: ops.
+func TestSetMetaWithParent(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	// Seed the parent tag so the store has it.
+	if err := h.st.SetMeta(ctx, "ops", "red", "Operations", ""); err != nil {
+		t.Fatalf("SetMeta ops: %v", err)
+	}
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", "ops"); err != nil {
+		t.Fatalf("SetMeta deploy: %v", err)
+	}
+	m, ok := h.st.GetMeta(ctx, "deploy")
+	if !ok {
+		t.Fatal("GetMeta: deploy not found")
+	}
+	if m.Parent != "ops" {
+		t.Errorf("parent = %q, want ops", m.Parent)
+	}
+	// Tags/deploy.md frontmatter must contain parent: ops.
+	raw, err := h.repo.Read("Tags/deploy.md")
+	if err != nil {
+		t.Fatalf("Read Tags/deploy.md: %v", err)
+	}
+	if !strings.Contains(string(raw), "parent: ops") {
+		t.Errorf("Tags/deploy.md missing parent frontmatter: %s", raw)
+	}
+}
+
+// TestCycleDetection_SelfParent: set parent="deploy" on "deploy" → rejected
+// with cycle error.
+func TestCycleDetection_SelfParent(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", ""); err != nil {
+		t.Fatalf("SetMeta deploy: %v", err)
+	}
+	err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", "deploy")
+	if err == nil {
+		t.Fatal("self-parent should be rejected with cycle error")
+	}
+	if !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("error should mention cycle, got: %v", err)
+	}
+}
+
+// TestCycleDetection_Indirect: build a chain ops→infra→deploy, then try to
+// set parent="deploy" on "ops" → rejected (cycle).
+func TestCycleDetection_Indirect(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	// Build chain: deploy's parent = infra, infra's parent = ops.
+	if err := h.st.SetMeta(ctx, "ops", "red", "Operations", ""); err != nil {
+		t.Fatalf("SetMeta ops: %v", err)
+	}
+	if err := h.st.SetMeta(ctx, "infra", "blue", "Infrastructure", "ops"); err != nil {
+		t.Fatalf("SetMeta infra: %v", err)
+	}
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", "infra"); err != nil {
+		t.Fatalf("SetMeta deploy: %v", err)
+	}
+
+	// Try to close the loop: set deploy as parent of ops → cycle.
+	err := h.st.SetMeta(ctx, "ops", "red", "Operations", "deploy")
+	if err == nil {
+		t.Fatal("indirect cycle should be rejected")
+	}
+	if !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("error should mention cycle, got: %v", err)
+	}
+}
+
+// TestCycleDetection_DeepChain: build a 50-tag chain, set parent at the end →
+// valid (no cycle); try to close the loop → rejected.
+func TestCycleDetection_DeepChain(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	// Build a 50-tag chain: tag0 is root, tag1's parent is tag0, ..., tag49's
+	// parent is tag48.
+	for i := range 50 {
+		parent := ""
+		if i > 0 {
+			parent = fmt.Sprintf("tag%d", i-1)
+		}
+		if err := h.st.SetMeta(ctx, fmt.Sprintf("tag%d", i), "red", "", parent); err != nil {
+			t.Fatalf("SetMeta tag%d: %v", i, err)
+		}
+	}
+
+	// Set tag50's parent to tag49 → valid (no cycle, depth 51).
+	if err := h.st.SetMeta(ctx, "tag50", "blue", "", "tag49"); err != nil {
+		t.Fatalf("SetMeta tag50 (deep chain): %v", err)
+	}
+
+	// Try to close the loop: set tag0's parent to tag50 → cycle.
+	err := h.st.SetMeta(ctx, "tag0", "red", "", "tag50")
+	if err == nil {
+		t.Fatal("deep chain cycle should be rejected")
+	}
+	if !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("error should mention cycle, got: %v", err)
+	}
+}
+
+// TestNonExistentParent: set parent="ghost" (doesn't exist) → accepted (treated
+// as root per D-02b); GetMeta returns parent="ghost" (the value is stored; the
+// UI treats non-existent as root).
+func TestNonExistentParent(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", "ghost"); err != nil {
+		t.Fatalf("SetMeta with non-existent parent: %v", err)
+	}
+	m, ok := h.st.GetMeta(ctx, "deploy")
+	if !ok {
+		t.Fatal("GetMeta: deploy not found")
+	}
+	if m.Parent != "ghost" {
+		t.Errorf("parent = %q, want ghost (stored as-is)", m.Parent)
+	}
+}
+
+// TestRebuildParityWithParent: seed Tags/*.md with parent fields, rebuild,
+// verify cache; delete cache, rebuild, verify identical.
+func TestRebuildParityWithParent(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	// Seed with parent fields forming a hierarchy.
+	if err := h.st.SetMeta(ctx, "ops", "red", "Operations", ""); err != nil {
+		t.Fatalf("SetMeta ops: %v", err)
+	}
+	if err := h.st.SetMeta(ctx, "infra", "blue", "Infrastructure", "ops"); err != nil {
+		t.Fatalf("SetMeta infra: %v", err)
+	}
+	if err := h.st.SetMeta(ctx, "deploy", "#4caf50", "Deploy ops", "infra"); err != nil {
+		t.Fatalf("SetMeta deploy: %v", err)
+	}
+
+	if err := h.st.RebuildTagMeta(ctx); err != nil {
+		t.Fatalf("RebuildTagMeta first: %v", err)
+	}
+	before := h.snapshotMeta(t)
+
+	// Nuke the cache and rebuild from files — must reproduce identical rows.
+	if _, err := h.db.DB().Exec(`DELETE FROM tag_meta`); err != nil {
+		t.Fatalf("delete tag_meta: %v", err)
+	}
+	if err := h.st.RebuildTagMeta(ctx); err != nil {
+		t.Fatalf("RebuildTagMeta second: %v", err)
+	}
+	after := h.snapshotMeta(t)
+	if !reflect.DeepEqual(after, before) {
+		t.Fatalf("tag_meta with parent not reproduced: after=%v before=%v", after, before)
+	}
+
+	// Verify the parent values are correct.
+	want := []Meta{
+		{Tag: "deploy", Color: "#4caf50", Description: "Deploy ops", Parent: "infra"},
+		{Tag: "infra", Color: "blue", Description: "Infrastructure", Parent: "ops"},
+		{Tag: "ops", Color: "red", Description: "Operations", Parent: ""},
+	}
+	if !reflect.DeepEqual(after, want) {
+		t.Fatalf("rebuild with parent: got %v, want %v", after, want)
 	}
 }

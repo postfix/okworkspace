@@ -55,6 +55,37 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
     ? tags.filter((t) => t.tag.includes(query.trim().toLowerCase()))
     : tags;
 
+  // Compute the grouped view: roots (no parent or orphaned parent) with their
+  // children indented beneath. A tag whose parent doesn't exist in the list is
+  // treated as a root (orphaned, per D-02b). Tags are sorted alphabetically;
+  // children under each root are also sorted alphabetically.
+  const tagSet = new Set(filtered.map((t) => t.tag));
+  const roots = filtered.filter((t) => !t.parent || !tagSet.has(t.parent));
+  const childrenByParent = new Map<string, TagEntry[]>();
+  for (const t of filtered) {
+    if (t.parent && tagSet.has(t.parent)) {
+      const arr = childrenByParent.get(t.parent) ?? [];
+      arr.push(t);
+      childrenByParent.set(t.parent, arr);
+    }
+  }
+  // Sort roots and children alphabetically by tag.
+  roots.sort((a, b) => a.tag.localeCompare(b.tag));
+  for (const arr of childrenByParent.values()) {
+    arr.sort((a, b) => a.tag.localeCompare(b.tag));
+  }
+
+  // Build the flat render order: root, then its children (indented), then next root.
+  type renderRow = { tag: TagEntry; depth: number };
+  const rows: renderRow[] = [];
+  for (const root of roots) {
+    rows.push({ tag: root, depth: 0 });
+    const kids = childrenByParent.get(root.tag) ?? [];
+    for (const k of kids) {
+      rows.push({ tag: k, depth: 1 });
+    }
+  }
+
   return (
     <>
       <input
@@ -77,14 +108,16 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
           </tr>
         </thead>
         <tbody>
-          {filtered.length === 0 ? (
+          {rows.length === 0 ? (
             <tr><td className="tagmgmt-empty-row" colSpan={3}>No tags match “{query}”.</td></tr>
           ) : (
-            filtered.map((t) => (
-              <tr key={t.tag}>
-                <td>
+            rows.map(({ tag: t, depth }) => (
+              <tr key={t.tag} className={depth > 0 ? "tagmgmt-child-row" : ""}>
+                <td style={{ paddingLeft: depth > 0 ? "24px" : undefined }}>
                   {t.color && <span className="tagmgmt-color-dot" style={{ backgroundColor: t.color }} title={t.description || undefined} />}
+                  {depth > 0 && <span className="tagmgmt-tree-marker">↳</span>}
                   <code>{t.tag}</code>
+                  {depth > 0 && t.parent && <span className="tagmgmt-parent-note"> (parent: {t.parent})</span>}
                 </td>
                 <td className="tagmgmt-count-col">{t.count}</td>
                 <td className="tagmgmt-actions-col">
@@ -109,7 +142,7 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
         <DeleteDialog tag={deleteTarget} onClose={() => setDeleteTarget(null)} onDone={onDone} />
       )}
       {metaTarget && (
-        <TagMetaDialog tag={metaTarget} onClose={() => setMetaTarget(null)} onDone={onDone} />
+        <TagMetaDialog tag={metaTarget} allTags={tags} onClose={() => setMetaTarget(null)} onDone={onDone} />
       )}
       {bulkOpen && (
         <BulkTagDialog allTags={tags} onClose={() => setBulkOpen(false)} onDone={onDone} />
@@ -499,13 +532,17 @@ function BulkTagDialog({ allTags, onClose, onDone }: { allTags: TagEntry[]; onCl
 }
 
 
-// TagMetaDialog (Phase 32 / TF-02) — set or clear a tag's color + description.
-// The color is a hex value via <input type="color"> or a palette token via
-// <select>; the description is a single-line text input (max 200 chars). Save
-// calls setTagMeta; clearing (empty color + description) deletes the metadata.
-function TagMetaDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () => void; onDone: () => void }) {
+// TagMetaDialog (Phase 32 / TF-02, Phase 33 / TF-03) — set or clear a tag's
+// color + description + parent. The color is a hex value via <input type="color">
+// or a palette token via <select>; the description is a single-line text input
+// (max 200 chars); the parent is a <select> of the tag vocabulary (excluding the
+// tag itself to prevent self-parenting in the UI — the server cycle check is the
+// authoritative gate). Save calls setTagMeta; clearing (empty color + description +
+// parent) deletes the metadata.
+function TagMetaDialog({ tag, allTags, onClose, onDone }: { tag: TagEntry; allTags: TagEntry[]; onClose: () => void; onDone: () => void }) {
   const [color, setColor] = useState(tag.color || "");
   const [description, setDescription] = useState(tag.description || "");
+  const [parent, setParent] = useState(tag.parent || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -513,7 +550,7 @@ function TagMetaDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () =>
     setSaving(true);
     setError("");
     try {
-      await setTagMeta({ tag: tag.tag, color, description });
+      await setTagMeta({ tag: tag.tag, color, description, parent });
       onDone();
       onClose();
     } catch {
@@ -524,6 +561,10 @@ function TagMetaDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () =>
   };
 
   const palette = ["", "red", "blue", "green", "amber", "purple", "gray"];
+  const parentOptions = allTags
+    .map((t) => t.tag)
+    .filter((t) => t !== tag.tag)
+    .sort((a, b) => a.localeCompare(b));
 
   return (
     <Dialog open title={`Tag metadata "${tag.tag}"`} confirmLabel="Save" cancelLabel="Cancel"
@@ -563,6 +604,19 @@ function TagMetaDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () =>
             maxLength={200}
             placeholder="Short description (optional)"
           />
+        </label>
+        <label className="tagmgmt-field">
+          Parent
+          <select
+            className="input"
+            value={parent}
+            onChange={(e) => setParent(e.target.value)}
+          >
+            <option value="">— root (no parent) —</option>
+            {parentOptions.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
         </label>
         {error && <p className="tagmgmt-error"><AlertTriangle size={14} /> {error}</p>}
       </div>

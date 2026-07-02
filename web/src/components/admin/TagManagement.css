@@ -247,3 +247,19 @@
   flex: 1;
   height: 36px;
 }
+
+/* Grouped hierarchy rendering (Phase 33 / TF-03) */
+.tagmgmt-child-row {
+  background: var(--color-bg-subtle, rgba(0, 0, 0, 0.02));
+}
+
+.tagmgmt-tree-marker {
+  color: var(--color-text-muted);
+  margin-right: 4px;
+  font-size: 12px;
+}
+
+.tagmgmt-parent-note {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}

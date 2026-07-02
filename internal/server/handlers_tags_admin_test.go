@@ -848,6 +848,7 @@ type tagListEntry struct {
 	Count       int    `json:"count"`
 	Color       string `json:"color"`
 	Description string `json:"description"`
+	Parent      string `json:"parent"`
 }
 
 // TestTagMetaRBAC: editor gets 403 on POST /admin/tags/meta.
@@ -1025,5 +1026,107 @@ func TestTagMetaAbsent(t *testing.T) {
 	}
 	if !found {
 		t.Error("ops tag not in tag list")
+	}
+}
+
+// --- Tag hierarchy tests (Phase 33 / TF-03) ---
+
+// TestTagHierarchySetParent: admin sets parent="ops" on "deploy"; GET
+// /admin/tags shows deploy with parent="ops".
+func TestTagHierarchySetParent(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"deploy"})
+	f.seedPage(t, "b.md", []string{"ops"})
+	admin := f.adminCookies(t)
+
+	// Set parent="ops" on "deploy".
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "deploy", "color": "#4caf50", "description": "Deploy ops", "parent": "ops"}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set parent: %d %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Parent string `json:"parent"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Parent != "ops" {
+		t.Errorf("response parent = %q, want ops", resp.Parent)
+	}
+
+	// GET /admin/tags must show the parent.
+	rec = doMutate(t, f.handler, http.MethodGet, "/api/v1/admin/tags", nil, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list tags: %d %s", rec.Code, rec.Body.String())
+	}
+	var entries []tagListEntry
+	if err := json.Unmarshal(rec.Body.Bytes(), &entries); err != nil {
+		t.Fatalf("unmarshal tags list: %v", err)
+	}
+	for _, e := range entries {
+		if e.Tag == "deploy" {
+			if e.Parent != "ops" {
+				t.Errorf("tag list parent = %q, want ops", e.Parent)
+			}
+		}
+	}
+}
+
+// TestTagHierarchyCycle: build ops→infra, then try to set parent="ops" on
+// "infra" → 400 (cycle).
+func TestTagHierarchyCycle(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	f.seedPage(t, "b.md", []string{"infra"})
+	admin := f.adminCookies(t)
+
+	// Set infra's parent to ops.
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "infra", "color": "", "description": "", "parent": "ops"}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set infra parent: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Try to set ops's parent to infra → cycle (infra→ops→infra).
+	rec = doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "ops", "color": "", "description": "", "parent": "infra"}, admin)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("cycle set parent: got %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTagHierarchySelfParent: set parent="deploy" on "deploy" → 400.
+func TestTagHierarchySelfParent(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"deploy"})
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "deploy", "color": "", "description": "", "parent": "deploy"}, admin)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("self-parent: got %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTagHierarchyRootTag: set parent="" on "deploy" → valid (root tag).
+func TestTagHierarchyRootTag(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"deploy"})
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "deploy", "color": "#4caf50", "description": "Deploy ops", "parent": ""}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set root tag: %d %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Parent string `json:"parent"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Parent != "" {
+		t.Errorf("root tag parent = %q, want empty", resp.Parent)
 	}
 }

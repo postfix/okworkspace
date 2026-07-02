@@ -81,12 +81,14 @@ type tagApplyResponse struct {
 	Results []pages.TagApplyResult `json:"results"`
 }
 
-// tagMetaRequest is the body of POST /admin/tags/meta (Phase 32 / TF-02). An
-// admin sets a tag's color + description. Empty color + description = clear.
+// tagMetaRequest is the body of POST /admin/tags/meta (Phase 32 / TF-02,
+// Phase 33 / TF-03). An admin sets a tag's color + description + parent.
+// Empty color + description + parent = clear (the file is deleted).
 type tagMetaRequest struct {
 	Tag         string `json:"tag"`
 	Color       string `json:"color"`
 	Description string `json:"description"`
+	Parent      string `json:"parent"`
 }
 
 // tagMetaResponse is the return shape: the updated metadata for the tag.
@@ -94,6 +96,7 @@ type tagMetaResponse struct {
 	Tag         string `json:"tag"`
 	Color       string `json:"color"`
 	Description string `json:"description"`
+	Parent      string `json:"parent"`
 }
 
 // normalizeTag trims whitespace and folds to lowercase. An empty string after
@@ -714,8 +717,9 @@ func (h *authHandlers) handleTagBulk(w http.ResponseWriter, r *http.Request) {
 
 // handleTagList handles GET /admin/tags (TM-04). Returns the workspace tag
 // vocabulary with per-tag page counts from the derived graph cache, merged
-// with per-tag color + description from the tag-metadata cache (Phase 32 /
-// TF-02). Tags with no metadata get empty color/description (graceful).
+// with per-tag color + description + parent from the tag-metadata cache
+// (Phase 32 / TF-02, Phase 33 / TF-03). Tags with no metadata get empty
+// color/description/parent (graceful).
 func (h *authHandlers) handleTagList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if h.graph == nil {
@@ -728,7 +732,7 @@ func (h *authHandlers) handleTagList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Build a tag→Meta lookup from the metadata cache (one call) so the list
-	// merges color/description inline without a second fetch per tag.
+	// merges color/description/parent inline without a second fetch per tag.
 	metaByTag := map[string]tagmeta.Meta{}
 	if h.tagmeta != nil {
 		metas, merr := h.tagmeta.AllMeta(ctx)
@@ -738,18 +742,19 @@ func (h *authHandlers) handleTagList(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// A metadata read error is non-fatal: the list still renders tags with
-		// empty color/description (graceful degradation, same as no metadata).
+		// empty color/description/parent (graceful degradation, same as no metadata).
 	}
 	type tagEntry struct {
 		Tag         string `json:"tag"`
 		Count       int    `json:"count"`
 		Color       string `json:"color,omitempty"`
 		Description string `json:"description,omitempty"`
+		Parent      string `json:"parent,omitempty"`
 	}
 	out := make([]tagEntry, 0, len(counts))
 	for tag, c := range counts {
 		m := metaByTag[tag] // zero-value Meta{} when absent → empty fields
-		out = append(out, tagEntry{Tag: tag, Count: c, Color: m.Color, Description: m.Description})
+		out = append(out, tagEntry{Tag: tag, Count: c, Color: m.Color, Description: m.Description, Parent: m.Parent})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -770,13 +775,16 @@ func (h *authHandlers) handleTagVocabulary(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, vocab)
 }
 
-// handleTagMeta handles POST /admin/tags/meta (Phase 32 / TF-02). An admin sets
-// or clears a tag's color + description. The metadata persists on disk as
-// Tags/{tag}.md via the single-writer commit path; the SQLite cache is updated
-// inline. Server validation: tag via ValidateTagCharset, color via
-// tagmeta.ValidateColor (hex/palette subset), description via
-// tagmeta.ValidateDescription (single-line, HTML-safe, ≤200). Empty color +
-// description = clear (the file is deleted). Admin-only RBAC + nosurf CSRF are
+// handleTagMeta handles POST /admin/tags/meta (Phase 32 / TF-02, Phase 33 /
+// TF-03). An admin sets or clears a tag's color + description + parent. The
+// metadata persists on disk as Tags/{tag}.md via the single-writer commit path;
+// the SQLite cache is updated inline. Server validation: tag via
+// ValidateTagCharset, color via tagmeta.ValidateColor (hex/palette subset),
+// description via tagmeta.ValidateDescription (single-line, HTML-safe, ≤200),
+// parent via tagmeta.ValidateParent (valid tag name or empty). The cycle check
+// (tagmeta.checkCycle) runs BEFORE the write — a cycle-producing parent is
+// rejected with 400, never written to disk (D-02a). Empty color + description +
+// parent = clear (the file is deleted). Admin-only RBAC + nosurf CSRF are
 // inherited from the admin route subgroup.
 func (h *authHandlers) handleTagMeta(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -806,10 +814,21 @@ func (h *authHandlers) handleTagMeta(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid description.")
 		return
 	}
+	parent := normalizeTag(req.Parent)
+	if err := tagmeta.ValidateParent(parent); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid parent tag name.")
+		return
+	}
+	// Cycle check BEFORE the write (D-02a): a cycle-producing parent is rejected
+	// with 400, never written to disk (which would create an un-rebuildable cycle).
+	if err := h.tagmeta.CheckCycle(ctx, tag, parent); err != nil {
+		writeError(w, http.StatusBadRequest, "Tag hierarchy cycle: "+err.Error())
+		return
+	}
 	// Thread the authenticated actor onto the commit spec + audit record.
 	actor := h.actorFromSession(r)
 	h.tagmeta.SetUser(actor)
-	if err := h.tagmeta.SetMeta(ctx, tag, req.Color, req.Description); err != nil {
+	if err := h.tagmeta.SetMeta(ctx, tag, req.Color, req.Description, parent); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to set tag metadata.")
 		return
 	}
@@ -817,13 +836,14 @@ func (h *authHandlers) handleTagMeta(w http.ResponseWriter, r *http.Request) {
 		Action: audit.ActionTagMeta,
 		Actor:  actor,
 		Target: tag,
-		Detail: fmt.Sprintf("color=%s", req.Color),
+		Detail: fmt.Sprintf("color=%s parent=%s", req.Color, parent),
 		Source: "web-ui",
 	})
 	writeJSON(w, http.StatusOK, tagMetaResponse{
 		Tag:         tag,
 		Color:       req.Color,
 		Description: req.Description,
+		Parent:      parent,
 	})
 }
 
