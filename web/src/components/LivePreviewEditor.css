@@ -167,6 +167,10 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  /* Overlay chrome, not code — exclude it from a select-all/copy of the block so the
+   * button label never lands in the user's clipboard (matches the button's own
+   * this.code copy-on-click). */
+  user-select: none;
   opacity: 0;
   transition: opacity 120ms ease-out;
 }

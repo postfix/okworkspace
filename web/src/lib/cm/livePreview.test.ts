@@ -470,9 +470,14 @@ describe("livePreview clean render (read mode)", () => {
     ).toDOM();
     expect(dom.tagName).toBe("PRE");
     expect(dom.getAttribute("data-lang")).toBe("go");
-    expect(dom.textContent).toBe("fmt.Println(1)");
+    // The rendered code lives in the <code> child; the <pre> also holds the EP-02
+    // copy-button overlay (a sibling of <code>), so assert on <code>'s textContent —
+    // that is the actual rendered code this test is about ("without fences").
+    const codeEl = dom.querySelector("code")!;
+    expect(codeEl).not.toBeNull();
+    expect(codeEl.textContent).toBe("fmt.Println(1)");
     // No backtick fences leaked into the rendered text.
-    expect(dom.textContent).not.toContain("`");
+    expect(codeEl.textContent).not.toContain("`");
   });
 });
 
