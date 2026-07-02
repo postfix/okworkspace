@@ -46,6 +46,16 @@ function renderTagManagement() {
   return qc;
 }
 
+// Locate the table row for a specific tag by its exact <code> label, then scope
+// queries to that row. This targets a tag by identity rather than by position,
+// so it survives the alphabetical row sort (Phase 33 / v1.6). getByText is exact
+// by default, so "ops" never matches "devops".
+function rowFor(tag: string) {
+  const row = screen.getByText(tag).closest("tr");
+  if (!row) throw new Error(`row for tag "${tag}" not found`);
+  return within(row as HTMLElement);
+}
+
 describe("TagManagement (TM-04)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -160,7 +170,7 @@ describe("TagManagement (TM-04)", () => {
     await screen.findByRole("table");
 
     // Open rename for "ops".
-    await user.click(screen.getAllByRole("button", { name: /rename/i })[0]);
+    await user.click(rowFor("ops").getByRole("button", { name: /rename/i }));
 
     // Type new name and click Preview.
     const dialog = await screen.findByRole("dialog");
@@ -210,7 +220,7 @@ describe("TagManagement (TM-04)", () => {
     await screen.findByRole("table");
 
     // Open merge for "ops".
-    await user.click(screen.getAllByRole("button", { name: /merge/i })[0]);
+    await user.click(rowFor("ops").getByRole("button", { name: /merge/i }));
 
     // Select target and click Preview.
     const dialog = await screen.findByRole("dialog");
@@ -258,7 +268,7 @@ describe("TagManagement (TM-04)", () => {
     await screen.findByRole("table");
 
     // Open delete for "ops".
-    await user.click(screen.getAllByRole("button", { name: /delete/i })[0]);
+    await user.click(rowFor("ops").getByRole("button", { name: /delete/i }));
 
     // Auto-preview fires on open.
     await waitFor(() =>
@@ -296,7 +306,7 @@ describe("TagManagement (TM-04)", () => {
     await screen.findByRole("table");
 
     // Open delete for "ops" — auto-preview fires and returns a body_affected page.
-    await user.click(screen.getAllByRole("button", { name: /delete/i })[0]);
+    await user.click(rowFor("ops").getByRole("button", { name: /delete/i }));
 
     // The delete dialog must surface the SAME body-note marker rename/merge show.
     const dialog = await screen.findByRole("dialog");
