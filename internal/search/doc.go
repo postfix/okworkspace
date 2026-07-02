@@ -15,13 +15,18 @@ func headingDocID(pagePath, anchor string) string {
 // pageDoc builds the indexable map for a page document. body is the opaque
 // okf.Doc.Body text (indexed verbatim, never re-emitted); tags are read
 // sequence-aware from frontmatter (Pitfall 7).
-func pageDoc(pagePath, title, body string, tags []string) map[string]interface{} {
+// pageDoc builds the indexable map for a page document. body is the opaque
+// okf.Doc.Body text (indexed verbatim, never re-emitted); tags are read
+// sequence-aware from frontmatter (Pitfall 7); description is the frontmatter
+// description (stored for display in search cards, EP-04).
+func pageDoc(pagePath, title, body, description string, tags []string) map[string]interface{} {
 	return map[string]interface{}{
-		"type":      TypePage,
-		"title":     title,
-		"body":      body,
-		"tags":      tags,
-		"page_path": pagePath,
+		"type":        TypePage,
+		"title":       title,
+		"body":         body,
+		"tags":         tags,
+		"page_path":    pagePath,
+		"description":  description,
 	}
 }
 

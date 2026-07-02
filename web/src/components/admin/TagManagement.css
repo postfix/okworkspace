@@ -159,6 +159,24 @@
   gap: 4px;
 }
 
+/* Undo button + note (Phase 35 / TF-05) */
+.tagmgmt-undo-btn {
+  margin-bottom: 8px;
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tagmgmt-undo-note {
+  margin: 0 0 8px;
+  font-size: 0.85em;
+  color: var(--text-muted, #666);
+}
+.tagmgmt-undo-note.tagmgmt-error {
+  color: var(--danger, #c0392b);
+}
+
 .tagmgmt-bulk-body {
   display: flex;
   flex-direction: column;

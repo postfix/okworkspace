@@ -18,6 +18,7 @@ import (
 	"github.com/postfix/okworkspace/internal/locks"
 	"github.com/postfix/okworkspace/internal/pages"
 	"github.com/postfix/okworkspace/internal/search"
+	"github.com/postfix/okworkspace/internal/store"
 	"github.com/postfix/okworkspace/internal/tagmeta"
 	"github.com/postfix/okworkspace/internal/tagsweep"
 	"github.com/postfix/okworkspace/internal/users"
@@ -47,6 +48,11 @@ type authHandlers struct {
 	users    *users.Repository
 	config   config.Config
 	audit    auditRecorder
+	// store is the shared operational *store.Store backing the SQLite op-journal
+	// (tag_op_journal, Phase 35 / TF-05) used by tag-op undo. Optional: when nil
+	// the undo handler returns a 500, following the same optional-dependency
+	// pattern as the other fields.
+	store *store.Store
 	// pages is the page lifecycle service (tree/get/create/save/folder).
 	// Optional: when nil the page/tree handlers return a 500 rather than panic,
 	// following the existing optional-dependency pattern.

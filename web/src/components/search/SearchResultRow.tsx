@@ -74,6 +74,9 @@ export default function SearchResultRow({
             {kindLabel(result.kind)}
           </span>
         </span>
+        {result.description && result.kind === "page" && (
+          <span className="search-result-description">{result.description}</span>
+        )}
         {result.snippet && (
           <span className="search-result-snippet">
             {renderHighlight(result.snippet)}

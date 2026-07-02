@@ -88,8 +88,9 @@ func (s *Index) RebuildIndex(ctx context.Context) error {
 			continue
 		}
 		title := okf.Field(doc, okf.FieldTitle)
+		description := okf.Field(doc, okf.FieldDescription)
 		if berr := batch.Index(pageDocID(it.Path), pageDoc(
-			it.Path, title, string(doc.Body), readTags(doc),
+			it.Path, title, string(doc.Body), description, readTags(doc),
 		)); berr != nil {
 			// A single bad doc must not nuke the whole index build (WR-06): skip it.
 			slog.WarnContext(ctx, "search: skipping page that failed to batch-index during rebuild",

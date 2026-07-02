@@ -141,6 +141,33 @@ export class CodeBlockWidget extends WidgetType {
     // even if the grammar never loads).
     code.textContent = this.code;
     pre.appendChild(code);
+    // Copy-to-clipboard button (EP-02): built with createElement + textContent
+    // ONLY (no innerHTML — the no-innerHTML invariant). The button is a SIBLING
+    // of <code> inside <pre>; highlight() only touches <code>'s children and
+    // <pre>'s classList, so the button never perturbs the async highlight swap
+    // or the destroyed/isConnected teardown (those guard codeEl, not the button).
+    const btn = document.createElement("button");
+    btn.className = "cm-copy-btn";
+    btn.type = "button";
+    btn.textContent = "Copy";
+    btn.setAttribute("aria-label", "Copy code to clipboard");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const write = navigator.clipboard?.writeText?.bind(navigator.clipboard);
+      if (!write) {
+        btn.textContent = "Failed";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+        return;
+      }
+      write(this.code).then(() => {
+        btn.textContent = "Copied";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+      }).catch(() => {
+        btn.textContent = "Failed";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+      });
+    });
+    pre.appendChild(btn);
     // Then kick off the async re-highlight (fire-and-forget; failures leave plain text).
     void this.highlight(pre, code);
     return pre;

@@ -1457,6 +1457,18 @@ export async function bulkTag(opts: {
 		opts,
 	);
 }
+
+// undoLastTagOp (Phase 35 / TF-05) — undo the last tag-admin operation
+// (rename/merge/delete/bulk) by replaying its inverse through ApplyTagsBatch
+// (one forward commit, per-page 409-guarded). The server reads the last
+// tag_op_journal row and builds the inverse. A 400 means "nothing to undo".
+// The response may carry a `note` field (delete body-#tag limitation).
+export async function undoLastTagOp(): Promise<TagApplyResponse & { note?: string }> {
+	return mutate<TagApplyResponse & { note?: string }>(
+		"/api/v1/admin/tags/undo",
+		{},
+	);
+}
 // setTagMeta (Phase 32 / TF-02, Phase 33 / TF-03) — set or clear a tag's color +
 // description + parent. Empty color + description + parent = clear (the
 // Tags/{tag}.md file is deleted). The server validates the parent tag name and

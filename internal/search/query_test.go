@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -251,5 +252,63 @@ func TestNormalizeQuery_ShortUnchanged(t *testing.T) {
 	got, ok := normalizeQuery("  hello world  ")
 	if !ok || got != "hello world" {
 		t.Fatalf("normalizeQuery(short) = %q,%v; want \"hello world\",true", got, ok)
+	}
+}
+
+// TestQuery_Description (EP-04): the frontmatter description is indexed and
+// returned as an additive optional field on the page Result. The harness's
+// writePage writes an empty description, so this test writes a page directly
+// with a non-empty description and verifies it surfaces on the Result.
+func TestQuery_Description(t *testing.T) {
+	h := newHarness(t)
+	content := fmt.Sprintf("---\ntype: page\ntitle: Deploy Guide\ndescription: How to deploy the service to production\ntags:\n  []\ntimestamp: 2026-06-21T00:00:00Z\n---\n\nbody about deploy\n")
+	if err := h.repo.Write("deploy.md", []byte(content)); err != nil {
+		t.Fatalf("write page: %v", err)
+	}
+	h.rebuild(t)
+
+	results, err := h.idx.Query(context.Background(), "deploy")
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	var found *Result
+	for i := range results {
+		if results[i].Path == "deploy.md" {
+			found = &results[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("deploy.md not in results: %+v", results)
+	}
+	if found.Description != "How to deploy the service to production" {
+		t.Fatalf("Description = %q; want the frontmatter description", found.Description)
+	}
+}
+
+// TestQuery_DescriptionAbsent (EP-04): a page with no description (the harness
+// writes an empty one) yields an empty Description on the Result — the card falls
+// back to today's snippet-only shape (no relevance regression).
+func TestQuery_DescriptionAbsent(t *testing.T) {
+	h := newHarness(t)
+	h.writePage(t, "nodesc.md", "No Description Page", nil, "some body text")
+	h.rebuild(t)
+
+	results, err := h.idx.Query(context.Background(), "description")
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	var found *Result
+	for i := range results {
+		if results[i].Path == "nodesc.md" {
+			found = &results[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("nodesc.md not in results: %+v", results)
+	}
+	if found.Description != "" {
+		t.Fatalf("Description = %q; want empty (absent description)", found.Description)
 	}
 }

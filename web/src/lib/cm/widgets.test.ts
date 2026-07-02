@@ -215,6 +215,33 @@ describe("CodeBlockWidget (ED-04a async syntax highlight — no-innerHTML + tear
     expect(code.querySelectorAll("span").length).toBe(0);
   });
 
+  it("has a copy button (EP-02) — createElement only, no innerHTML, copies this.code", async () => {
+    const code = "const x = 1;";
+    const { pre } = mount(code, "go");
+    const btn = pre.querySelector("button.cm-copy-btn")!;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toBe("Copy");
+    // The button is a sibling of <code>, not inside it — <code> stays clean.
+    const codeEl = pre.querySelector("code")!;
+    expect(codeEl.contains(btn)).toBe(false);
+    // Mock clipboard.writeText and click.
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    btn.click();
+    // The clipboard call received the code.
+    expect(writeText).toHaveBeenCalledWith(code);
+    // Wait for the "Copied" confirmation + reset (vi.waitFor polls).
+    await vi.waitFor(() => {
+      expect(btn.textContent).toBe("Copied");
+    });
+    await vi.waitFor(() => {
+      expect(btn.textContent).toBe("Copy");
+    }, { timeout: 3000 });
+  });
+
   it("re-highlights into tok-* <span>s once the grammar resolves (element structure, never innerHTML)", async () => {
     const code = "func main() { return }";
     const { pre } = mount(code, "go");

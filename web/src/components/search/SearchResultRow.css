@@ -75,6 +75,17 @@
   overflow: hidden;
 }
 
+.search-result-description {
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .search-result-subline {
   font-size: var(--font-size-label);
   line-height: var(--line-height-label);

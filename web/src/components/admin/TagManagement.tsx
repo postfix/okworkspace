@@ -5,13 +5,14 @@
 // per-tag usage counts, most/least used, orphans, and totals.
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2, Layers, Palette, BarChart3 } from "lucide-react";
+import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2, Layers, Palette, BarChart3, Undo2 } from "lucide-react";
 import {
   listTags,
   renameTag,
   mergeTag,
   deleteTag,
   bulkTag,
+  undoLastTagOp,
   setTagMeta,
   getTree,
   getTagAnalytics,
@@ -84,6 +85,33 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
   const [metaTarget, setMetaTarget] = useState<TagEntry | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [undoMsg, setUndoMsg] = useState<string | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
+
+  // undoLast triggers POST /admin/tags/undo, shows per-page results + any
+  // note (delete body-#tag limitation), and invalidates the tag list. A 400
+  // means "nothing to undo" — shown as a subtle message, not an error.
+  const undoLast = async () => {
+    setUndoBusy(true);
+    setUndoError(null);
+    setUndoMsg(null);
+    try {
+      const res = await undoLastTagOp();
+      const applied = res.results.filter((r) => r.status === "applied").length;
+      const stale = res.results.filter((r) => r.status === "stale").length;
+      const parts = [`${applied} page(s) restored`];
+      if (stale > 0) parts.push(`${stale} skipped (stale)`);
+      if (res.note) parts.push(res.note);
+      setUndoMsg(parts.join(" — "));
+      onDone();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Undo failed.";
+      setUndoError(msg.includes("nothing to undo") ? "Nothing to undo." : msg);
+    } finally {
+      setUndoBusy(false);
+    }
+  };
 
   const filtered = query.trim()
     ? tags.filter((t) => t.tag.includes(query.trim().toLowerCase()))
@@ -133,6 +161,16 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
       <button className="btn btn-sm tagmgmt-bulk-btn" onClick={() => setBulkOpen(true)} title="Bulk add/remove tags across pages">
         <Layers size={14} /> Bulk add/remove
       </button>
+      <button
+        className="btn btn-sm tagmgmt-undo-btn"
+        onClick={undoLast}
+        disabled={undoBusy}
+        title="Undo the last tag-admin operation (rename/merge/delete/bulk)"
+      >
+        {undoBusy ? <Loader2 size={14} className="spinner" /> : <Undo2 size={14} />} Undo last tag operation
+      </button>
+      {undoMsg && <p className="tagmgmt-undo-note">{undoMsg}</p>}
+      {undoError && <p className="tagmgmt-undo-note tagmgmt-error">{undoError}</p>}
       <table className="tagmgmt-table">
         <thead>
           <tr>

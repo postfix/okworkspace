@@ -6,19 +6,31 @@ import rehypeSlug from "rehype-slug";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 
 import { resolveRelativeMdLink } from "../lib/mdlink";
+import { remarkHashtag } from "../lib/remark-hashtag";
 import "./MarkdownProse.css";
 
-// headingIdSchema is the rehype-sanitize default schema with one change: `id` is
-// removed from the `clobber` list. rehype-sanitize otherwise PREFIXES every id
-// with `user-content-` (clobberPrefix), which would turn rehype-slug's
-// `id="my-section"` into `id="user-content-my-section"` and break heading
-// deep-links — the rendered id MUST equal okf.ScanHeadings's GitHub-style anchor
-// (T-03-15). `id` is already in the default global allow-list, so no attribute
-// is newly permitted; raw HTML stays disallowed (rehype-raw OFF), preserving the
-// Phase 1 stored-XSS guard (T-03-14).
+// headingIdSchema is the rehype-sanitize default schema with two changes:
+//   1. `id` is removed from the `clobber` list. rehype-sanitize otherwise
+//      PREFIXES every id with `user-content-` (clobberPrefix), which would turn
+//      rehype-slug's `id="my-section"` into `id="user-content-my-section"` and
+//      break heading deep-links — the rendered id MUST equal okf.ScanHeadings's
+//      GitHub-style anchor (T-03-15). `id` is already in the default global
+//      allow-list, so no attribute is newly permitted.
+//   2. `className` is allowed on `span` (restricted to the literal value
+//      "cm-hashtag") so the EP-01 remark hashtag plugin's badge
+//      `<span class="cm-hashtag">` survives sanitize. The badge is a typed hast
+//      element (via data.hName/hProperties), NOT raw HTML — this permits a
+//      specific class name on a safe element only, never raw HTML injection.
+//      `span` is already in the default tagNames. raw HTML stays disallowed
+//      (the raw-HTML rehype plugin is NOT enabled), preserving the Phase 1
+//      stored-XSS guard (T-03-14).
 const headingIdSchema = {
   ...defaultSchema,
   clobber: (defaultSchema.clobber ?? []).filter((attr) => attr !== "id"),
+  attributes: {
+    ...defaultSchema.attributes,
+    span: [...(defaultSchema.attributes.span ?? []), ["className", "cm-hashtag"]],
+  },
 };
 
 // MarkdownProse renders committed page Markdown safely (T-02-03): react-markdown
@@ -75,7 +87,7 @@ export default function MarkdownProse({
   return (
     <div className="markdown-prose">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkHashtag]}
         rehypePlugins={[rehypeSlug, [rehypeSanitize, headingIdSchema]]}
         components={components}
       >

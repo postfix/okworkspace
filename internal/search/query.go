@@ -12,12 +12,13 @@ import (
 // contract consumed by 03-02). THIS plan emits only kind:"page"; heading/
 // attachment kinds are added by 03-03 without changing the envelope.
 type Result struct {
-	Kind      string `json:"kind"`                 // "page" | "heading" | "attachment"
-	Title     string `json:"title"`                // page/heading title or attachment filename
-	Path      string `json:"path"`                 // workspace-relative page path to navigate to
-	Snippet   string `json:"snippet"`              // weight-only-safe highlighted fragment (no <mark>)
-	Anchor    string `json:"anchor,omitempty"`     // heading only
-	PageTitle string `json:"page_title,omitempty"` // heading/attachment only
+	Kind        string `json:"kind"`                 // "page" | "heading" | "attachment"
+	Title       string `json:"title"`                // page/heading title or attachment filename
+	Path        string `json:"path"`                 // workspace-relative page path to navigate to
+	Snippet     string `json:"snippet"`             // weight-only-safe highlighted fragment (no <mark>)
+	Anchor      string `json:"anchor,omitempty"`     // heading only
+	PageTitle   string `json:"page_title,omitempty"` // heading/attachment only
+	Description string `json:"description,omitempty"` // page only — frontmatter description (EP-04)
 }
 
 const (
@@ -68,7 +69,7 @@ func buildQuery(q string) *bleve.SearchRequest {
 	dis.AddQuery(ph)
 
 	req := bleve.NewSearchRequestOptions(dis, maxResults, 0, false)
-	req.Fields = []string{"type", "title", "page_path", "page_title", "anchor", "filename"}
+	req.Fields = []string{"type", "title", "page_path", "page_title", "anchor", "filename", "description"}
 	req.Highlight = bleve.NewHighlightWithStyle(highlightStyle)
 	req.Highlight.AddField("title")
 	req.Highlight.AddField("body")
@@ -137,11 +138,12 @@ func (s *Index) Query(ctx context.Context, q string) ([]Result, error) {
 // mapHit converts a Bleve DocumentMatch into a typed Result.
 func mapHit(hit *search.DocumentMatch) Result {
 	r := Result{
-		Kind:      fieldString(hit.Fields, "type"),
-		Title:     fieldString(hit.Fields, "title"),
-		Path:      fieldString(hit.Fields, "page_path"),
-		Anchor:    fieldString(hit.Fields, "anchor"),
-		PageTitle: fieldString(hit.Fields, "page_title"),
+		Kind:        fieldString(hit.Fields, "type"),
+		Title:       fieldString(hit.Fields, "title"),
+		Path:        fieldString(hit.Fields, "page_path"),
+		Anchor:      fieldString(hit.Fields, "anchor"),
+		PageTitle:   fieldString(hit.Fields, "page_title"),
+		Description: fieldString(hit.Fields, "description"),
 	}
 	// An attachment carries its filename in `filename`, not `title`.
 	if r.Title == "" {

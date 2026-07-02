@@ -135,7 +135,8 @@ func (s *Index) indexPage(ctx context.Context, pagePath string) error {
 		return fmt.Errorf("search: parse page %q: %w", pagePath, err)
 	}
 	title := okf.Field(doc, okf.FieldTitle)
-	d := pageDoc(pagePath, title, string(doc.Body), readTags(doc))
+	description := okf.Field(doc, okf.FieldDescription)
+	d := pageDoc(pagePath, title, string(doc.Body), description, readTags(doc))
 	if err := s.withIndex(func(idx bleve.Index) error {
 		return idx.Index(pageDocID(pagePath), d)
 	}); err != nil {

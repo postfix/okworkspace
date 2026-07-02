@@ -58,6 +58,13 @@ func buildMapping() mapping.IndexMapping {
 	page.AddFieldMappingsAt("body", bodyFM)
 	page.AddFieldMappingsAt("tags", keywordFM)
 	page.AddFieldMappingsAt("page_path", pathFM)
+	// Description is stored for display in search cards (EP-04). It is NOT
+	// analyzed/indexed (keyword mapping, not text) — the requirement is
+	// "show in cards", and description-only display avoids any relevance
+	// regression. Keyword keeps it whole-token stored + retrievable.
+	descFM := bleve.NewKeywordFieldMapping()
+	descFM.Store = true
+	page.AddFieldMappingsAt("description", descFM)
 
 	// Heading documents (deep-link sub-docs; populated by 03-03).
 	heading := bleve.NewDocumentMapping()

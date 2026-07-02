@@ -152,6 +152,33 @@
   border-bottom-left-radius: var(--radius-sm);
 }
 
+/* Copy-to-clipboard button (EP-02): a small subtle button in the top-right
+ * corner of the read-mode fenced code block. The button is a sibling of <code>
+ * inside <pre>; built with createElement + textContent (no innerHTML). */
+.livepreview-editor .cm-copy-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 2px var(--space-sm);
+  font-family: var(--font-family-ui);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.livepreview-editor .cm-md-codeblock:hover .cm-copy-btn {
+  opacity: 1;
+}
+
+.livepreview-editor .cm-copy-btn:hover {
+  color: var(--color-accent);
+}
+
 /* Syntax-highlight token colors (ED-04a). The ONE shared HighlightStyle
  * (lib/cm/highlight.ts) emits these `.tok-*` classes on token spans for BOTH
  * surfaces: inside the read CodeBlockWidget <pre> AND inside .cm-content (the

@@ -69,6 +69,10 @@ const (
 	// ActionTagMeta (Phase 32 / TF-02) — admin sets/clears a tag's color +
 	// description through the on-disk Tags/{tag}.md store + single-writer commit.
 	ActionTagMeta = "tag_meta"
+	// ActionTagUndo (Phase 35 / TF-05) — admin undoes the last tag-admin op by
+	// replaying its inverse through ApplyTagsBatch (a forward commit, never a
+	// history rewrite). Audited like every other tag-admin write.
+	ActionTagUndo = "tag_undo"
 )
 
 // Event is one audit record. It carries only non-secret provenance — there is
