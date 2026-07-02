@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Rich-Block Editor (TipTap)
-status: "v1.7 planning complete — RE-01…05 requirements + risk-first roadmap (Phases 38–42) authored, red-team gate run (GO-WITH-REVISIONS, folded). Ready to build; next is discuss/plan Phase 38 (RE-01 codec GO/NO-GO gate)."
-last_updated: "2026-07-02T17:30:00.000Z"
+status: "v1.7 in progress — Phase 38 (RE-01 codec GO/NO-GO gate) COMPLETE: verdict GO, qa-verified (PASS). Codec + round-trip corpus + cross-engine parity + HTML-inertness all green. Next: Phase 39 (RE-02) and/or Phase 40 (RE-05) — parallelizable."
+last_updated: "2026-07-02T21:00:00.000Z"
 last_activity: 2026-07-02
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
 ---
 
 # Project State
@@ -27,13 +27,14 @@ RE-01…05 + risk-first roadmap (Phases 38–42) authored; independent red-team 
 
 ## Current Position
 
-Milestone: v1.7 Rich-Block Editor (TipTap) — **planning complete, ready to build**.
-Phases: 38 (RE-01 codec GO/NO-GO gate), 39 (RE-02 verbatim preserved tier), 40 (RE-05 editor-host
-abstraction — no-behavior-change refactor), 41 (RE-03 TipTap #tag/suggest/slash + real save),
-42 (RE-04 toggle + load guard + code-split; shared-content design fork). None started.
-Status: v1.7 planning complete; v1.6 shipped + closed 2026-07-02.
-Next: `/anvil-discuss-phase 38` then `/anvil-plan-phase 38`. **Phase 38 is a GO/NO-GO spike** — if the
-round-trip corpus can't pass, the milestone halts and returns to the co-driver.
+Milestone: v1.7 Rich-Block Editor (TipTap) — **in progress, 1/5 phases.**
+Phases: ✅ 38 (RE-01 codec GO/NO-GO gate — **GO**, qa PASS) · 39 (RE-02 verbatim preserved tier) ·
+40 (RE-05 editor-host abstraction — no-behavior-change refactor) · 41 (RE-03 TipTap #tag/suggest/slash
++ real save) · 42 (RE-04 toggle + load guard + code-split; shared-content design fork).
+Status: Phase 38 committed (`7806c5e`); GO gate passed — the milestone is viable, TipTap can round-trip
+the bounded slice. A pre-existing v1.6 `npm run build` (tsc -b) breakage was found + fixed (`d025cf6`).
+Next: **Phase 39 (RE-02) and/or Phase 40 (RE-05) — independent, parallelizable** (39 = web/src/lib/tiptap/*;
+40 = PageEditor host + editorMode). Then 41 (needs 38+39+40), then 42 (needs 40+41, design fork).
 Last activity: 2026-07-02
 
 ## Accumulated Context
