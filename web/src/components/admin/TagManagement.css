@@ -215,3 +215,35 @@
 .tagmgmt-bulk-ops .tagmgmt-field {
   flex: 1;
 }
+
+/* Color swatch + TagMetaDialog (Phase 32 / TF-02) */
+.tagmgmt-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  border: 1px solid var(--color-border-subtle, #ddd);
+}
+
+.tagmgmt-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tagmgmt-color-picker {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+ border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  cursor: pointer;
+}
+
+.tagmgmt-color-palette {
+  flex: 1;
+  height: 36px;
+}

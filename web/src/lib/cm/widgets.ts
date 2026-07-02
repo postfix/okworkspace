@@ -333,13 +333,13 @@ export class MermaidWidget extends WidgetType {
 // child). The widget is emitted as a NON-atomic inline replace (livePreview.ts) — a
 // hashtag is short inline text, so it must not trap the cursor (Pitfall 1).
 export class HashtagWidget extends WidgetType {
-  constructor(readonly tag: string) {
+  constructor(readonly tag: string, readonly color?: string) {
     super();
   }
 
-  // Identical labels reuse the same DOM (CM6 skips a re-render).
+  // Identical labels + color reuse the same DOM (CM6 skips a re-render).
   eq(other: HashtagWidget): boolean {
-    return other.tag === this.tag;
+    return other.tag === this.tag && other.color === this.color;
   }
 
   toDOM(): HTMLElement {
@@ -348,6 +348,12 @@ export class HashtagWidget extends WidgetType {
     // The '#' is a literal prefix; only `this.tag` is dynamic and it flows through
     // textContent (never innerHTML) — one inert text node, no markup parsing.
     span.textContent = "#" + this.tag;
+    // Apply the tag's color via style.color (never innerHTML). The color is a
+    // server-validated hex/palette token; an empty/undefined color falls back to
+    // the .cm-hashtag CSS default (var(--color-accent)).
+    if (this.color) {
+      span.style.color = this.color;
+    }
     return span;
   }
 

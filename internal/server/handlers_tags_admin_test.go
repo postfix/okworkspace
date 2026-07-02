@@ -25,6 +25,7 @@ import (
 	"github.com/postfix/okworkspace/internal/repo"
 	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
+	"github.com/postfix/okworkspace/internal/tagmeta"
 	"github.com/postfix/okworkspace/internal/users"
 	"gopkg.in/yaml.v3"
 )
@@ -37,6 +38,7 @@ type tagAdminFixture struct {
 	users   *users.Repository
 	gs      *gitstore.GitStore
 	pages   *pages.Service
+	tagmeta *tagmeta.Store
 }
 
 func newTagAdminServer(t *testing.T) *tagAdminFixture {
@@ -77,6 +79,7 @@ func newTagAdminServer(t *testing.T) *tagAdminFixture {
 	t.Cleanup(func() { w.Stop(); cancel() })
 
 	ps := pages.NewService(contentRepo, gs, w, st.DB(), false)
+	tagmetaStore := tagmeta.NewStore(contentRepo, st.DB(), w, false)
 
 	var cfg config.Config
 	cfg.Auth.SessionCookieName = config.DefaultSessionCookieName
@@ -95,13 +98,14 @@ func newTagAdminServer(t *testing.T) *tagAdminFixture {
 		GraphJobs: w,
 		Graph:     graphStore,
 		Pages:     ps,
+		Tagmeta:   tagmetaStore,
 	})
 	if err != nil {
 		t.Fatalf("server.New: %v", err)
 	}
 	return &tagAdminFixture{
 		handler: h, repo: contentRepo, store: graphStore,
-		db: st, users: userRepo, gs: gs, pages: ps,
+		db: st, users: userRepo, gs: gs, pages: ps, tagmeta: tagmetaStore,
 	}
 }
 
@@ -832,5 +836,194 @@ func TestBulkTagValidation(t *testing.T) {
 		map[string]any{}, admin)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("empty request: got %d, want 400", rec.Code)
+	}
+}
+
+
+// --- Tag metadata tests (Phase 32 / TF-02) ---
+
+// tagListEntry mirrors the GET /admin/tags response shape.
+type tagListEntry struct {
+	Tag         string `json:"tag"`
+	Count       int    `json:"count"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
+}
+
+// TestTagMetaRBAC: editor gets 403 on POST /admin/tags/meta.
+func TestTagMetaRBAC(t *testing.T) {
+	f := newTagAdminServer(t)
+	editor := f.editorCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "deploy", "color": "#4caf50", "description": "Deploy ops"}, editor)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("editor POST /admin/tags/meta: got %d, want 403", rec.Code)
+	}
+}
+
+// TestTagMetaSetGet: admin sets color + description; GET /admin/tags reflects
+// them; Tags/deploy.md exists on disk.
+func TestTagMetaSetGet(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"deploy"})
+	admin := f.adminCookies(t)
+
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "deploy", "color": "#4caf50", "description": "Deploy ops"}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set meta: %d %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Tag         string `json:"tag"`
+		Color       string `json:"color"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal meta response: %v", err)
+	}
+	if resp.Color != "#4caf50" || resp.Description != "Deploy ops" {
+		t.Errorf("meta response = %+v, want color=#4caf50 desc=Deploy ops", resp)
+	}
+
+	// GET /admin/tags must show the metadata.
+	rec = doMutate(t, f.handler, http.MethodGet, "/api/v1/admin/tags", nil, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list tags: %d %s", rec.Code, rec.Body.String())
+	}
+	var entries []tagListEntry
+	if err := json.Unmarshal(rec.Body.Bytes(), &entries); err != nil {
+		t.Fatalf("unmarshal tags list: %v", err)
+	}
+	var found bool
+	for _, e := range entries {
+		if e.Tag == "deploy" {
+			found = true
+			if e.Color != "#4caf50" {
+				t.Errorf("tag list color = %q, want #4caf50", e.Color)
+			}
+			if e.Description != "Deploy ops" {
+				t.Errorf("tag list description = %q, want Deploy ops", e.Description)
+			}
+		}
+	}
+	if !found {
+		t.Error("deploy tag not in tag list")
+	}
+
+	// Tags/deploy.md must exist on disk.
+	raw, err := f.repo.Read("Tags/deploy.md")
+	if err != nil {
+		t.Fatalf("Read Tags/deploy.md: %v", err)
+	}
+	if !strings.Contains(string(raw), "color: \"#4caf50\"") {
+		t.Errorf("Tags/deploy.md missing color frontmatter: %s", raw)
+	}
+}
+
+// TestTagMetaValidation: invalid color → 400; invalid description (newline,
+// >200 chars, HTML metachar) → 400; invalid tag (a/b) → 400.
+func TestTagMetaValidation(t *testing.T) {
+	f := newTagAdminServer(t)
+	admin := f.adminCookies(t)
+
+	cases := []struct {
+		name string
+		body map[string]string
+	}{
+		{"invalid color url()", map[string]string{"tag": "deploy", "color": "url(x)"}},
+		{"invalid color var()", map[string]string{"tag": "deploy", "color": "var(--x)"}},
+		{"description with newline", map[string]string{"tag": "deploy", "description": "line1\nline2"}},
+		{"description too long", map[string]string{"tag": "deploy", "description": strings.Repeat("x", 201)}},
+		{"description html metachar", map[string]string{"tag": "deploy", "description": "<script>"}},
+		{"invalid tag slash", map[string]string{"tag": "a/b", "color": "red"}},
+		{"empty tag", map[string]string{"tag": ""}},
+	}
+	for _, tc := range cases {
+		rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta", tc.body, admin)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: got %d, want 400 (body=%v)", tc.name, rec.Code, tc.body)
+		}
+	}
+}
+
+// TestTagMetaClear: set metadata, then set with empty color + description →
+// file deleted, GET /admin/tags shows empty metadata.
+func TestTagMetaClear(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"deploy"})
+	admin := f.adminCookies(t)
+
+	// Set metadata first.
+	rec := doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "deploy", "color": "#4caf50", "description": "Deploy ops"}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set meta: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Clear: empty color + description.
+	rec = doMutate(t, f.handler, http.MethodPost, "/api/v1/admin/tags/meta",
+		map[string]string{"tag": "deploy", "color": "", "description": ""}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("clear meta: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Tags/deploy.md must be gone.
+	exists, err := f.repo.Exists("Tags/deploy.md")
+	if err != nil {
+		t.Fatalf("Exists Tags/deploy.md: %v", err)
+	}
+	if exists {
+		t.Error("Tags/deploy.md still exists after clear")
+	}
+
+	// GET /admin/tags shows empty metadata for deploy.
+	rec = doMutate(t, f.handler, http.MethodGet, "/api/v1/admin/tags", nil, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list tags: %d %s", rec.Code, rec.Body.String())
+	}
+	var entries []tagListEntry
+	if err := json.Unmarshal(rec.Body.Bytes(), &entries); err != nil {
+		t.Fatalf("unmarshal tags list: %v", err)
+	}
+	for _, e := range entries {
+		if e.Tag == "deploy" {
+			if e.Color != "" || e.Description != "" {
+				t.Errorf("after clear: deploy color=%q description=%q, want empty", e.Color, e.Description)
+			}
+		}
+	}
+}
+
+// TestTagMetaAbsent: GET /admin/tags with no Tags/ folder → tags render with
+// empty color/description (graceful).
+func TestTagMetaAbsent(t *testing.T) {
+	f := newTagAdminServer(t)
+	f.seedPage(t, "a.md", []string{"ops"})
+	admin := f.adminCookies(t)
+
+	// No Tags/ folder exists — the list must still work with empty metadata.
+	rec := doMutate(t, f.handler, http.MethodGet, "/api/v1/admin/tags", nil, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list tags: %d %s", rec.Code, rec.Body.String())
+	}
+	var entries []tagListEntry
+	if err := json.Unmarshal(rec.Body.Bytes(), &entries); err != nil {
+		t.Fatalf("unmarshal tags list: %v", err)
+	}
+	var found bool
+	for _, e := range entries {
+		if e.Tag == "ops" {
+			found = true
+			if e.Color != "" {
+				t.Errorf("absent meta: color=%q, want empty", e.Color)
+			}
+			if e.Description != "" {
+				t.Errorf("absent meta: description=%q, want empty", e.Description)
+			}
+		}
+	}
+	if !found {
+		t.Error("ops tag not in tag list")
 	}
 }

@@ -1366,6 +1366,8 @@ export interface TagPreview {
 export interface TagEntry {
   tag: string;
   count: number;
+  color?: string;
+  description?: string;
 }
 
 export async function listTags(): Promise<TagEntry[]> {
@@ -1431,6 +1433,16 @@ export async function bulkTag(opts: {
 		"/api/v1/admin/tags/bulk",
 		opts,
 	);
+}
+
+// setTagMeta (Phase 32 / TF-02) — set or clear a tag's color + description.
+// Empty color + description = clear (the Tags/{tag}.md file is deleted).
+export async function setTagMeta(opts: {
+  tag: string;
+  color: string;
+  description: string;
+}): Promise<void> {
+  await mutate<void>("/api/v1/admin/tags/meta", opts);
 }
 
 // relativeMdLink computes a relative `.md` link destination from the page at

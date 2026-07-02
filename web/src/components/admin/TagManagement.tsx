@@ -4,13 +4,14 @@
 // preview→approve contract.
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2, Layers } from "lucide-react";
+import { Pencil, GitMerge, Trash2, AlertTriangle, Loader2, Layers, Palette } from "lucide-react";
 import {
   listTags,
   renameTag,
   mergeTag,
   deleteTag,
   bulkTag,
+  setTagMeta,
   getTree,
   type TagEntry,
   type TagPreview,
@@ -46,6 +47,7 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
   const [renameTarget, setRenameTarget] = useState<TagEntry | null>(null);
   const [mergeSource, setMergeSource] = useState<TagEntry | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TagEntry | null>(null);
+  const [metaTarget, setMetaTarget] = useState<TagEntry | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -80,9 +82,13 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
           ) : (
             filtered.map((t) => (
               <tr key={t.tag}>
-                <td><code>{t.tag}</code></td>
+                <td>
+                  {t.color && <span className="tagmgmt-color-dot" style={{ backgroundColor: t.color }} title={t.description || undefined} />}
+                  <code>{t.tag}</code>
+                </td>
                 <td className="tagmgmt-count-col">{t.count}</td>
                 <td className="tagmgmt-actions-col">
+                  <button className="btn btn-sm btn-ghost" onClick={() => setMetaTarget(t)} title="Edit metadata"><Palette size={14} /></button>
                   <button className="btn btn-sm btn-ghost" onClick={() => setRenameTarget(t)} title="Rename"><Pencil size={14} /></button>
                   <button className="btn btn-sm btn-ghost" onClick={() => setMergeSource(t)} title="Merge"><GitMerge size={14} /></button>
                   <button className="btn btn-sm btn-ghost" onClick={() => setDeleteTarget(t)} title="Delete"><Trash2 size={14} /></button>
@@ -101,6 +107,9 @@ function TagTable({ tags, onDone }: { tags: TagEntry[]; onDone: () => void }) {
       )}
       {deleteTarget && (
         <DeleteDialog tag={deleteTarget} onClose={() => setDeleteTarget(null)} onDone={onDone} />
+      )}
+      {metaTarget && (
+        <TagMetaDialog tag={metaTarget} onClose={() => setMetaTarget(null)} onDone={onDone} />
       )}
       {bulkOpen && (
         <BulkTagDialog allTags={tags} onClose={() => setBulkOpen(false)} onDone={onDone} />
@@ -483,6 +492,78 @@ function BulkTagDialog({ allTags, onClose, onDone }: { allTags: TagEntry[]; onCl
             </ul>
           </div>
         )}
+        {error && <p className="tagmgmt-error"><AlertTriangle size={14} /> {error}</p>}
+      </div>
+    </Dialog>
+  );
+}
+
+
+// TagMetaDialog (Phase 32 / TF-02) — set or clear a tag's color + description.
+// The color is a hex value via <input type="color"> or a palette token via
+// <select>; the description is a single-line text input (max 200 chars). Save
+// calls setTagMeta; clearing (empty color + description) deletes the metadata.
+function TagMetaDialog({ tag, onClose, onDone }: { tag: TagEntry; onClose: () => void; onDone: () => void }) {
+  const [color, setColor] = useState(tag.color || "");
+  const [description, setDescription] = useState(tag.description || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await setTagMeta({ tag: tag.tag, color, description });
+      onDone();
+      onClose();
+    } catch {
+      setError("Failed to save tag metadata.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const palette = ["", "red", "blue", "green", "amber", "purple", "gray"];
+
+  return (
+    <Dialog open title={`Tag metadata "${tag.tag}"`} confirmLabel="Save" cancelLabel="Cancel"
+      busy={saving}
+      onCancel={onClose}
+      onConfirm={handleSave}
+    >
+      <div className="tagmgmt-dialog-body">
+        <label className="tagmgmt-field">
+          Color
+          <div className="tagmgmt-color-row">
+            <input
+              type="color"
+              className="tagmgmt-color-picker"
+              value={color.startsWith("#") ? color : "#000000"}
+              onChange={(e) => setColor(e.target.value)}
+            />
+            <select
+              className="input tagmgmt-color-palette"
+              value={color.startsWith("#") ? "" : color}
+              onChange={(e) => setColor(e.target.value)}
+            >
+              {palette.map((p) => (
+                <option key={p} value={p}>{p || "— palette —"}</option>
+              ))}
+            </select>
+            <button className="btn btn-sm btn-ghost" type="button" onClick={() => setColor("")} title="Clear color">Clear</button>
+          </div>
+        </label>
+        <label className="tagmgmt-field">
+          Description
+          <input
+            type="text"
+            className="input"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            maxLength={200}
+            placeholder="Short description (optional)"
+          />
+        </label>
         {error && <p className="tagmgmt-error"><AlertTriangle size={14} /> {error}</p>}
       </div>
     </Dialog>

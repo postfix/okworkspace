@@ -26,6 +26,7 @@ import (
 	"github.com/postfix/okworkspace/internal/search"
 	"github.com/postfix/okworkspace/internal/server"
 	"github.com/postfix/okworkspace/internal/store"
+	"github.com/postfix/okworkspace/internal/tagmeta"
 	"github.com/postfix/okworkspace/internal/tagsweep"
 	"github.com/postfix/okworkspace/internal/users"
 	"github.com/postfix/okworkspace/internal/web"
@@ -333,6 +334,11 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 	tagsweepStore.SetRepo(contentRepo)
 	worker.Register(tagsweep.KindTagSuggest, tagsweep.SuggestHandler(tagsweepStore, agentSvc))
 
+	// Tag metadata store (Phase 32 / TF-02): per-tag color + description persisted
+	// as Tags/{tag}.md (files-as-truth) with a rebuildable SQLite cache. The store
+	// rides the SAME single-writer commit path (the worker's KindCommit handler).
+	tagmetaStore := tagmeta.NewStore(contentRepo, st.DB(), worker, cfg.Git.PushOnCommit)
+
 	// Reconcile the trash table against the working tree at startup: a prior
 	// Delete/Restore whose async commit failed can leave a SQLite trash row that
 	// points at a trash_path never written to disk (WR-01). Prune those phantom
@@ -409,6 +415,7 @@ func runServe(ctx context.Context, logger *slog.Logger, configPath string) error
 		Locks:          lockStore,
 		TagSuggestions: tagsweepStore,
 		TagSweepJobs:   worker,
+		Tagmeta:         tagmetaStore,
 	})
 	if err != nil {
 		return fmt.Errorf("build server: %w", err)

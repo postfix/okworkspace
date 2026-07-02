@@ -69,6 +69,15 @@ export const cleanRender = Facet.define<boolean, boolean>({
   combine: (values) => values.some(Boolean),
 });
 
+// tagColors — the per-tag color map (Phase 32 / TF-02). When a surface provides
+// `tagColors.of({ "deploy": "#4caf50" })`, the live-preview passes the color to
+// HashtagWidget so the badge reflects the admin-set color via style.color (never
+// innerHTML). Tags with no entry fall back to the .cm-hashtag CSS default. The
+// map is a plain Record<string, string> (tag → validated hex/palette token).
+export const tagColors = Facet.define<Record<string, string>, Record<string, string>>({
+  combine: (values) => Object.assign({}, ...values),
+});
+
 // hideMark hides a syntax marker. Zero-width + NON-atomic (no atomicRanges) so the
 // cursor is never trapped and revealing it does not reflow neighbors (Pitfall 1/2).
 const hideMark = Decoration.replace({});
@@ -185,6 +194,7 @@ function buildDecorations(view: EditorView): BuildResult {
   // Read mode (cleanRender) renders finished prose: there is no editing caret to
   // reveal markers for, so NO line is ever "active" and every marker hides.
   const clean = view.state.facet(cleanRender);
+  const colors = view.state.facet(tagColors);
   // Lines the selection touches → reveal (skip hides) on those lines. In clean
   // render the set stays empty (the read view never reveals raw markers).
   const activeLines = new Set<number>();
@@ -291,7 +301,7 @@ function buildDecorations(view: EditorView): BuildResult {
               const tag = view.state.doc.sliceString(node.from + 1, node.to);
               deco.push(
                 Decoration.replace({
-                  widget: new HashtagWidget(tag),
+                  widget: new HashtagWidget(tag, colors[tag]),
                 }).range(node.from, node.to),
               );
             }
