@@ -1,15 +1,30 @@
 # Milestones
 
-## v1.6 v1.6 (Shipped: 2026-07-02)
+## v1.6 Tag System Completion & Authoring Polish (Shipped: 2026-07-02)
 
-**Phases completed:** 7 phases, 7 plans, 15 tasks
+**Phases completed:** 7 phases (31–37), 7 plans — two tracks (T: tag-system completion; E: authoring polish)
+**Git range:** `b45879f..4b5c71f` on `main` (build), closed at `248e401`
+**Audit:** [`milestones/v1.6-MILESTONE-AUDIT.md`](milestones/v1.6-MILESTONE-AUDIT.md) — **COMPLETE** (all 9 requirements TF-01…05 + EP-01…04 met against code reality; grounded in a direct re-read of the system + re-run suites, not the phase SUMMARYs)
 
 **Key accomplishments:**
 
-- Goal:
-- Goal:
-- Goal:
-- Goal:
+- **Bulk multi-tag operations (Phase 31, TF-01):** `handleTagBulk` + `POST /admin/tags/bulk` (admin-RBAC + nosurf) routes N pages → **1** byte-stable commit through the EXISTING `buildTagApplyItems` + `ApplyTagsBatch` seam (frontmatter-only, no body rewrite); `computeBulkTags = (current ∪ add) \ remove`; page set re-resolved server-side; added tags re-validated (`ValidateTagCharset`); per-page stale (409) excluded without sinking the batch; `ActionTagBulk` audited. No new write path.
+- **Tag metadata store — color/description (Phase 32, TF-02):** a NET-NEW committed on-disk store `internal/tagmeta/` — `Tags/{tag}.md` frontmatter (co-driver-chosen shape over `.okf-workspace/tags.json`) via the SEC-01 resolver + single-writer commit; `tag_meta` rebuildable SQLite cache + migration `0011` (delete-cache→rebuild=identical, `TestRebuildParity`); `handleTagMeta` + `POST /admin/tags/meta`; `ValidateColor` (hex/palette subset, rejects url()/var()/expression) + `ValidateDescription` (single-line, ≤200, HTML-safe); `HashtagWidget` applies color via `span.style.color` (createElement+textContent, NO innerHTML — XSS invariant held); `Tags/` skipped by page-tree + graph/search rebuilds. Files-as-truth preserved.
+- **Tag hierarchy (Phase 33, TF-03):** `Meta.Parent` + migration `0012`; `CheckCycle` (O(depth) walk, cap 100, rejects self/indirect cycles; non-existent parent = root) runs before write (400 on cycle); grouped admin rendering (roots→children, alphabetical). Display-only — zero page bytes changed by a hierarchy edit; rebuild parity holds with parent.
+- **Tag usage analytics (Phase 34, TF-04):** `handleTagAnalytics` + `GET /admin/tags/analytics` (read-only) reuses `graph.TagPageCounts` + a lightweight `TaggedPageCount`; AnalyticsPanel with summary cards, sortable per-tag table, most/least/orphans, and a scope note. No new heavy scan.
+- **Tag-operation undo (Phase 35, TF-05):** migration `0013` (co-driver-chosen dedicated SQLite op-journal over the metadata store); `journalOp` hooked into all 4 handlers records `{op_type, op_detail, pages:[{path, pre_op_tags, body_affected}]}`; `handleTagUndo` + `POST /admin/tags/undo` reads the last row, builds inverse items, reads FRESH revisions (TOCTOU-safe), replays via `ApplyTagsBatch`; forward-commit (never a history rewrite); undo journals itself (undo-of-undo=redo); `ActionTagUndo` audited. **Honest limitation surfaced (not hidden):** delete body-`#tag` bytes are not invertible (`RewriteHashtags` removed the span) — undo restores frontmatter tags; body self-heals on next edit.
+- **Rendering polish (Phase 36, EP-01/02/04):** EP-01 `web/src/lib/remark-hashtag.ts` renders body `#tag` as a **sanitized hast `span`** (typed element, NOT raw HTML) in the two `MarkdownProse` surfaces (`HistoryPanel` + `AgentAnswer`) — `rehype-raw` OFF / `rehype-sanitize` ON preserved, AgentAnswer stored-XSS test still passes, false-`#` cases stay literal. EP-02 copy-to-clipboard button on the read-mode `CodeBlockWidget` (`createElement`+`textContent`, `navigator.clipboard` w/ fallback, `user-select:none` so select-all excludes "Copy"). EP-04 frontmatter `description` indexed (keyword, no relevance change) + returned (`omitempty`) + rendered in `SearchResultRow`; absent falls back to today's card.
+- **Insert-at-cursor templates (Phase 37, EP-03):** `TemplatePicker` + `PageEditor.insertTemplateAtCursor` lists via `listTemplates`, fetches body via `getPage`, substitutes `{{title}}/{{date}}/{{time}}` client-side, inserts via a normal CM6 `replaceSelection` transaction (`externalSeed` NOT used — it's a user edit). Byte-stability preserved by construction.
+
+**Quality gates at close:**
+
+- Every phase: engineer built → independent **qa** goal-backward verification (7 VERIFICATION.md on disk, all passed); gaps routed UP to the architect (judge≠doer held). Phase-36's three unrelated features verified independently per red-team MIN-05.
+- Independent milestone **security review** (`.planning/v1.6-SECURITY-REVIEW.md`) — **SHIP**, 0 high/medium/low; 1 informational (copy-button "Copy" leak into `<pre>.textContent`) found + closed in-milestone. Supply chain clean: zero new Go deps, zero new npm deps across the whole range.
+- **The architect's close-time full-suite smoke was the net:** three regressions escaped the per-phase scoped runs (copy-button DOM ×2 — `livePreview` + `widgets.adversarial` INV-2; Phase-33 alphabetical sort vs v1.3 position-based `TagManagement` selectors) and were caught + fixed (`1653933`, `e17dbca`, `4b5c71f`). **Lesson banked:** a phase touching a shared component should run that component's FULL existing suite, not just its new tests.
+- Final suites at build HEAD `4b5c71f`: `go build ./...` exit 0; `go test ./...` 19 packages ok / 0 failures; `cd web && npx vitest run` 66 files / **815 tests** passed; `npx tsc --noEmit` exit 0. Working tree clean. Docs + codebase maps refreshed (new `MAP-tagmeta-subsystem.md` + `MAP-page-templates.md`; independent drift-check ZERO findings).
+- **Substrate note:** SMTC daemon OFFLINE + native agent-teams spawn unavailable this run — spans delegated via the `task` tool; cert tiers capped at Structural/Empirical (never Decision-tier). The gates genuinely occurred — 7 VERIFICATION + 1 SECURITY-REVIEW + 1 MILESTONE-AUDIT artifacts on disk.
+
+**Known deferred items at close:** TipTap rich-block editor (track R, phases 38–41) **split to v1.7** by the independent roadmap red-team (SPLIT-REQUIRED, co-driver-accepted) — R requirements + red-team findings preserved in `REQUIREMENTS.md` §R so v1.7 starts warm. TF-05 delete-body-`#tag` byte-inversion (self-heals on edit; git history retains originals). Carried from v1.5/v1.4: global JSON body `MaxBytesReader` cap (F-02), pin mermaid deps + CI `npm audit` (F-01), `govulncheck` re-run when the Go 1.26 toolchain panic is fixed.
 
 ---
 

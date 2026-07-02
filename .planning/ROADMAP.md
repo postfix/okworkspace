@@ -2,7 +2,7 @@
 author: architect
 responsible: architect
 milestone: v1.6
-status: approved
+status: shipped
 last_updated: "2026-07-02"
 parent_artifacts:
   - .planning/REQUIREMENTS.md
