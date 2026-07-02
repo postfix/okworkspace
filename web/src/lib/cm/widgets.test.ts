@@ -230,7 +230,7 @@ describe("CodeBlockWidget (ED-04a async syntax highlight — no-innerHTML + tear
       value: { writeText },
       configurable: true,
     });
-    btn.click();
+    (btn as HTMLElement).click();
     // The clipboard call received the code.
     expect(writeText).toHaveBeenCalledWith(code);
     // Wait for the "Copied" confirmation + reset (vi.waitFor polls).

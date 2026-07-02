@@ -28,8 +28,8 @@ const headingIdSchema = {
   ...defaultSchema,
   clobber: (defaultSchema.clobber ?? []).filter((attr) => attr !== "id"),
   attributes: {
-    ...defaultSchema.attributes,
-    span: [...(defaultSchema.attributes.span ?? []), ["className", "cm-hashtag"]],
+    ...(defaultSchema.attributes ?? {}),
+    span: [...(defaultSchema.attributes?.span ?? []), ["className", "cm-hashtag"]],
   },
 };
 

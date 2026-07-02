@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Code, Eye, FileText, Paperclip, Pencil, Save } from "lucide-react";
+import { Code, Eye, Paperclip, Pencil, Save } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 
 import {
@@ -10,7 +10,6 @@ import {
   deletePage,
   forceLock,
   getPage,
-  listTemplates,
   releaseLock,
   savePage,
   type Page,

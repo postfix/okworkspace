@@ -57,8 +57,8 @@ const isStartBoundary = (prev: string | null): boolean => {
 
 // scanTag examines `text` starting at index `i` (which must be `#`), and returns
 // the exclusive end index of a recognized tag body, or -1 when the `#` here is
-// not a tag start. `prev` is the char before `text[i]` (or null at start).
-function scanTag(text: string, i: number, prev: string | null): number {
+// not a tag start.
+function scanTag(text: string, i: number): number {
   if (text[i] !== "#") return -1;
   let end = i + 1;
   let hasNonDigit = false;
@@ -99,8 +99,8 @@ interface HashtagNode {
 // ORIGINAL SOURCE (from the vfile): if the source char before the `#`'s source
 // offset is `\`, the `#` was escaped and must stay literal.
 export const remarkHashtag: Plugin<[], Root> = () => {
-  return (tree: Root, file: { value?: string } | undefined) => {
-    const source = file?.value ?? "";
+  return (tree: Root, file) => {
+    const source = typeof file?.value === "string" ? file.value : "";
     visit(tree, (node, index, parent) => {
       // Only split `text` nodes — inline code and fenced code are `code` nodes
       // and are never visited here (their value is in `value`, not children),
@@ -115,7 +115,7 @@ export const remarkHashtag: Plugin<[], Root> = () => {
       // unavailable (synthetic trees), we fall back to the within-node check.
       const pos = (node as Text).position;
       let srcOffsets: number[] | null = null;
-      if (pos && source.length > 0) {
+      if (pos && source.length > 0 && pos.start.offset != null && pos.end.offset != null) {
         const start = pos.start.offset;
         const end = pos.end.offset;
         const span = source.slice(start, end);
@@ -160,7 +160,7 @@ export const remarkHashtag: Plugin<[], Root> = () => {
           }
         }
 
-        const end = scanTag(text, i, boundaryChar);
+        const end = scanTag(text, i);
         if (end < 0) continue;
 
         // Push the literal text before the tag.
@@ -191,7 +191,7 @@ export const remarkHashtag: Plugin<[], Root> = () => {
 
       // Replace the single text node with the segments, in place.
       if (parent && index !== undefined) {
-        parent.children.splice(index, 1, ...segments);
+        parent.children.splice(index, 1, ...(segments as PhrasingContent[]));
         return SKIP;
       }
     });
