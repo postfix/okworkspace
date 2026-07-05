@@ -32,10 +32,18 @@
 import { StarterKit } from "@tiptap/starter-kit";
 import { TaskList, TaskItem } from "@tiptap/extension-list";
 import type { AnyExtension } from "@tiptap/core";
+import { preservedExtensions } from "./preserved";
 
-// buildExtensions returns a fresh bounded-slice extension array. It is called per
-// MarkdownManager instance (codec.ts) so no mutable extension state is shared between
+// buildExtensions returns a fresh bounded-slice + Tier-2 extension array. It is called
+// per MarkdownManager instance (codec.ts) so no mutable extension state is shared between
 // parse/serialize passes.
+//
+// TIER-2 (v1.7 RE-02, preserved.ts): the preservedExtensions append verbatim-preservation
+// atom nodes so unmodeled constructs — GFM tables, `$…$`/`$$…$$` math, and raw HTML
+// (block + inline) — round-trip BYTE-FOR-BYTE (modulo outer trim) instead of being
+// dropped or lossily escaped. They are ADDITIVE: each intercepts a marked token type the
+// Tier-1 slice does not model, so Tier-1 fixtures are unaffected. Raw HTML stays inert
+// literal text (MAJ-04) — no DOM path (see preserved.ts / codec.test.ts).
 export function buildExtensions(): AnyExtension[] {
   return [
     StarterKit.configure({
@@ -48,5 +56,6 @@ export function buildExtensions(): AnyExtension[] {
     }),
     TaskList,
     TaskItem,
+    ...preservedExtensions,
   ];
 }
