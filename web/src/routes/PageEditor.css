@@ -68,7 +68,16 @@
   outline: none;
 }
 
-/* The active Live/Source toggle reads as pressed: accent icon tint. */
+/* The 3-way editor-mode segmented control (RE-04-1): Live / Source / Rich, laid out as a
+   tight button group so it reads as one control, not three loose icons. */
+.pageeditor-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* The active mode reads as pressed: accent icon tint (Live/Source and the Rich segment
+   once the guard has cleared it — aria-pressed drives it uniformly). */
 .pageeditor-topbar .icon-btn[aria-pressed="true"] {
   color: var(--color-accent);
 }

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Code, Eye, Paperclip, Pencil, Save } from "lucide-react";
+import { Code, Eye, Paperclip, Pencil, Save, Sparkles } from "lucide-react";
 
 import {
   acquireLock,
@@ -37,14 +37,16 @@ import PropertiesPanel from "../components/PropertiesPanel";
 import DocStatusBar from "../components/DocStatusBar";
 import TagSuggest from "../components/TagSuggest";
 import DescriptionGenerate from "../components/DescriptionGenerate";
-import { useEditorMode } from "../stores/editorMode";
+import TipTapConsentNotice from "../components/TipTapConsentNotice";
+import { useEditorMode, type EditorMode } from "../stores/editorMode";
+import { useTipTapConsent } from "../stores/tiptapConsent";
 import "./PageEditor.css";
 
 // TipTapEditor (RE-03) is the live @tiptap/react surface. It is lazy-loaded so the whole
 // @tiptap tree (react + suggestion + markdown) stays OUT of the entry chunk (D-06
-// import-isolation; assertLazyChunks stays green). The "tiptap" mode is NOT user-
-// selectable yet (Phase 42 adds the toggle) — renderEditorSurface mounts it only when a
-// dev/test sets the mode to "tiptap".
+// selectable via the 3-way toolbar control (Phase 42). renderEditorSurface mounts it only
+// when mode==="tiptap" AND the load guard (isLosslessRoundTrip) has cleared the current
+// buffer — see selectMode / the open-guard effect.
 const TipTapEditor = lazy(() => import("../components/TipTapEditor"));
 
 // LOCK_HEARTBEAT_MS is the soft-lock refresh interval (COLL-02). It sits well
@@ -91,12 +93,26 @@ export default function PageEditor() {
   // the seam a future TipTap surface implements the same way (surface-agnostic insert).
   const surfaceRef = useRef<EditorSurfaceHandle>(null);
 
-  // Live/Source editor mode — a persisted per-device UI preference (default Live).
-  // The CM6 surface reads `mode`; the toolbar toggle and the Cmd/Ctrl-E shortcut
-  // (mode.ts toggleKeymap) both drive this single store. Switching modes never
-  // touches the document bytes (EDIT-02).
+  // Editor mode — a persisted per-device UI preference (default "live", CM6). The CM6
+  // surface reads "live"/"source"; the 3-way toolbar control and the Cmd/Ctrl-E shortcut
+  // (mode.ts toggleKeymap, live⇄source only) both drive this single store. Switching CM6
+  // modes never touches the document bytes (EDIT-02). "tiptap" is opt-in and routes
+  // through the load guard before it may mount (selectMode / the open-guard effect).
   const mode = useEditorMode((s) => s.mode);
   const setMode = useEditorMode((s) => s.setMode);
+  // The one-time informed-consent flag (RE-04-3, D-03): the notice shows on first TipTap
+  // entry until dismissed, then never again. A store (not a bare localStorage read) so a
+  // dismiss re-renders this gate reactively within the session.
+  const consentDismissed = useTipTapConsent((s) => s.dismissed);
+  // tiptapAllowed gates the TipTap MOUNT (RE-04-2, BLK-03/MED-07). It is set true ONLY
+  // after isLosslessRoundTrip clears the CURRENT live buffer (on switch-to-tiptap AND on
+  // open-in-tiptap). Until then, mode==="tiptap" still renders CM6 — so a persisted
+  // "tiptap" mode never mounts TipTap on non-round-trippable content before the guard runs.
+  const [tiptapAllowed, setTiptapAllowed] = useState(false);
+  // tiptapBlocked drives the per-attempt "the rich editor can't preserve this page" warning
+  // (a GUARD message, not persisted): set when the guard rejects the buffer, cleared on the
+  // next successful CM6 selection or a passing guard run.
+  const [tiptapBlocked, setTiptapBlocked] = useState(false);
 
   const { data, isLoading } = useQuery<Page>({
     queryKey: ["page", path],
@@ -196,6 +212,77 @@ export default function PageEditor() {
       lastSavedFrontmatter.current = data.frontmatter;
     }
   }, [data]);
+
+  // verifyBufferForTipTap runs the LOAD GUARD (RE-04-2, D-02) against a Markdown buffer and
+  // resolves true iff it round-trips TREE-EQUAL (safe to open in TipTap), false on genuine
+  // loss OR a codec throw. The guard module is DYNAMICALLY imported: it (transitively) pulls
+  // @tiptap/markdown + marked, which the Phase-42 code-split invariant (assertLazyChunks,
+  // vite.config.ts) forbids in the entry chunk — a static import here would drag that whole
+  // tree into entry and FAIL `npm run build`. So the import is genuinely runtime-gated (the
+  // same reason TipTapEditor is lazy), not a stylistic choice; a chunk-load failure is
+  // treated as "unverifiable" → false (stay on CM6).
+  const verifyBufferForTipTap = useCallback(
+    async (md: string): Promise<boolean> => {
+      try {
+        const { isLosslessRoundTrip } = await import("../lib/tiptap/guard");
+        return isLosslessRoundTrip(md);
+      } catch {
+        return false;
+      }
+    },
+    [],
+  );
+
+  // Open-guard (MED-07): a page whose PERSISTED mode is already "tiptap" must ALSO clear the
+  // load guard before TipTap mounts — a page loaded in TipTap mode whose CURRENT buffer can't
+  // round-trip falls back to CM6 too. Runs ONCE, on first data arrival (after the seed effect
+  // above has populated bodyRef in the same commit). tiptapAllowed stays false until this
+  // resolves, so renderEditorSurface never mounts TipTap on non-round-trippable content on
+  // open. A mid-session switch is owned by selectMode (openGuardDone is already set here).
+  const openGuardDone = useRef(false);
+  useEffect(() => {
+    if (!data || openGuardDone.current) return;
+    openGuardDone.current = true;
+    if (mode !== "tiptap") return; // opened in CM6 — nothing to guard until a switch
+    void verifyBufferForTipTap(bodyRef.current).then((ok) => {
+      if (ok) {
+        setTiptapAllowed(true);
+      } else {
+        setTiptapBlocked(true);
+        setMode("live");
+      }
+    });
+  }, [data, mode, setMode, verifyBufferForTipTap]);
+
+  // selectMode is the 3-way toolbar control's handler (RE-04-1/2, D-01/D-02). "live"/"source"
+  // switch CM6 directly (byte-identical — the default surface). "tiptap" is GUARDED: it runs
+  // isLosslessRoundTrip on the CURRENT live (possibly unsaved) buffer FIRST — pass → mount
+  // TipTap (+ the one-time consent notice via the render gate); fail → WARN AND STAY on CM6
+  // (a guard, not a toast: TipTap is made UNAVAILABLE for non-round-trippable content, never
+  // entered-and-silently-lost — BLK-03). CM6 "live" stays the default; "tiptap" is never
+  // auto-selected.
+  const selectMode = useCallback(
+    (next: EditorMode) => {
+      if (next !== "tiptap") {
+        setTiptapAllowed(false);
+        setTiptapBlocked(false);
+        setMode(next);
+        return;
+      }
+      if (mode === "tiptap" && tiptapAllowed) return; // already live in TipTap
+      void verifyBufferForTipTap(bodyRef.current).then((ok) => {
+        if (ok) {
+          setTiptapBlocked(false);
+          setTiptapAllowed(true);
+          setMode("tiptap");
+        } else {
+          setTiptapAllowed(false);
+          setTiptapBlocked(true);
+        }
+      });
+    },
+    [mode, tiptapAllowed, setMode, verifyBufferForTipTap],
+  );
 
   // Soft-lock lifecycle (COLL-02): acquire the lock on entering Edit, refresh it
   // on a ~30s heartbeat while we hold it, and best-effort release it on unmount /
@@ -739,14 +826,15 @@ export default function PageEditor() {
 
   // renderEditorSurface is the mount seam (RE-05/D-02): it chooses the editor surface by
   // mode behind the stable EditorSurfaceHandle interface. "live"/"source" mount the CM6
-  // <LivePreviewEditor>; "tiptap" mounts the lazy @tiptap/react <TipTapEditor> (RE-03) in
-  // a <Suspense>. All three pass ref={surfaceRef} + the SAME props, so runSaver and the
-  // conflict/lock/reconcile state are surface-agnostic and untouched. "tiptap" is NOT
-  // user-selectable yet (no UI sets it — the keymap/toggle stay live⇄source; Phase 42
-  // gates selection), but the branch now mounts the real surface for a dev/test that sets
-  // it. The lazy import keeps @tiptap out of the entry chunk (D-06; assertLazyChunks green).
+  // <LivePreviewEditor>; "tiptap" mounts the lazy @tiptap/react <TipTapEditor> (RE-03) in a
+  // <Suspense> — but ONLY once the load guard has cleared the current buffer (tiptapAllowed).
+  // Until then, mode==="tiptap" still renders CM6, so a persisted "tiptap" mode never mounts
+  // TipTap on non-round-trippable content before the open-guard effect resolves (MED-07). All
+  // surfaces pass ref={surfaceRef} + the SAME props, so runSaver and the conflict/lock/
+  // reconcile state are surface-agnostic and untouched. The lazy import keeps @tiptap out of
+  // the entry chunk (RE-04-4; assertLazyChunks green).
   function renderEditorSurface() {
-    if (mode === "tiptap") {
+    if (mode === "tiptap" && tiptapAllowed) {
       return (
         <Suspense fallback={<p className="pageeditor-status">Loading editor…</p>}>
           <TipTapEditor
@@ -775,8 +863,8 @@ export default function PageEditor() {
 
   return (
     <div className="pageeditor">
-      {/* Top-right corner controls (Obsidian-style): save state, the Live/Source
-          single-toggle, an explicit Save, and the switch-to-reading-view book.
+      {/* Top-right corner controls (Obsidian-style): save state, the 3-way editor-mode
+          segmented control, an explicit Save, and the switch-to-reading-view book.
           Pinned to the top-right of the editor, above everything else. */}
       <div className="pageeditor-topbar">
         {/* Presence sits left (margin-right:auto in CSS); Link-to-page joins the
@@ -790,20 +878,43 @@ export default function PageEditor() {
           onSelect={(tpl) => void insertTemplateAtCursor(tpl)}
         />
         <AutosaveStatus state={saveState} />
-        <button
-          type="button"
-          className="btn btn-ghost icon-btn"
-          aria-pressed={mode === "source"}
-          aria-label={mode === "live" ? "Switch to source" : "Switch to live preview"}
-          title={mode === "live" ? "Source · ⌘E" : "Live preview · ⌘E"}
-          onClick={() => setMode(mode === "live" ? "source" : "live")}
-        >
-          {mode === "live" ? (
-            <Code size={18} aria-hidden="true" />
-          ) : (
+        {/* The 3-way mode control (RE-04-1, D-01): Live preview / Source (both CM6, the
+            byte-exact default) / Rich (TipTap, opt-in). "Rich" routes through selectMode →
+            the load guard before it can mount (BLK-03/MED-07); it reads "pressed" only when
+            TipTap is actually live (mode==="tiptap" && the guard cleared the buffer), so a
+            blocked attempt never leaves the segment falsely lit. CM6 "live" stays default. */}
+        <div className="pageeditor-mode-toggle" role="group" aria-label="Editor mode">
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn"
+            aria-pressed={mode === "live"}
+            aria-label="Live preview"
+            title="Live preview · ⌘E"
+            onClick={() => selectMode("live")}
+          >
             <Eye size={18} aria-hidden="true" />
-          )}
-        </button>
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn"
+            aria-pressed={mode === "source"}
+            aria-label="Source"
+            title="Source · ⌘E"
+            onClick={() => selectMode("source")}
+          >
+            <Code size={18} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn"
+            aria-pressed={mode === "tiptap" && tiptapAllowed}
+            aria-label="Rich editor"
+            title="Rich editor (beta)"
+            onClick={() => selectMode("tiptap")}
+          >
+            <Sparkles size={18} aria-hidden="true" />
+          </button>
+        </div>
         <button
           type="button"
           className="btn btn-ghost icon-btn"
@@ -891,6 +1002,17 @@ export default function PageEditor() {
           {saveError}
         </div>
       )}
+      {/* The load-guard fall-back warning (RE-04-2, BLK-03). When isLosslessRoundTrip
+          rejects the current buffer, TipTap is NOT entered — this per-attempt message says
+          so and the surface stays on the byte-exact CM6 editor. Not persisted (a guard
+          message, cleared on the next successful CM6 selection or a passing guard run).
+          Color is not the sole signal — the lead sentence carries the meaning. */}
+      {tiptapBlocked && (
+        <div className="banner banner-warning" role="status" aria-live="polite">
+          This page has content the rich editor can't preserve — staying in the
+          Markdown editor.
+        </div>
+      )}
 
       <div className="pageeditor-frontmatter">
         {/* Document-style header: folder breadcrumb + an inline heading-styled title
@@ -950,6 +1072,14 @@ export default function PageEditor() {
           View only — {lockedBy} is editing. Choose <strong>Force edit</strong> to
           take over.
         </p>
+      )}
+
+      {/* The one-time informed-consent notice (RE-04-3, D-03 — the fork resolution). Shown
+          only while TipTap is actually live AND consent has not been dismissed; "Got it"
+          persists the dismissal so it is never re-shown (not a per-save nag). It does NOT
+          block editing — informed consent, not a gate. */}
+      {mode === "tiptap" && tiptapAllowed && !consentDismissed && (
+        <TipTapConsentNotice />
       )}
 
       <div

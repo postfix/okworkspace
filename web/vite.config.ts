@@ -37,7 +37,12 @@ import { assertLazyChunks } from "./vite-plugins/assertLazyChunks";
 // mermaid-UNIQUE per `npm ls` (mermaid is the SOLE root that pulls it), so each remains a
 // reliable signal: a stray static mermaid import would drag ALL of these (mermaid itself
 // + its unique renderers dagre-d3-es / cytoscape / @mermaid-js/parser / roughjs / katex /
-// marked / dayjs / dompurify / khroma) into the entry chunk, and any one match fails the build.
+// dayjs / dompurify / khroma) into the entry chunk, and any one match fails the build.
+//
+// `marked` is DELIBERATELY NOT in this mermaid-unique list anymore: as of the v1.7 TipTap
+// codec (RE-04) it is DUAL-ROOTED — pulled by mermaid@16 AND by @tiptap/markdown@17 (the
+// codec's MarkdownManager). It moves to the SHARED_FORBIDDEN constant below so its comment
+// tells the truth about both roots; it stays forbidden either way (both trees are lazy).
 const MERMAID_FORBIDDEN = [
   /node_modules[\\/]mermaid[\\/]/,
   /node_modules[\\/]dagre-d3-es[\\/]/,
@@ -45,16 +50,36 @@ const MERMAID_FORBIDDEN = [
   /node_modules[\\/]khroma[\\/]/,
   /node_modules[\\/]dompurify[\\/]/,
   /node_modules[\\/]katex[\\/]/,
-  /node_modules[\\/]marked[\\/]/,
   /node_modules[\\/]dayjs[\\/]/,
   /node_modules[\\/]roughjs[\\/]/,
   /node_modules[\\/]@mermaid-js[\\/]parser[\\/]/,
+];
+
+// TIPTAP_FORBIDDEN (RE-04, D-04 / MIN-04): the WHOLE @tiptap/react editor tree must stay
+// code-split — TipTapEditor is lazy-mounted (React.lazy) and the load guard is dynamically
+// imported, so a future stray STATIC import reachable from the app entry (which would drag
+// @tiptap/core + /pm + /react + /starter-kit + /markdown + /extension-list + /suggestion,
+// plus its prosemirror-* transitive deps via @tiptap/pm) fails `npm run build` HERE rather
+// than silently inflating the entry chunk. `[\\/]` matches POSIX + Windows separators; the
+// prosemirror-* pattern anchors on the path-segment boundary so it matches the whole name.
+const TIPTAP_FORBIDDEN = [
+  /node_modules[\\/]@tiptap[\\/]/,
+  /node_modules[\\/]prosemirror-[a-z-]+[\\/]/,
+];
+
+// SHARED_FORBIDDEN: modules pulled by MORE THAN ONE lazy tree. `marked` is dual-rooted
+// (mermaid@16 + @tiptap/markdown@17) — it belongs to neither exclusive list above, so it
+// lives here with an honest comment. Both roots are lazy, so marked must never reach entry.
+const SHARED_FORBIDDEN = [
+  /node_modules[\\/]marked[\\/]/,
 ];
 
 const FORBIDDEN_IN_ENTRY = [
   /node_modules\/@codemirror\/lang-(?!(?:markdown|html|css|javascript)\/)/,
   /node_modules\/@codemirror\/legacy-modes\//,
   ...MERMAID_FORBIDDEN,
+  ...TIPTAP_FORBIDDEN,
+  ...SHARED_FORBIDDEN,
 ];
 
 // Build output goes to internal/web/dist, which the Go binary embeds via

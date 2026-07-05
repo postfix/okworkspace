@@ -1,0 +1,43 @@
+/* TipTapConsentNotice — the one-time informed-consent banner (RE-04-3, D-03). It
+   composes the shared `.banner` primitive with an accent border (informative, NOT a
+   warning/destructive hue) and lays its children out as a single flex row, mirroring
+   the SoftLockBanner layout. Token-only: no hard-coded hex/px. */
+
+.tiptap-consent-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text);
+  border: 1px solid var(--color-accent);
+  background: var(--color-bg);
+}
+
+/* The leading Info glyph carries the meaning alongside the accent hue (color is never
+   the sole signal) and does not shrink when the text wraps. */
+.tiptap-consent-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+
+/* Lead clause is semibold so the "normalizes" verb is scannable; the trailing body
+   sentence stays regular weight (inherited). */
+.tiptap-consent-lead {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The text column takes the remaining width and may wrap at narrow widths; the spacer
+   then pushes "Got it" to the row end (or below, when it wraps). */
+.tiptap-consent-text {
+  flex: 1 1 auto;
+}
+
+.tiptap-consent-spacer {
+  flex: 0 1 auto;
+}
+
+/* "Got it" never shrinks below its label/hit size and stays right-aligned. */
+.tiptap-consent-dismiss {
+  flex-shrink: 0;
+}

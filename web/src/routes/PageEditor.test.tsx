@@ -48,8 +48,41 @@ vi.mock("../components/LivePreviewEditor", () => ({
   ),
 }));
 
+// Mock the lazy TipTap surface with a plain textarea (RE-04-5): the test exercises
+// PageEditor's mode toggle + save machinery through the value/onChange seam, not TipTap's
+// real ProseMirror rendering (covered by TipTapEditor.test). A distinct aria-label lets
+// the TipTap-mode test target it vs the CM6 "body" textarea above.
+vi.mock("../components/TipTapEditor", () => ({
+  default: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    currentPath: string;
+    mode: "live" | "source";
+  }) => (
+    <textarea
+      aria-label="tiptap body"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  ),
+}));
+
+// Mock the load guard so switching to TipTap mode is deterministic + fast: the guard's
+// own tree-equality logic is covered by guard.test.ts; here we only need the "buffer is
+// safe → TipTap mounts" path so the save machinery can be exercised from TipTap mode.
+// (PageEditor dynamically import()s this module — the mock intercepts that import.)
+vi.mock("../lib/tiptap/guard", () => ({
+  isLosslessRoundTrip: vi.fn(() => true),
+}));
+
 import * as client from "../api/client";
 import { readTags } from "../lib/tag-frontmatter";
+import { useEditorMode } from "../stores/editorMode";
+import { useTipTapConsent } from "../stores/tiptapConsent";
+import { isLosslessRoundTrip } from "../lib/tiptap/guard";
 import PageEditor from "./PageEditor";
 
 function renderEditor(path: string) {
@@ -79,6 +112,14 @@ describe("PageEditor", () => {
     // Reset call history between tests so per-test call-count assertions are not
     // polluted by a prior test's savePage/getPage calls.
     vi.clearAllMocks();
+    // Reset the persisted UI stores so a test that switches to TipTap mode (or dismisses
+    // the consent notice) does not leak that into the next test (both persist to
+    // localStorage; default is CM6 "live" + consent-not-dismissed).
+    localStorage.clear();
+    useEditorMode.setState({ mode: "live" });
+    useTipTapConsent.setState({ dismissed: false });
+    // The guard mock defaults to "safe → TipTap may mount"; clearAllMocks reset its impl.
+    vi.mocked(isLosslessRoundTrip).mockReturnValue(true);
     vi.mocked(client.getPage).mockResolvedValue({
       frontmatter: "type: Page\ntitle: Notes\n",
       body: "original",
@@ -897,5 +938,48 @@ describe("PageEditor", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // RE-04-5 (D-05): a save from TipTap mode routes through the SAME revision-checked
+  // runSaver as CM6 — TipTap adds no new save path — so a stale-revision save 409s and
+  // opens the conflict flow identically. This is a CONFIRMATION (no new save code); it
+  // switches to the (guarded, mocked-safe) TipTap surface, edits, saves, and asserts the
+  // conflict dialog opens exactly as the CM6 409 test above.
+  it("a stale-revision save in TipTap mode 409s and opens the conflict flow (RE-04-5)", async () => {
+    const err = new Error("conflict") as Error & { status?: number };
+    err.status = 409;
+    vi.mocked(client.savePage).mockRejectedValue(err);
+    vi.mocked(client.getPage)
+      .mockResolvedValueOnce({
+        frontmatter: "type: Page\ntitle: Notes\n",
+        body: "original",
+        revision: "rev-1",
+      })
+      .mockResolvedValue({
+        frontmatter: "type: Page\ntitle: Notes\n",
+        body: "their server version",
+        revision: "rev-2",
+      });
+
+    renderEditor("notes.md");
+    // Start in CM6 (the default), then switch to the Rich editor — selectMode runs the
+    // (mocked-safe) load guard, which clears the buffer and mounts the lazy TipTap surface.
+    await screen.findByLabelText("body");
+    fireEvent.click(screen.getByRole("button", { name: "Rich editor" }));
+
+    // The guard is async (dynamic import) → the TipTap textarea appears once it resolves.
+    const tiptapBody = await screen.findByLabelText("tiptap body");
+    expect(vi.mocked(isLosslessRoundTrip)).toHaveBeenCalled();
+    fireEvent.change(tiptapBody, { target: { value: "my edited body" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save page" }));
+
+    // Same conflict surface as CM6 — TipTap uses the same runSaver revision check.
+    expect(
+      await screen.findByText(/this page was changed somewhere else/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /overwrite with my version/i }),
+    ).toBeInTheDocument();
   });
 });
