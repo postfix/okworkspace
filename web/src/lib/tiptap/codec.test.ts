@@ -22,7 +22,16 @@
 import { describe, it, expect } from "vitest";
 import type { JSONContent } from "@tiptap/core";
 import { parse, roundTrip } from "./codec";
-import { TIER1_CORPUS, TIER2_CORPUS, MIXED_CORPUS, SECURITY_CORPUS } from "./codec.corpus";
+import {
+  TIER1_CORPUS,
+  TIER2_CORPUS,
+  MIXED_CORPUS,
+  SECURITY_CORPUS,
+  TAG_CORPUS,
+  PROSE_CURRENCY_CORPUS,
+} from "./codec.corpus";
+import { TAG_RE } from "./tagNode";
+import { inlineTagsFromBody } from "../cm/hashtag";
 
 // collectTree walks a TipTap JSON document and gathers, across every node: the set of
 // node `type`s, the set of attribute keys, and the concatenated text. The security
@@ -185,5 +194,79 @@ describe("tiptap markdown codec — raw-HTML byte-exact + inert (MAJ-04, D-04)",
     expect(types.has("image")).toBe(false);
     expect(attrKeys.has("onerror")).toBe(false);
     expect(attrKeys.has("raw")).toBe(true);
+  });
+});
+
+// RE-03-1 (D-01): the recognizer regex agrees with the Lezer grammar corpus. TAG_RE is
+// the WHOLE-STRING body check the live Tag node's input/paste rules are built from; here
+// it is cross-checked against inlineTagsFromBody (the ONE Lezer materializer) so the live
+// badge set can never fork from the saved tag set (single-recognizer discipline).
+describe("tiptap Tag node recognizer — matches the Lezer grammar corpus (RE-03-1)", () => {
+  // ACCEPT: >=1 non-digit, nested slash, leading dash/underscore, hex-like short tags.
+  const accept = ["#a", "#a/b", "#-1", "#_", "#_draft", "#fff", "#deploy", "#a1"];
+  // REJECT: all-digit, digits+slashes, bare `#`, a `#` with no body.
+  const reject = ["#1984", "#12/34", "#", "#123"];
+  for (const tag of accept) {
+    it(`accepts ${tag}`, () => {
+      expect(TAG_RE.test(tag)).toBe(true);
+      // …and the same string materializes through the REAL Lezer recognizer.
+      expect(inlineTagsFromBody(tag)).toEqual([tag.slice(1).toLowerCase()]);
+    });
+  }
+  for (const tag of reject) {
+    it(`rejects ${tag}`, () => {
+      expect(TAG_RE.test(tag)).toBe(false);
+      // …and the Lezer recognizer also finds no tag (agreement on the negative corpus).
+      expect(inlineTagsFromBody(tag)).toEqual([]);
+    });
+  }
+  // Boundary rule: mid-word `foo#bar` is NOT a tag in Lezer (start boundary = ws/BOS). The
+  // regex is a WHOLE-STRING body check; the boundary is enforced by the input/paste rules
+  // + Lezer — so `foo#bar` yields no materialized tag.
+  it("rejects mid-word #: foo#bar materializes no tag (boundary parity)", () => {
+    expect(inlineTagsFromBody("foo#bar")).toEqual([]);
+  });
+});
+
+// RE-03-1 (D-01): the Tag node is DISPLAY-only and the headless codec is tag-free, so a
+// body `#tag` round-trips as LITERAL text — the exact string the Lezer materializer sees
+// on save. Asserts literal preservation + that NO `tag` node appears in the codec's JSON.
+describe("tiptap markdown codec — #tag stays literal (RE-03-1, D-01)", () => {
+  for (const [id, src] of Object.entries(TAG_CORPUS)) {
+    describe(id, () => {
+      it("round-trips #tag as literal text (verbatim, not a node)", () => {
+        expect(roundTrip(src).trim()).toBe(src.trim());
+      });
+      it("emits NO `tag` node in the headless codec (tag-free by construction)", () => {
+        expect(collectTree(parse(roundTrip(src))).types.has("tag")).toBe(false);
+      });
+      it("is idempotent", () => {
+        const once = roundTrip(src);
+        expect(roundTrip(once)).toBe(once);
+      });
+    });
+  }
+});
+
+// RE-03-6 (D-05, the Phase-39 P3 fold): a two-`$` prose run stays LITERAL PROSE (NO
+// preservedInline math atom) after the pandoc no-space-adjacent tokenizer tightening,
+// while real inline math still captures. The byte-exact Tier-2 gate above stays green.
+describe("tiptap markdown codec — prose currency stays literal (RE-03-6, D-05)", () => {
+  for (const [id, src] of Object.entries(PROSE_CURRENCY_CORPUS)) {
+    describe(id, () => {
+      it("does NOT capture a preservedInline math atom (stays prose)", () => {
+        expect(collectTree(parse(src)).types.has("preservedInline")).toBe(false);
+      });
+      it("round-trips byte-exact (modulo outer trim)", () => {
+        expect(roundTrip(src).trim()).toBe(src.trim());
+      });
+    });
+  }
+
+  // The counter-proof: REAL inline math IS still captured (the fix tightened, not
+  // disabled, the tokenizer) — the two Tier-2 inline-math fixtures still form the atom.
+  it("still captures real inline math ($x$) as a preservedInline atom", () => {
+    expect(collectTree(parse(TIER2_CORPUS.inlineMath)).types.has("preservedInline")).toBe(true);
+    expect(collectTree(parse(TIER2_CORPUS.inlineMathTwice)).types.has("preservedInline")).toBe(true);
   });
 });

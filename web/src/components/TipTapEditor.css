@@ -1,0 +1,50 @@
+/* TipTapEditor — the live @tiptap/react surface (RE-03). Visual parity with the CM6
+ * surface: the ProseMirror editable fills its host, and the #tag badge mirrors the
+ * shipped .cm-hashtag / HashtagWidget look so a tag reads identically across surfaces. */
+
+.tiptap-editor .ProseMirror {
+  outline: none;
+  min-height: 100%;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* The DISPLAY-only Tag node badge (tagNode.ts renderHTML). The `#name` text is an inert
+ * text node (textContent, never innerHTML) — mirrors MarkdownProse .cm-hashtag. */
+.tiptap-editor .tag-badge {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-xs);
+  white-space: nowrap;
+}
+
+/* The developer-supplied suggestion / slash popup (suggestion.ts). Item labels are set
+ * via textContent only (MAJ-03). Positioned absolutely under the caret rect. */
+.tiptap-suggest {
+  position: absolute;
+  z-index: 40;
+  min-width: 12rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  padding: var(--space-xs);
+}
+
+.tiptap-suggest-item {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tiptap-suggest-item.is-selected,
+.tiptap-suggest-item:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}

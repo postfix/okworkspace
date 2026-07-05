@@ -137,3 +137,31 @@ export const SECURITY_CORPUS: Record<string, string> = {
   divOnclick: '<div onclick="steal()">click me</div>',
   inlineEm: "<em>emphasis via raw html</em>",
 };
+
+// TAG_CORPUS — the Phase-41 (RE-03, D-01) `#tag` round-trip fixtures. The live TipTap
+// surface's DISPLAY-only Tag node serializes back to LITERAL `#tag`; the headless codec
+// itself is tag-free (the Tag node is registered ONLY in the live surface, never in
+// buildExtensions()), so these prove the codec leaves a body `#tag` as inert literal
+// text — exactly the string the EXISTING Lezer materializer (reconcileFrontmatterTags ->
+// inlineTagsFromBody) sees on save. Asserted in codec.test.ts as literal preservation
+// (roundTrip keeps `#tag` verbatim, and the parsed JSON has NO `tag` node in the
+// headless codec). These are OUTSIDE the Tier-1 tree-equality/parity gate.
+export const TAG_CORPUS: Record<string, string> = {
+  inlineTag: "a #tag here",
+  nestedTag: "see #a/b for details",
+  multipleTags: "#one and #two and #three",
+  tagWithDash: "ship #-1 and #x2 now",
+};
+
+// PROSE_CURRENCY_CORPUS — the Phase-41 (RE-03, D-05, the Phase-39 P3 fold) prose-currency
+// fixtures. After tightening the inline-math tokenizer with the pandoc no-space-adjacent
+// rule, a two-`$` prose run (`$5 and $10`) stays LITERAL PROSE — it is NOT captured as a
+// `preservedInline` math atom (the Phase-39 P3 defect). codec.test.ts asserts the parsed
+// JSON has NO preservedInline for these, byte-exact round-trip, while the real inlineMath/
+// inlineMathTwice fixtures (TIER2_CORPUS) still DO capture. These are OUTSIDE the Tier-1
+// gate (they carry `$`, which the Tier-1 corpus never does).
+export const PROSE_CURRENCY_CORPUS: Record<string, string> = {
+  currencyPair: "It costs $5 and $10 today.",
+  currencyAdjacent: "Pay $5$10 now.",
+  currencyList: "Prices are $3, $50, and $100.",
+};

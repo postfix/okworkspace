@@ -1378,6 +1378,17 @@ export async function listTags(): Promise<TagEntry[]> {
   return (await res.json()) as TagEntry[];
 }
 
+// getTagVocabulary fetches the sorted, distinct workspace tag vocabulary (a GET —
+// no CSRF, any-authed read; GET /api/v1/tags/vocabulary → router.go handleTagVocabulary).
+// It backs the live TipTap editor's `#`-suggestion source (RE-03). On failure it throws
+// generic, hidden-infra-safe copy (no git/index/graph vocabulary — mirrors getBacklinks /
+// the graph contract). The `#`-suggest degrades to an empty list, never a crash.
+export async function getTagVocabulary(): Promise<string[]> {
+  const res = await fetch("/api/v1/tags/vocabulary", { credentials: "same-origin" });
+  if (!res.ok) throw new Error("Couldn't load tags.");
+  return (await res.json()) as string[];
+}
+
 // TagAnalyticsSummary (Phase 34 / TF-04) — admin analytics view over
 // graph.TagPageCounts. Read-only: per-tag page counts, most/least used,
 // orphans (metadata-only tags with zero pages), and totals. Scope is

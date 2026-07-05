@@ -166,12 +166,21 @@ export const BlockMath = Node.create({
   markdownTokenizer: blockMathTokenizer,
 });
 
-// inlineMathTokenizer — custom INLINE tokenizer for `$…$`. Guards:
+// inlineMathTokenizer — custom INLINE tokenizer for `$…$`, with the PANDOC
+// no-space-adjacent-to-`$` guard (D-05, the Phase-39 P3 fix). A `$` pair is inline
+// math ONLY when:
 //   - `(?!\$)` after the opening `$` so it never eats a `$$` block delimiter;
-//   - `[^$\n]+?` so the content has no `$`/newline (a lone `$` in prose can't pair
-//     across the whole line into a false match, and `$5 ... $10` won't span);
+//   - the opening `$` is NOT immediately followed by whitespace (`(?![\s])`) — so a
+//     prose `$ ...` never opens a span;
+//   - the content `[^$\n]*[^$\n\s]` has no `$`/newline AND its LAST char is
+//     non-whitespace — so the closing `$` is NOT preceded by a space (pandoc);
+//   - `(?!\d)` after the closing `$` so a currency pair like `$5$10` never closes on
+//     a digit run.
 //   - `.raw` is the exact `$…$` slice (delimiters included) for correct relocation.
-// A stray `$` with no closing pair returns undefined -> marked treats it as plain text
+// The upshot: `$5 and $10` stays LITERAL PROSE (the closing `$` before `10` is
+// preceded by a space → no match; the stray `$` falls through to marked's text
+// tokenizer), while real math `$x_1$` / `$a + b$` / `$e^{i\pi}+1=0$` still captures.
+// A stray `$` with no valid pair returns undefined -> marked treats it as plain text
 // (no Tier-1 regression; the Tier-1 corpus has no `$` at all).
 const inlineMathTokenizer: MarkdownTokenizer = {
   name: "inlineMath",
@@ -181,7 +190,7 @@ const inlineMathTokenizer: MarkdownTokenizer = {
     return i < 0 ? src.length : i;
   },
   tokenize: (src) => {
-    const m = /^\$(?!\$)([^$\n]+?)\$/.exec(src);
+    const m = /^\$(?!\$)(?![\s])(?:[^$\n]*[^$\n\s])?\$(?!\d)/.exec(src);
     return m ? { type: "inlineMath", raw: m[0] } : undefined;
   },
 };

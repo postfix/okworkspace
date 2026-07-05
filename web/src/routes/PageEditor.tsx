@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Code, Eye, Paperclip, Pencil, Save } from "lucide-react";
@@ -39,6 +39,13 @@ import TagSuggest from "../components/TagSuggest";
 import DescriptionGenerate from "../components/DescriptionGenerate";
 import { useEditorMode } from "../stores/editorMode";
 import "./PageEditor.css";
+
+// TipTapEditor (RE-03) is the live @tiptap/react surface. It is lazy-loaded so the whole
+// @tiptap tree (react + suggestion + markdown) stays OUT of the entry chunk (D-06
+// import-isolation; assertLazyChunks stays green). The "tiptap" mode is NOT user-
+// selectable yet (Phase 42 adds the toggle) — renderEditorSurface mounts it only when a
+// dev/test sets the mode to "tiptap".
+const TipTapEditor = lazy(() => import("../components/TipTapEditor"));
 
 // LOCK_HEARTBEAT_MS is the soft-lock refresh interval (COLL-02). It sits well
 // inside the server's 2-minute lock TTL so a held lock never lapses mid-edit; a
@@ -730,15 +737,29 @@ export default function PageEditor() {
     return <p className="pageeditor-status">Loading…</p>;
   }
 
-  // renderEditorSurface is the mount seam (RE-05/D-02): it chooses the editor
-  // surface by mode behind the stable EditorSurfaceHandle interface. Today only CM6
-  // exists, so "live"/"source" mount <LivePreviewEditor> at that CM mode. "tiptap"
-  // is NOT user-selectable this phase (no UI sets it — the keymap/toggle stay
-  // live⇄source), so it falls back to CM6 "live" — a defensive guard, never reached
-  // in practice. Phase 41 adds the real TipTap branch here; Phase 42 gates selection.
-  // No TipTap import this phase (the bundle is unchanged). runSaver and the
-  // conflict/lock/reconcile state are surface-agnostic and stay untouched.
+  // renderEditorSurface is the mount seam (RE-05/D-02): it chooses the editor surface by
+  // mode behind the stable EditorSurfaceHandle interface. "live"/"source" mount the CM6
+  // <LivePreviewEditor>; "tiptap" mounts the lazy @tiptap/react <TipTapEditor> (RE-03) in
+  // a <Suspense>. All three pass ref={surfaceRef} + the SAME props, so runSaver and the
+  // conflict/lock/reconcile state are surface-agnostic and untouched. "tiptap" is NOT
+  // user-selectable yet (no UI sets it — the keymap/toggle stay live⇄source; Phase 42
+  // gates selection), but the branch now mounts the real surface for a dev/test that sets
+  // it. The lazy import keeps @tiptap out of the entry chunk (D-06; assertLazyChunks green).
   function renderEditorSurface() {
+    if (mode === "tiptap") {
+      return (
+        <Suspense fallback={<p className="pageeditor-status">Loading editor…</p>}>
+          <TipTapEditor
+            ref={surfaceRef}
+            value={body}
+            onChange={onBodyChange}
+            currentPath={path}
+            mode="live"
+            readOnly={readOnly}
+          />
+        </Suspense>
+      );
+    }
     const cmMode = mode === "source" ? "source" : "live";
     return (
       <LivePreviewEditor
