@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Rich-Block Editor (TipTap)
-status: "v1.7 in progress — Phases 38-41 COMPLETE + qa-verified (RE-01 codec GO, RE-02 preserved tier, RE-05 host, RE-03 live TipTap editor incl paste-XSS keystone). ONLY Phase 42 (RE-04) remains — PAUSED at the shared-content-fidelity DESIGN FORK for the co-driver decision before its plan."
-last_updated: "2026-07-02T23:59:00.000Z"
-last_activity: 2026-07-02
+status: "v1.7 build COMPLETE — all 5 phases (38-42) built + qa-verified (RE-01…05). TipTap opt-in editor shipped: codec + preserved tier + host abstraction + live #tag/suggest/slash editor + 3-way toggle/load-guard/code-split. AWAITING milestone close: security review (co-driver gate) → docs → MILESTONE-AUDIT."
+last_updated: "2026-07-03T00:30:00.000Z"
+last_activity: 2026-07-03
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 5
+  total_plans: 5
+  completed_plans: 5
 ---
 
 # Project State
