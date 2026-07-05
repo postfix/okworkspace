@@ -7,15 +7,21 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-// EditorMode is the live-preview surface mode: "live" renders Markdown inline,
-// "source" shows raw monospace text. Both share ONE document — see mode.ts.
-export type EditorMode = "live" | "source";
+// EditorMode is the editor-surface mode. "live" renders Markdown inline and
+// "source" shows raw monospace text — the two CM6 live-preview modes that share
+// ONE document (see mode.ts). "tiptap" is the future WYSIWYG surface (Phase 41
+// mounts it, Phase 42 exposes it); it is NOT user-selectable yet, so the store
+// carries the value but no UI sets it this phase (RE-05/MED-05).
+export type EditorMode = "live" | "source" | "tiptap";
 
 interface EditorModeState {
   mode: EditorMode;
-  // setMode sets the mode explicitly (e.g. the toolbar segmented control).
+  // setMode sets the mode explicitly (e.g. the toolbar segmented control). It is
+  // the toolbar's source of truth and accepts all three modes.
   setMode: (mode: EditorMode) => void;
-  // toggle flips live⇄source (the Cmd/Ctrl-E shortcut).
+  // toggle flips live⇄source ONLY (the Cmd/Ctrl-E shortcut, a CM6-only affordance).
+  // A "tiptap" current value toggles back to "live" — the keymap never toggles
+  // INTO tiptap (that is a future React-toolbar-only selection, Phase 42).
   toggle: () => void;
 }
 

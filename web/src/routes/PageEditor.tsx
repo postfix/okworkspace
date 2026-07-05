@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Code, Eye, Paperclip, Pencil, Save } from "lucide-react";
-import type { EditorView } from "@codemirror/view";
 
 import {
   acquireLock,
@@ -27,7 +26,9 @@ import DiffReviewDialog, {
 import Dialog from "../components/Dialog";
 import LinkPicker from "../components/LinkPicker";
 import TemplatePicker from "../components/TemplatePicker";
-import LivePreviewEditor from "../components/LivePreviewEditor";
+import LivePreviewEditor, {
+  type EditorSurfaceHandle,
+} from "../components/LivePreviewEditor";
 import AttachmentsSection from "../components/attachments/AttachmentsSection";
 import PresenceIndicator from "../components/PresenceIndicator";
 import SoftLockBanner from "../components/SoftLockBanner";
@@ -76,12 +77,12 @@ export default function PageEditor() {
   // Template picker open state (EP-03): an "Insert template" affordance that
   // lists Templates/*.md and inserts the chosen body at the cursor.
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
-  // editorSurfaceRef points at the .pageeditor-surface wrapper div; the CM6
-  // EditorView is stamped on its child .cm-editor element as `cmView.view`
-  // (LivePreviewEditor.tsx:205). The insert-at-cursor path resolves it from here
-  // so no new prop or forwardRef is needed on LivePreviewEditor (zero contract
-  // change to the existing editor surface).
-  const editorSurfaceRef = useRef<HTMLDivElement>(null);
+  // surfaceRef holds the editor surface's imperative handle (EditorSurfaceHandle,
+  // RE-05/MED-06). insert-at-cursor calls surfaceRef.current?.insertAtCursor(text)
+  // — the surface owns its editor instance and applies the caret insert itself, so
+  // PageEditor no longer reaches into `.cm-editor`'s stamped cmView.view. This is
+  // the seam a future TipTap surface implements the same way (surface-agnostic insert).
+  const surfaceRef = useRef<EditorSurfaceHandle>(null);
 
   // Live/Source editor mode — a persisted per-device UI preference (default Live).
   // The CM6 surface reads `mode`; the toolbar toggle and the Cmd/Ctrl-E shortcut
@@ -515,16 +516,16 @@ export default function PageEditor() {
 
   // insertTemplateAtCursor (EP-03) fetches a template's body via getPage,
   // substitutes {{title}}/{{date}}/{{time}} client-side (same substitution as
-  // the create-from-template flow), and inserts the substituted body at the
-  // cursor via a normal CM6 transaction (replaceSelection). This is a USER
-  // EDIT — it fires onChange verbatim on docChanged (the updateListener ships
-  // doc.toString()), so the autosave machinery picks it up exactly like a
-  // keystroke. The prop-driven reset annotation is NOT used (an insert is a
-  // user edit that must be saved, not a programmatic reset). The template body
-  // read via getPage (the existing safe-path resolver endpoint) — no path
-  // escape. replaceSelection replaces the current selection or inserts at the
-  // cursor if no selection, so inserting into a non-empty document does not
-  // corrupt surrounding text.
+  // the create-from-template flow), and inserts the substituted body at the cursor
+  // via the surface's imperative handle (surfaceRef.insertAtCursor,
+  // RE-05/MED-06). insertAtCursor applies a normal replaceSelection transaction on
+  // the surface's OWN editor — a USER EDIT that fires onChange verbatim on docChanged
+  // (the updateListener ships doc.toString()), so the autosave machinery picks it up
+  // exactly like a keystroke. The prop-driven reset annotation is NOT used (an insert
+  // is a user edit that must be saved, not a programmatic reset). The template body is
+  // read via getPage (the existing safe-path resolver endpoint) — no path escape.
+  // replaceSelection replaces the current selection or inserts at the cursor if no
+  // selection, so inserting into a non-empty document does not corrupt surrounding text.
   async function insertTemplateAtCursor(tpl: TemplateInfo) {
     setTemplatePickerOpen(false);
     try {
@@ -534,11 +535,7 @@ export default function PageEditor() {
         title,
         now: new Date(),
       });
-      const el = editorSurfaceRef.current?.querySelector(".cm-editor");
-      const view = (el as { cmView?: { view?: EditorView } } | null)?.cmView
-        ?.view;
-      if (!view) return;
-      view.dispatch(view.state.replaceSelection(substituted));
+      surfaceRef.current?.insertAtCursor(substituted);
       // onChange fires via the updateListener on docChanged, syncing bodyRef +
       // scheduling autosave. No manual setBody needed — doing so would race
       // with the CM6-driven onChange and could clobber the editor.
@@ -733,6 +730,28 @@ export default function PageEditor() {
     return <p className="pageeditor-status">Loading…</p>;
   }
 
+  // renderEditorSurface is the mount seam (RE-05/D-02): it chooses the editor
+  // surface by mode behind the stable EditorSurfaceHandle interface. Today only CM6
+  // exists, so "live"/"source" mount <LivePreviewEditor> at that CM mode. "tiptap"
+  // is NOT user-selectable this phase (no UI sets it — the keymap/toggle stay
+  // live⇄source), so it falls back to CM6 "live" — a defensive guard, never reached
+  // in practice. Phase 41 adds the real TipTap branch here; Phase 42 gates selection.
+  // No TipTap import this phase (the bundle is unchanged). runSaver and the
+  // conflict/lock/reconcile state are surface-agnostic and stay untouched.
+  function renderEditorSurface() {
+    const cmMode = mode === "source" ? "source" : "live";
+    return (
+      <LivePreviewEditor
+        ref={surfaceRef}
+        value={body}
+        onChange={onBodyChange}
+        currentPath={path}
+        mode={cmMode}
+        readOnly={readOnly}
+      />
+    );
+  }
+
   return (
     <div className="pageeditor">
       {/* Top-right corner controls (Obsidian-style): save state, the Live/Source
@@ -913,18 +932,11 @@ export default function PageEditor() {
       )}
 
       <div
-        ref={editorSurfaceRef}
         className={
           readOnly ? "pageeditor-surface pageeditor-surface-readonly" : "pageeditor-surface"
         }
       >
-        <LivePreviewEditor
-          value={body}
-          onChange={onBodyChange}
-          currentPath={path}
-          mode={mode}
-          readOnly={readOnly}
-        />
+        {renderEditorSurface()}
       </div>
       <DocStatusBar path={path} body={body} />
 

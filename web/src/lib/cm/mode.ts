@@ -43,10 +43,18 @@ export const liveExtensions: Extension[] = [
 // reveal/hide decorations are applied.
 export const sourceExtensions: Extension[] = [markdownExtension, theme, sourceTheme];
 
+// CmMode is the CM6 surface's OWN mode — strictly the two live-preview modes CM6
+// can render. It is deliberately NARROWER than the store's EditorMode: "tiptap"
+// is NOT a CM6 view (a TipTap surface isn't a CodeMirror view), so it can never
+// reach the compartment config. The store carries "tiptap"; the CM6 keymap/setMode
+// stay live⇄source only (MED-05).
+export type CmMode = "live" | "source";
+
 // setMode flips the compartment WITHOUT touching the document. The dispatch carries
 // `effects` only — this is the byte-identity guarantee (EDIT-02). Never add
-// `changes` here.
-export function setMode(view: EditorView, mode: "live" | "source"): void {
+// `changes` here. The `mode` param is the narrow CmMode, so "tiptap" cannot be
+// passed (a compile-time guard that the TipTap value never reconfigures a CM6 view).
+export function setMode(view: EditorView, mode: CmMode): void {
   view.dispatch({
     effects: modeCompartment.reconfigure(
       mode === "live" ? liveExtensions : sourceExtensions,
@@ -63,7 +71,11 @@ export const toggleKeymap = keymap.of([
     key: "Mod-e",
     run: (view) => {
       useEditorMode.getState().toggle();
-      setMode(view, useEditorMode.getState().mode);
+      // toggle() guarantees the resulting mode is live⇄source only (a "tiptap"
+      // value flips back to "live"), so this narrows the 3-way store value to the
+      // CM6 CmMode: "tiptap" can never reach setMode via the keymap (MED-05).
+      const next = useEditorMode.getState().mode;
+      setMode(view, next === "source" ? "source" : "live");
       return true;
     },
   },

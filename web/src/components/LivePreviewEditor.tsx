@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Annotation, Compartment, EditorState } from "@codemirror/state";
 import { EditorView, drawSelection, keymap, placeholder } from "@codemirror/view";
@@ -44,6 +44,16 @@ interface LivePreviewEditorProps {
   readOnly?: boolean;
 }
 
+// EditorSurfaceHandle is the stable imperative contract a mountable editor surface
+// exposes to its host (RE-05/MED-06). The host (PageEditor) calls insertAtCursor to
+// drop template/link text at the caret WITHOUT reaching into the surface's DOM or
+// its internal editor instance. LivePreviewEditor implements it over its OWN
+// EditorView (below); a future TipTap surface implements the SAME handle over its
+// own editor, so the host's insert path is surface-agnostic.
+export interface EditorSurfaceHandle {
+  insertAtCursor(text: string): void;
+}
+
 // CmEditorEl is the .cm-editor host element with the EditorView exposed for tests
 // (and potential imperative callers). CM6 does not expose the view as a stable
 // public DOM property across versions, so the component stamps it explicitly.
@@ -74,16 +84,31 @@ function editableExtFor(ro: boolean) {
     : [];
 }
 
-export default function LivePreviewEditor({
-  value,
-  onChange,
-  currentPath,
-  mode,
-  readOnly = false,
-}: LivePreviewEditorProps) {
+const LivePreviewEditor = forwardRef<EditorSurfaceHandle, LivePreviewEditorProps>(
+  function LivePreviewEditor(
+    { value, onChange, currentPath, mode, readOnly = false },
+    ref,
+  ) {
   const navigate = useNavigate();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  // Expose the imperative surface handle (RE-05/MED-06). insertAtCursor drops text
+  // at the caret on the surface's OWN EditorView via a normal replaceSelection
+  // transaction — the SAME dispatch PageEditor used to do by reaching into
+  // `.cm-editor`'s stamped cmView.view, now owned by the surface. onChange fires
+  // through the existing updateListener on docChanged (an insert is a user edit),
+  // so the host's autosave picks it up exactly as before — byte-identical behavior.
+  useImperativeHandle(
+    ref,
+    () => ({
+      insertAtCursor(text: string) {
+        const v = view.current;
+        if (!v) return;
+        v.dispatch(v.state.replaceSelection(text));
+      },
+    }),
+    [],
+  );
   // onChange can change identity between renders; read the latest from a ref so
   // the updateListener (created once) never fires a stale callback. The ref is
   // synced in an effect (never mutated during render).
@@ -272,4 +297,7 @@ export default function LivePreviewEditor({
       }
     />
   );
-}
+  },
+);
+
+export default LivePreviewEditor;
