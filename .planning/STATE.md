@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Rich-Block Editor (TipTap)
-status: "v1.7 in progress — Phase 38 (RE-01 codec GO/NO-GO gate) COMPLETE: verdict GO, qa-verified (PASS). Codec + round-trip corpus + cross-engine parity + HTML-inertness all green. Next: Phase 39 (RE-02) and/or Phase 40 (RE-05) — parallelizable."
-last_updated: "2026-07-02T21:00:00.000Z"
+status: "v1.7 in progress — Phases 38 (RE-01 codec GO), 39 (RE-02 preserved tier byte-exact), 40 (RE-05 editor-host abstraction, zero behavior change) COMPLETE + qa-verified. Next: Phase 41 (RE-03 TipTap #tag/suggest/slash + real save; folds a P3 math-tokenizer guard). Then 42 (RE-04, design fork)."
+last_updated: "2026-07-02T22:30:00.000Z"
 last_activity: 2026-07-02
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
